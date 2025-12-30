@@ -307,19 +307,21 @@ function drawBaseHealthBar(ctx: CanvasRenderingContext2D, base: Base, screenPos:
   ctx.strokeRect(barX, barY, barWidth, barHeight);
   ctx.shadowBlur = 0;
   
-  ctx.fillStyle = COLORS.white;
-  ctx.font = 'bold 11px Space Mono, monospace';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.shadowColor = 'oklch(0 0 0)';
-  ctx.shadowBlur = 3;
-  ctx.fillText(`${Math.ceil(base.hp)} / ${base.maxHp}`, screenPos.x, barY + barHeight / 2);
-  ctx.shadowBlur = 0;
+  if (state.settings.showNumericHP) {
+    ctx.fillStyle = COLORS.white;
+    ctx.font = 'bold 11px Space Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'oklch(0 0 0)';
+    ctx.shadowBlur = 3;
+    ctx.fillText(`${Math.ceil(base.hp)} / ${base.maxHp}`, screenPos.x, barY + barHeight / 2);
+    ctx.shadowBlur = 0;
+  }
   
   ctx.restore();
 }
 
-function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
+function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string, showNumeric: boolean): void {
   const barWidth = 24;
   const barHeight = 4;
   const barX = screenPos.x - barWidth / 2;
@@ -348,6 +350,17 @@ function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos:
   ctx.shadowBlur = 4;
   ctx.fillRect(barX, barY, barWidth * hpPercent, barHeight);
   ctx.shadowBlur = 0;
+  
+  if (showNumeric) {
+    ctx.fillStyle = COLORS.white;
+    ctx.font = 'bold 9px Space Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'oklch(0 0 0)';
+    ctx.shadowBlur = 3;
+    ctx.fillText(`${Math.ceil(unit.hp)}`, screenPos.x, barY - 6);
+    ctx.shadowBlur = 0;
+  }
   
   ctx.restore();
 }
@@ -418,7 +431,7 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
 
     ctx.globalAlpha = 1.0;
 
-    drawUnitHealthBar(ctx, unit, screenPos, color);
+    drawUnitHealthBar(ctx, unit, screenPos, color, state.settings.showNumericHP);
 
     ctx.fillStyle = COLORS.white;
     ctx.font = '10px Space Mono, monospace';

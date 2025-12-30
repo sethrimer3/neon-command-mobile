@@ -214,6 +214,7 @@ export interface GameState {
     enabledUnits: Set<UnitType>;
     unitSlots: Record<'left' | 'up' | 'down', UnitType>;
     selectedMap: string;
+    showNumericHP: boolean;
   };
 
   surrenderClicks: number;

@@ -42,6 +42,7 @@ function App() {
   const [soundEnabled, setSoundEnabled] = useKV<boolean>('sound-enabled', true);
   const [sfxVolume, setSfxVolume] = useKV<number>('sfx-volume', 0.7);
   const [musicVolume, setMusicVolume] = useKV<number>('music-volume', 0.5);
+  const [showNumericHP, setShowNumericHP] = useKV<boolean>('show-numeric-hp', true);
 
   const gameState = gameStateRef.current;
 
@@ -83,12 +84,13 @@ function App() {
       enabledUnits: new Set((enabledUnits || ['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor']) as UnitType[]),
       unitSlots: (unitSlots || { left: 'marine', up: 'warrior', down: 'snaker' }) as Record<'left' | 'up' | 'down', UnitType>,
       selectedMap: selectedMap || 'open',
+      showNumericHP: showNumericHP ?? true,
     };
     gameStateRef.current.players = gameStateRef.current.players.map((p, i) => ({
       ...p,
       color: i === 0 ? (playerColor || COLORS.playerDefault) : (enemyColor || COLORS.enemyDefault),
     }));
-  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap]);
+  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -127,6 +129,7 @@ function App() {
           };
           soundManager.playMatchStart();
           delete gameStateRef.current.countdownStartTime;
+          setRenderTrigger(prev => prev + 1);
         }
       }
 
@@ -675,6 +678,18 @@ function App() {
                 </div>
               </div>
 
+              <div className="flex items-center justify-between">
+                <Label htmlFor="numeric-hp-toggle">Show Numeric HP</Label>
+                <Switch
+                  id="numeric-hp-toggle"
+                  checked={showNumericHP ?? true}
+                  onCheckedChange={(checked) => {
+                    setShowNumericHP(checked);
+                    soundManager.playButtonClick();
+                  }}
+                />
+              </div>
+
               <Button
                 onClick={backToMenu}
                 className="w-full orbitron"
@@ -785,6 +800,7 @@ function createInitialState(): GameState {
       enabledUnits: new Set(['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor']),
       unitSlots: { left: 'marine', up: 'warrior', down: 'snaker' },
       selectedMap: 'open',
+      showNumericHP: true,
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
@@ -956,6 +972,7 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
       enabledUnits: new Set(lobby.enabledUnits as UnitType[]),
       unitSlots: { left: 'marine', up: 'warrior', down: 'snaker' },
       selectedMap: lobby.mapId,
+      showNumericHP: true,
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
@@ -1016,6 +1033,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean): GameStat
       enabledUnits: new Set(lobby.enabledUnits as UnitType[]),
       unitSlots: { left: 'marine', up: 'warrior', down: 'snaker' },
       selectedMap: lobby.mapId,
+      showNumericHP: true,
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
