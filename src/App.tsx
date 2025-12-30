@@ -10,11 +10,13 @@ import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Label } from './components/ui/label';
 import { Switch } from './components/ui/switch';
-import { GameController, Robot, ListChecks, GearSix, ArrowLeft, Flag, MapPin } from '@phosphor-icons/react';
+import { GameController, Robot, ListChecks, GearSix, ArrowLeft, Flag, MapPin, WifiHigh } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { UnitSelectionScreen } from './components/UnitSelectionScreen';
 import { MapSelectionScreen } from './components/MapSelectionScreen';
+import { MultiplayerLobbyScreen } from './components/MultiplayerLobbyScreen';
 import { getMapById, getValidBasePositions } from './lib/maps';
+import { MultiplayerManager, LobbyData } from './lib/multiplayer';
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -22,6 +24,10 @@ function App() {
   const [renderTrigger, setRenderTrigger] = useState(0);
   const animationFrameRef = useRef<number | undefined>(undefined);
   const lastTimeRef = useRef<number>(Date.now());
+  const multiplayerManagerRef = useRef<MultiplayerManager | null>(null);
+  const [multiplayerLobbies, setMultiplayerLobbies] = useState<LobbyData[]>([]);
+  const [currentLobby, setCurrentLobby] = useState<LobbyData | null>(null);
+  const [userId, setUserId] = useState<string>('');
 
   const [playerColor, setPlayerColor] = useKV('player-color', COLORS.playerDefault);
   const [enemyColor, setEnemyColor] = useKV('enemy-color', COLORS.enemyDefault);
@@ -30,6 +36,22 @@ function App() {
   const [selectedMap, setSelectedMap] = useKV('selected-map', 'open');
 
   const gameState = gameStateRef.current;
+
+  useEffect(() => {
+    const initUser = async () => {
+      const user = await window.spark.user();
+      const uid = user?.id?.toString() || `player_${Date.now()}`;
+      setUserId(uid);
+      multiplayerManagerRef.current = new MultiplayerManager(uid);
+    };
+    initUser();
+  }, []);
+
+  useEffect(() => {
+    if (currentLobby && currentLobby.status === 'playing' && gameState.mode === 'multiplayerLobby') {
+      startOnlineGame();
+    }
+  }, [currentLobby]);
 
   useEffect(() => {
     gameStateRef.current.settings = {
@@ -121,8 +143,19 @@ function App() {
     setRenderTrigger(prev => prev + 1);
   };
 
+  const startOnlineGame = () => {
+    if (!currentLobby) return;
+    const isHost = multiplayerManagerRef.current?.getIsHost() || false;
+    gameStateRef.current = createOnlineGameState(currentLobby, isHost);
+    setRenderTrigger(prev => prev + 1);
+  };
+
   const returnToMenu = () => {
+    if (multiplayerManagerRef.current?.getGameId()) {
+      multiplayerManagerRef.current.endGame();
+    }
     gameStateRef.current = createInitialState();
+    setCurrentLobby(null);
     setRenderTrigger(prev => prev + 1);
   };
 
@@ -147,6 +180,12 @@ function App() {
 
   const goToMapSelection = () => {
     gameStateRef.current.mode = 'mapSelection';
+    setRenderTrigger(prev => prev + 1);
+  };
+
+  const goToMultiplayer = () => {
+    gameStateRef.current.mode = 'multiplayerLobby';
+    refreshLobbies();
     setRenderTrigger(prev => prev + 1);
   };
 
@@ -194,6 +233,86 @@ function App() {
     }));
   };
 
+  const refreshLobbies = async () => {
+    if (!multiplayerManagerRef.current) return;
+    const lobbies = await multiplayerManagerRef.current.getAvailableLobbies();
+    setMultiplayerLobbies(lobbies);
+  };
+
+  const handleCreateGame = async (playerName: string) => {
+    if (!multiplayerManagerRef.current) return;
+    try {
+      const gameId = await multiplayerManagerRef.current.createGame(
+        playerName,
+        playerColor || COLORS.playerDefault,
+        selectedMap || 'open',
+        enabledUnits || ['marine', 'warrior', 'snaker']
+      );
+      const lobby = await multiplayerManagerRef.current.getLobby(gameId);
+      setCurrentLobby(lobby);
+      toast.success('Game created! Share the Game ID with your opponent.');
+      
+      const checkInterval = setInterval(async () => {
+        const updatedLobby = await multiplayerManagerRef.current?.getLobby(gameId);
+        if (updatedLobby) {
+          setCurrentLobby(updatedLobby);
+          if (updatedLobby.status === 'playing') {
+            clearInterval(checkInterval);
+          }
+        }
+      }, 1000);
+    } catch (error) {
+      toast.error('Failed to create game');
+    }
+  };
+
+  const handleJoinGame = async (gameId: string, playerName: string) => {
+    if (!multiplayerManagerRef.current) return;
+    try {
+      const success = await multiplayerManagerRef.current.joinGame(
+        gameId,
+        playerName,
+        enemyColor || COLORS.enemyDefault
+      );
+      if (success) {
+        const lobby = await multiplayerManagerRef.current.getLobby(gameId);
+        setCurrentLobby(lobby);
+        toast.success('Joined game! Waiting for host to start...');
+        
+        const checkInterval = setInterval(async () => {
+          const updatedLobby = await multiplayerManagerRef.current?.getLobby(gameId);
+          if (updatedLobby) {
+            setCurrentLobby(updatedLobby);
+            if (updatedLobby.status === 'playing') {
+              clearInterval(checkInterval);
+            }
+          }
+        }, 1000);
+      } else {
+        toast.error('Failed to join game');
+      }
+    } catch (error) {
+      toast.error('Failed to join game');
+    }
+  };
+
+  const handleStartMultiplayerGame = async () => {
+    if (!multiplayerManagerRef.current) return;
+    try {
+      await multiplayerManagerRef.current.startGame();
+      toast.success('Starting game...');
+    } catch (error) {
+      toast.error('Failed to start game');
+    }
+  };
+
+  const handleLeaveGame = async () => {
+    if (!multiplayerManagerRef.current) return;
+    await multiplayerManagerRef.current.leaveGame();
+    setCurrentLobby(null);
+    toast.info('Left the lobby');
+  };
+
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-background" onClick={handleCanvasSurrenderReset}>
       <canvas ref={canvasRef} className="absolute inset-0" />
@@ -235,6 +354,15 @@ function App() {
             >
               <Robot className="mr-2" size={24} />
               Vs. AI
+            </Button>
+
+            <Button
+              onClick={goToMultiplayer}
+              className="h-14 text-lg orbitron uppercase tracking-wider"
+              variant="default"
+            >
+              <WifiHigh className="mr-2" size={24} />
+              Online Multiplayer
             </Button>
 
             <Button
@@ -348,6 +476,20 @@ function App() {
         />
       )}
 
+      {gameState.mode === 'multiplayerLobby' && (
+        <MultiplayerLobbyScreen
+          onBack={backToMenu}
+          onCreateGame={handleCreateGame}
+          onJoinGame={handleJoinGame}
+          lobbies={multiplayerLobbies}
+          currentLobby={currentLobby}
+          isHost={multiplayerManagerRef.current?.getIsHost() || false}
+          onStartGame={handleStartMultiplayerGame}
+          onLeaveGame={handleLeaveGame}
+          onRefreshLobbies={refreshLobbies}
+        />
+      )}
+
       {gameState.mode === 'victory' && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/80">
           <Card className="w-96 max-w-full">
@@ -442,6 +584,61 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
     lastIncomeTime: 0,
     winner: null,
     settings,
+    surrenderClicks: 0,
+    lastSurrenderClickTime: 0,
+  };
+}
+
+function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
+  const arenaWidth = window.innerWidth / 20;
+  const arenaHeight = window.innerHeight / 20;
+
+  const selectedMapDef = getMapById(lobby.mapId) || getMapById('open')!;
+  const obstacles = selectedMapDef.obstacles;
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles);
+
+  return {
+    mode: 'game',
+    vsMode: 'online',
+    units: [],
+    obstacles: obstacles,
+    bases: [
+      {
+        id: generateId(),
+        owner: 0,
+        position: basePositions.player,
+        hp: 1000,
+        maxHp: 1000,
+        movementTarget: null,
+        isSelected: false,
+        laserCooldown: 0,
+      },
+      {
+        id: generateId(),
+        owner: 1,
+        position: basePositions.enemy,
+        hp: 1000,
+        maxHp: 1000,
+        movementTarget: null,
+        isSelected: false,
+        laserCooldown: 0,
+      },
+    ],
+    players: [
+      { photons: 0, incomeRate: 1, color: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault },
+      { photons: 0, incomeRate: 1, color: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor },
+    ],
+    selectedUnits: new Set(),
+    elapsedTime: 0,
+    lastIncomeTime: 0,
+    winner: null,
+    settings: {
+      playerColor: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault,
+      enemyColor: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor,
+      enabledUnits: new Set(lobby.enabledUnits as UnitType[]),
+      unitSlots: { left: 'marine', up: 'warrior', down: 'snaker' },
+      selectedMap: lobby.mapId,
+    },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
   };

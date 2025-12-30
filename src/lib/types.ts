@@ -188,8 +188,8 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
 };
 
 export interface GameState {
-  mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection';
-  vsMode: 'ai' | 'player' | null;
+  mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection' | 'multiplayerLobby';
+  vsMode: 'ai' | 'player' | 'online' | null;
   
   units: Unit[];
   bases: Base[];

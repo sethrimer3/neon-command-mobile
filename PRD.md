@@ -13,11 +13,18 @@ This is a full real-time strategy game with multiple systems: menu navigation, g
 ## Essential Features
 
 ### Main Menu Navigation
-- **Functionality**: Central hub presenting game mode options, map selection, unit selection, and settings
+- **Functionality**: Central hub presenting game mode options including AI, online multiplayer, map selection, unit selection, and settings
 - **Purpose**: Provides clear entry points to all game features
 - **Trigger**: App launch
 - **Progression**: Splash → Main Menu → Mode Selection → Game Start
 - **Success criteria**: All buttons navigate correctly, disabled states show "Coming Soon" for unimplemented features
+
+### Online Multiplayer System
+- **Functionality**: Real-time online matches using Spark KV for synchronization, with lobby creation/joining, game ID sharing, and state syncing
+- **Purpose**: Enables players to compete against each other remotely in real-time matches
+- **Trigger**: Online Multiplayer button from main menu
+- **Progression**: Main Menu → Multiplayer Lobby → Create/Join Game → Share Game ID → Wait for Opponent → Host Starts → Match Begins → Victory/Defeat → Return to Menu
+- **Success criteria**: Players can create lobbies, join via Game ID, see opponent details, host controls game start, real-time command synchronization works, games end properly
 
 ### Map Selection System
 - **Functionality**: Choose from 8 unique battlefields with different terrain layouts, obstacles, and choke points
