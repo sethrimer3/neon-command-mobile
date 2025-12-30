@@ -13,18 +13,25 @@ This is a full real-time strategy game with multiple systems: menu navigation, g
 ## Essential Features
 
 ### Main Menu Navigation
-- **Functionality**: Central hub presenting game mode options, unit selection, and settings
+- **Functionality**: Central hub presenting game mode options, map selection, unit selection, and settings
 - **Purpose**: Provides clear entry points to all game features
 - **Trigger**: App launch
 - **Progression**: Splash → Main Menu → Mode Selection → Game Start
 - **Success criteria**: All buttons navigate correctly, disabled states show "Coming Soon" for unimplemented features
 
+### Map Selection System
+- **Functionality**: Choose from 8 unique battlefields with different terrain layouts, obstacles, and choke points
+- **Purpose**: Adds strategic variety by requiring different tactical approaches for different maps
+- **Trigger**: Map Selection button from main menu
+- **Progression**: Main Menu → Map Selection Screen → Browse Maps → Select Map → Confirmation Toast → Return to Menu
+- **Success criteria**: All 8 maps display correctly, selection persists between sessions, obstacles render properly in-game, collision detection works with all obstacle types
+
 ### Real-Time Match Gameplay
-- **Functionality**: Full RTS match with bases, unit spawning, movement, combat, and abilities
-- **Purpose**: Core gameplay loop where players compete to destroy enemy base
+- **Functionality**: Full RTS match with bases, unit spawning, movement, combat, abilities, and terrain obstacles
+- **Purpose**: Core gameplay loop where players compete to destroy enemy base while navigating terrain
 - **Trigger**: Selecting Vs. AI or Vs. Player from menu
-- **Progression**: Match Start → Economy Generation → Unit Production → Tactical Movement → Combat → Base Destruction → Victory Screen → Return to Menu
-- **Success criteria**: Stable 60fps on mobile, all gesture inputs recognized, units execute commands correctly, win condition triggers properly
+- **Progression**: Match Start → Economy Generation → Unit Production → Tactical Movement (avoiding obstacles) → Combat → Base Destruction → Victory Screen → Return to Menu
+- **Success criteria**: Stable 60fps on mobile, all gesture inputs recognized, units execute commands correctly, units avoid obstacles, win condition triggers properly
 
 ### Gesture-Based Unit Commands
 - **Functionality**: Touch gestures for selecting units, issuing movement orders, and casting abilities
@@ -99,6 +106,32 @@ The game features 8 distinct unit types, each with unique strategic roles and ab
 
 Each unit has distinct visual representation, cost, stats, and ability cooldowns to create diverse tactical compositions and counter-play opportunities.
 
+### Map Types & Terrain Strategy
+The game features 8 distinct battlefields, each with unique obstacle layouts that require different tactical approaches:
+
+#### Open Maps
+- **Open Arena**: Classic open battlefield with no obstacles. Pure micro and unit positioning determines victory.
+
+#### Corridor Maps
+- **The Corridor**: Narrow central passage with walls on top and bottom forces head-on engagements and rewards unit composition.
+- **Choke Point**: Single narrow passage between massive walls. Perfect for defensive play and artillery positioning.
+
+#### Tactical Maps
+- **Crossroads**: Four paths meeting at center with defensive pillars. Multiple approach angles and flanking opportunities.
+- **Fortress Siege**: Heavily fortified center with narrow attack lanes. Defender has strong positional advantage.
+
+#### Complex Maps
+- **The Labyrinth**: Complex maze requiring strategic positioning and scouting. Easy to lose units or get flanked.
+- **The Gauntlet**: Alternating barriers force zigzag movement. Rewards planning long paths for promotion bonuses.
+- **Island Clusters**: Scattered obstacle islands create multiple flanking routes. Mobility units excel here.
+
+**Obstacle Types:**
+- **Walls**: Large rectangular barriers that block all movement and line of sight. Glow with blue neon energy.
+- **Pillars**: Circular defensive structures that create cover and block paths. Emit purple neon glow.
+- **Debris**: Small irregular obstacles that add complexity. Orange-red neon coloring.
+
+All obstacles block unit movement (units cancel their move command if collision detected) and provide tactical cover for ranged combat.
+
 ## Edge Case Handling
 
 - **Out of Bounds Movement** - Commands beyond arena boundaries get clamped to valid positions
@@ -111,6 +144,8 @@ Each unit has distinct visual representation, cost, stats, and ability cooldowns
 - **Cooldown Spam** - Multiple swipes during cooldown are ignored silently
 - **Empty Selection Commands** - Movement/ability gestures with no units selected do nothing
 - **Base Collision** - Bases push away from each other if paths cross
+- **Obstacle Collision** - Units that hit obstacles cancel current movement node and wait for next command
+- **Base Spawning on Obstacles** - Map system validates base positions don't overlap with obstacles
 - **Surrender Counter Reset** - Clicking anywhere other than surrender button resets the 5-click counter
 - **Mouse and Touch Simultaneous** - Input handlers treat mouse as single persistent touch point
 - **Rapid Surrender Clicks** - 3-second timeout window; counter resets if clicks too slow
@@ -174,6 +209,7 @@ This is a Canvas-based game, so traditional shadcn components are primarily used
   - Main Menu: Custom canvas-based UI with neon button rectangles
   - Settings Screen: shadcn `Card`, `Label`, color picker buttons
   - Unit Selection Screen: Custom `Card` with visual base representation and slot selectors showing unit icons
+  - Map Selection Screen: shadcn `Card`, `ScrollArea`, grid layout of map cards with descriptions
   - Victory Overlay: Custom canvas modal with shadcn-styled `Button` for "Return to Menu"
   - Surrender Button: shadcn `Button` with `Flag` icon, fixed position top-left with click counter
   - Debug HUD: Canvas text rendering, no React components
@@ -183,15 +219,19 @@ This is a Canvas-based game, so traditional shadcn components are primarily used
   - Custom unit slot selector with clickable positions around base visual
   - Unit icons rendered as SVG mini-representations matching in-game appearance
   - Selection rectangle overlay during drag operations (canvas or mouse)
+  - Map cards with hover effects and selected state highlighting
+  - Obstacle rendering with type-specific neon colors and glow effects
 - **States**: 
   - Units: default (subtle glow), selected (bright pulsing glow), executing ability (color flash)
   - Base: idle (dim), spawnable sides (bright glow), selected (border pulse), laser cooldown (progress arc)
   - Buttons: rest (medium glow), touch-down (bright), disabled (very dim + "Coming Soon" text)
   - Surrender Button: default (small), showing count (expanded with progress), about to surrender (destructive styling)
   - Unit Slots: unselected (subtle), selected for editing (highlighted ring), hover (scale-up)
+  - Map Cards: default (border-border), selected (border-primary with shadow), hover (shadow-lg transition)
+  - Obstacles: constant neon glow matching type (blue walls, purple pillars, orange debris)
 - **Icon Selection**: 
-  - @phosphor-icons/react for menu navigation: `GameController`, `Robot`, `ListChecks`, `GearSix`, `ArrowLeft`, `Flag`
-  - Canvas-drawn icons for in-game elements (unit shapes, ability arrows)
+  - @phosphor-icons/react for menu navigation: `GameController`, `Robot`, `ListChecks`, `GearSix`, `ArrowLeft`, `Flag`, `MapPin`
+  - Canvas-drawn icons for in-game elements (unit shapes, ability arrows, obstacles)
   - SVG mini-units for slot selection interface (matching game visuals)
 - **Spacing**: 
   - Menu buttons: 16px vertical gap, 24px horizontal padding, 48px from edges
@@ -200,6 +240,7 @@ This is a Canvas-based game, so traditional shadcn components are primarily used
   - Command queue dots: 8px diameter, lines 2px width, arrows 12px length
   - Surrender button: 16px from top-left corner, compact sizing
   - Unit slot selectors: 80px squares with 32px gap from base center
+  - Map selection grid: 16px gap between cards, responsive 1-2 column layout
 - **Mobile**: 
   - Canvas fills entire viewport (100vw/100vh minus minimal chrome)
   - Touch targets minimum 44px for menu buttons and unit slots

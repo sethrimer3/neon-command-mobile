@@ -13,6 +13,7 @@ import {
   UNIT_SIZE_METERS,
 } from './types';
 import { distance, normalize, scale, add, subtract, generateId } from './gameUtils';
+import { checkObstacleCollision } from './maps';
 
 export function updateGame(state: GameState, deltaTime: number): void {
   if (state.mode !== 'game') return;
@@ -77,7 +78,14 @@ function updateUnits(state: GameState, deltaTime: number): void {
       const movement = scale(direction, def.moveSpeed * deltaTime);
 
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
-      unit.position = add(unit.position, scale(direction, moveDist));
+      const newPosition = add(unit.position, scale(direction, moveDist));
+      
+      if (!checkObstacleCollision(newPosition, UNIT_SIZE_METERS / 2, state.obstacles)) {
+        unit.position = newPosition;
+      } else {
+        unit.commandQueue.shift();
+        return;
+      }
 
       const queueMovementNodes = unit.commandQueue.filter((n) => n.type === 'move').length;
       const creditMultiplier = 1.0 + QUEUE_BONUS_PER_NODE * queueMovementNodes;

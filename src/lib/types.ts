@@ -188,11 +188,12 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
 };
 
 export interface GameState {
-  mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory';
+  mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection';
   vsMode: 'ai' | 'player' | null;
   
   units: Unit[];
   bases: Base[];
+  obstacles: import('./maps').Obstacle[];
   
   players: {
     photons: number;
@@ -212,6 +213,7 @@ export interface GameState {
     enemyColor: string;
     enabledUnits: Set<UnitType>;
     unitSlots: Record<'left' | 'up' | 'down', UnitType>;
+    selectedMap: string;
   };
 
   surrenderClicks: number;

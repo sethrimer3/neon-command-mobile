@@ -8,6 +8,7 @@ import {
   UNIT_DEFINITIONS,
 } from './types';
 import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract } from './gameUtils';
+import { Obstacle } from './maps';
 
 export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canvas: HTMLCanvasElement, selectionRect?: { x1: number; y1: number; x2: number; y2: number } | null): void {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -15,6 +16,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
   drawBackground(ctx, canvas);
 
   if (state.mode === 'game') {
+    drawObstacles(ctx, state);
     drawCommandQueues(ctx, state);
     drawBases(ctx, state);
     drawUnits(ctx, state);
@@ -55,6 +57,68 @@ function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement
     ctx.lineTo(canvas.width, y);
     ctx.stroke();
   }
+}
+
+function drawObstacles(ctx: CanvasRenderingContext2D, state: GameState): void {
+  state.obstacles.forEach((obstacle) => {
+    const screenPos = positionToPixels(obstacle.position);
+    const width = metersToPixels(obstacle.width);
+    const height = metersToPixels(obstacle.height);
+
+    ctx.save();
+    ctx.translate(screenPos.x, screenPos.y);
+    ctx.rotate(obstacle.rotation);
+
+    if (obstacle.type === 'wall') {
+      ctx.fillStyle = 'oklch(0.30 0.15 240)';
+      ctx.strokeStyle = 'oklch(0.55 0.22 240)';
+      ctx.lineWidth = 2;
+      
+      ctx.fillRect(-width / 2, -height / 2, width, height);
+      ctx.strokeRect(-width / 2, -height / 2, width, height);
+      
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = 'oklch(0.55 0.22 240)';
+      ctx.strokeRect(-width / 2, -height / 2, width, height);
+      ctx.shadowBlur = 0;
+    } else if (obstacle.type === 'pillar') {
+      const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, width / 2);
+      gradient.addColorStop(0, 'oklch(0.45 0.20 280)');
+      gradient.addColorStop(1, 'oklch(0.25 0.15 280)');
+      
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(0, 0, width / 2, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.strokeStyle = 'oklch(0.65 0.25 280)';
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = 'oklch(0.65 0.25 280)';
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    } else if (obstacle.type === 'debris') {
+      ctx.fillStyle = 'oklch(0.35 0.12 25)';
+      ctx.strokeStyle = 'oklch(0.58 0.20 25)';
+      ctx.lineWidth = 1.5;
+      
+      ctx.beginPath();
+      ctx.moveTo(-width / 2, -height / 3);
+      ctx.lineTo(width / 3, -height / 2);
+      ctx.lineTo(width / 2, height / 3);
+      ctx.lineTo(-width / 3, height / 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = 'oklch(0.58 0.20 25)';
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.restore();
+  });
 }
 
 function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): void {

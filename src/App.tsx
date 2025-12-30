@@ -10,9 +10,11 @@ import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Label } from './components/ui/label';
 import { Switch } from './components/ui/switch';
-import { GameController, Robot, ListChecks, GearSix, ArrowLeft, Flag } from '@phosphor-icons/react';
+import { GameController, Robot, ListChecks, GearSix, ArrowLeft, Flag, MapPin } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { UnitSelectionScreen } from './components/UnitSelectionScreen';
+import { MapSelectionScreen } from './components/MapSelectionScreen';
+import { getMapById, getValidBasePositions } from './lib/maps';
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -25,6 +27,7 @@ function App() {
   const [enemyColor, setEnemyColor] = useKV('enemy-color', COLORS.enemyDefault);
   const [enabledUnits, setEnabledUnits] = useKV<string[]>('enabled-units', ['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor']);
   const [unitSlots, setUnitSlots] = useKV<Record<string, UnitType>>('unit-slots', { left: 'marine', up: 'warrior', down: 'snaker' });
+  const [selectedMap, setSelectedMap] = useKV('selected-map', 'open');
 
   const gameState = gameStateRef.current;
 
@@ -34,12 +37,13 @@ function App() {
       enemyColor: enemyColor || COLORS.enemyDefault,
       enabledUnits: new Set((enabledUnits || ['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor']) as UnitType[]),
       unitSlots: (unitSlots || { left: 'marine', up: 'warrior', down: 'snaker' }) as Record<'left' | 'up' | 'down', UnitType>,
+      selectedMap: selectedMap || 'open',
     };
     gameStateRef.current.players = gameStateRef.current.players.map((p, i) => ({
       ...p,
       color: i === 0 ? (playerColor || COLORS.playerDefault) : (enemyColor || COLORS.enemyDefault),
     }));
-  }, [playerColor, enemyColor, enabledUnits, unitSlots]);
+  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -141,9 +145,19 @@ function App() {
     setRenderTrigger(prev => prev + 1);
   };
 
+  const goToMapSelection = () => {
+    gameStateRef.current.mode = 'mapSelection';
+    setRenderTrigger(prev => prev + 1);
+  };
+
   const backToMenu = () => {
     gameStateRef.current.mode = 'menu';
     setRenderTrigger(prev => prev + 1);
+  };
+
+  const handleMapSelect = (mapId: string) => {
+    setSelectedMap(mapId);
+    toast.success(`Map changed to ${getMapById(mapId)?.name || mapId}`);
   };
 
   const handleSurrenderClick = (e: React.MouseEvent) => {
@@ -221,6 +235,15 @@ function App() {
             >
               <Robot className="mr-2" size={24} />
               Vs. AI
+            </Button>
+
+            <Button
+              onClick={goToMapSelection}
+              className="h-14 text-lg orbitron uppercase tracking-wider"
+              variant="outline"
+            >
+              <MapPin className="mr-2" size={24} />
+              Map Selection
             </Button>
 
             <Button
@@ -317,6 +340,14 @@ function App() {
         />
       )}
 
+      {gameState.mode === 'mapSelection' && (
+        <MapSelectionScreen
+          selectedMap={selectedMap || 'open'}
+          onMapSelect={handleMapSelect}
+          onBack={backToMenu}
+        />
+      )}
+
       {gameState.mode === 'victory' && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/80">
           <Card className="w-96 max-w-full">
@@ -346,6 +377,7 @@ function createInitialState(): GameState {
     vsMode: null,
     units: [],
     bases: [],
+    obstacles: [],
     players: [
       { photons: 0, incomeRate: 1, color: COLORS.playerDefault },
       { photons: 0, incomeRate: 1, color: COLORS.enemyDefault },
@@ -359,6 +391,7 @@ function createInitialState(): GameState {
       enemyColor: COLORS.enemyDefault,
       enabledUnits: new Set(['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor']),
       unitSlots: { left: 'marine', up: 'warrior', down: 'snaker' },
+      selectedMap: 'open',
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
@@ -369,15 +402,20 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
   const arenaWidth = window.innerWidth / 20;
   const arenaHeight = window.innerHeight / 20;
 
+  const selectedMapDef = getMapById(settings.selectedMap) || getMapById('open')!;
+  const obstacles = selectedMapDef.obstacles;
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles);
+
   return {
     mode: 'game',
     vsMode: mode,
     units: [],
+    obstacles: obstacles,
     bases: [
       {
         id: generateId(),
         owner: 0,
-        position: { x: BASE_SIZE_METERS * 2, y: arenaHeight / 2 },
+        position: basePositions.player,
         hp: 1000,
         maxHp: 1000,
         movementTarget: null,
@@ -387,7 +425,7 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
       {
         id: generateId(),
         owner: 1,
-        position: { x: arenaWidth - BASE_SIZE_METERS * 2, y: arenaHeight / 2 },
+        position: basePositions.enemy,
         hp: 1000,
         maxHp: 1000,
         movementTarget: null,
