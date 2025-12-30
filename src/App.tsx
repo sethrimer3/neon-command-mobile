@@ -10,6 +10,7 @@ import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Label } from './components/ui/label';
 import { Switch } from './components/ui/switch';
+import { Slider } from './components/ui/slider';
 import { GameController, Robot, ListChecks, GearSix, ArrowLeft, Flag, MapPin, WifiHigh, ChartBar, SpeakerHigh, SpeakerSlash } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { UnitSelectionScreen } from './components/UnitSelectionScreen';
@@ -39,6 +40,8 @@ function App() {
   const [selectedMap, setSelectedMap] = useKV('selected-map', 'open');
   const [playerStatistics, setPlayerStatistics] = useKV<PlayerStatistics>('player-statistics', createEmptyStatistics());
   const [soundEnabled, setSoundEnabled] = useKV<boolean>('sound-enabled', true);
+  const [sfxVolume, setSfxVolume] = useKV<number>('sfx-volume', 0.7);
+  const [musicVolume, setMusicVolume] = useKV<number>('music-volume', 0.5);
 
   const gameState = gameStateRef.current;
 
@@ -51,11 +54,21 @@ function App() {
     };
     initUser();
     soundManager.setEnabled(soundEnabled ?? true);
+    soundManager.setSfxVolume(sfxVolume ?? 0.7);
+    soundManager.setMusicVolume(musicVolume ?? 0.5);
   }, []);
 
   useEffect(() => {
     soundManager.setEnabled(soundEnabled ?? true);
   }, [soundEnabled]);
+
+  useEffect(() => {
+    soundManager.setSfxVolume(sfxVolume ?? 0.7);
+  }, [sfxVolume]);
+
+  useEffect(() => {
+    soundManager.setMusicVolume(musicVolume ?? 0.5);
+  }, [musicVolume]);
 
   useEffect(() => {
     if (currentLobby && currentLobby.status === 'playing' && gameState.mode === 'multiplayerLobby') {
@@ -582,6 +595,44 @@ function App() {
                     }
                   }}
                 />
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="sfx-volume">SFX Volume</Label>
+                    <span className="text-sm text-muted-foreground">{Math.round((sfxVolume ?? 0.7) * 100)}%</span>
+                  </div>
+                  <Slider
+                    id="sfx-volume"
+                    value={[sfxVolume ?? 0.7]}
+                    onValueChange={(values) => {
+                      setSfxVolume(values[0]);
+                    }}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="music-volume">Music Volume</Label>
+                    <span className="text-sm text-muted-foreground">{Math.round((musicVolume ?? 0.5) * 100)}%</span>
+                  </div>
+                  <Slider
+                    id="music-volume"
+                    value={[musicVolume ?? 0.5]}
+                    onValueChange={(values) => {
+                      setMusicVolume(values[0]);
+                    }}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    className="w-full"
+                  />
+                </div>
               </div>
 
               <Button

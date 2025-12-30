@@ -1,6 +1,7 @@
 export class SoundManager {
   private audioContext: AudioContext | null = null;
-  private masterVolume = 0.3;
+  private sfxVolume = 0.7;
+  private musicVolume = 0.5;
   private enabled = true;
   private audioFiles: Map<string, HTMLAudioElement> = new Map();
 
@@ -14,8 +15,25 @@ export class SoundManager {
     this.enabled = enabled;
   }
 
-  setVolume(volume: number) {
-    this.masterVolume = Math.max(0, Math.min(1, volume));
+  setSfxVolume(volume: number) {
+    this.sfxVolume = Math.max(0, Math.min(1, volume));
+  }
+
+  setMusicVolume(volume: number) {
+    this.musicVolume = Math.max(0, Math.min(1, volume));
+    this.audioFiles.forEach((audio, name) => {
+      if (name.startsWith('music_')) {
+        audio.volume = this.musicVolume;
+      }
+    });
+  }
+
+  getSfxVolume(): number {
+    return this.sfxVolume;
+  }
+
+  getMusicVolume(): number {
+    return this.musicVolume;
   }
 
   private async ensureAudioContext() {
@@ -41,7 +59,7 @@ export class SoundManager {
       oscillator.type = type;
       oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
       
-      const finalVolume = volume * this.masterVolume;
+      const finalVolume = volume * this.sfxVolume;
       gainNode.gain.setValueAtTime(finalVolume, this.audioContext.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
       
@@ -71,7 +89,7 @@ export class SoundManager {
       source.connect(gainNode);
       gainNode.connect(this.audioContext.destination);
       
-      gainNode.gain.setValueAtTime(volume * this.masterVolume, this.audioContext.currentTime);
+      gainNode.gain.setValueAtTime(volume * this.sfxVolume, this.audioContext.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
       
       source.start(this.audioContext.currentTime);
@@ -124,7 +142,7 @@ export class SoundManager {
       oscillator.frequency.setValueAtTime(1000, this.audioContext!.currentTime);
       oscillator.frequency.exponentialRampToValueAtTime(200, this.audioContext!.currentTime + 0.3);
       
-      gainNode.gain.setValueAtTime(0.3 * this.masterVolume, this.audioContext!.currentTime);
+      gainNode.gain.setValueAtTime(0.3 * this.sfxVolume, this.audioContext!.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext!.currentTime + 0.3);
       
       oscillator.start(this.audioContext!.currentTime);
@@ -172,7 +190,8 @@ export class SoundManager {
 
   loadAudioFile(name: string, url: string) {
     const audio = new Audio(url);
-    audio.volume = this.masterVolume;
+    const isMusic = name.startsWith('music_');
+    audio.volume = isMusic ? this.musicVolume : this.sfxVolume;
     this.audioFiles.set(name, audio);
   }
 
@@ -182,7 +201,8 @@ export class SoundManager {
     const audio = this.audioFiles.get(name);
     if (audio) {
       audio.currentTime = 0;
-      audio.volume = this.masterVolume;
+      const isMusic = name.startsWith('music_');
+      audio.volume = isMusic ? this.musicVolume : this.sfxVolume;
       audio.play().catch(() => {});
     }
   }
