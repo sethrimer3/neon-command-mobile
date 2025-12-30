@@ -380,15 +380,12 @@ export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCan
   if (dist > 10 && !mouseState.isDragging) {
     mouseState.isDragging = true;
 
-    const elapsed = Date.now() - mouseState.startTime;
-    if (elapsed > HOLD_TIME_MS) {
-      mouseState.selectionRect = {
-        x1: mouseState.startPos.x,
-        y1: mouseState.startPos.y,
-        x2: x,
-        y2: y,
-      };
-    }
+    mouseState.selectionRect = {
+      x1: mouseState.startPos.x,
+      y1: mouseState.startPos.y,
+      x2: x,
+      y2: y,
+    };
   }
 
   if (mouseState.selectionRect) {

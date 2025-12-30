@@ -844,8 +844,8 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
       },
     ],
     players: [
-      { photons: 0, incomeRate: 1, color: settings.playerColor },
-      { photons: 0, incomeRate: 1, color: settings.enemyColor },
+      { photons: 50, incomeRate: 1, color: settings.playerColor },
+      { photons: 50, incomeRate: 1, color: settings.enemyColor },
     ],
     selectedUnits: new Set(),
     elapsedTime: 0,
@@ -905,8 +905,8 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
       },
     ],
     players: [
-      { photons: 0, incomeRate: 1, color: settings.playerColor },
-      { photons: 0, incomeRate: 1, color: settings.enemyColor },
+      { photons: 50, incomeRate: 1, color: settings.playerColor },
+      { photons: 50, incomeRate: 1, color: settings.enemyColor },
     ],
     selectedUnits: new Set(),
     elapsedTime: 0,
@@ -959,8 +959,8 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
       },
     ],
     players: [
-      { photons: 0, incomeRate: 1, color: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault },
-      { photons: 0, incomeRate: 1, color: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor },
+      { photons: 50, incomeRate: 1, color: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault },
+      { photons: 50, incomeRate: 1, color: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor },
     ],
     selectedUnits: new Set(),
     elapsedTime: 0,
@@ -1020,8 +1020,8 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean): GameStat
       },
     ],
     players: [
-      { photons: 0, incomeRate: 1, color: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault },
-      { photons: 0, incomeRate: 1, color: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor },
+      { photons: 50, incomeRate: 1, color: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault },
+      { photons: 50, incomeRate: 1, color: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor },
     ],
     selectedUnits: new Set(),
     elapsedTime: 0,

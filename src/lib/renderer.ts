@@ -663,16 +663,10 @@ function drawHUD(ctx: CanvasRenderingContext2D, state: GameState): void {
 
   const p1 = state.players[0];
   ctx.fillStyle = p1.color;
-  ctx.fillText(`P1: ${Math.floor(p1.photons)} photons (+${p1.incomeRate}/s)`, 10, 20);
-
-  if (state.players[1]) {
-    const p2 = state.players[1];
-    ctx.fillStyle = p2.color;
-    ctx.fillText(`P2: ${Math.floor(p2.photons)} photons (+${p2.incomeRate}/s)`, 10, 40);
-  }
+  ctx.fillText(`Photons: ${Math.floor(p1.photons)} (+${p1.incomeRate}/s)`, 10, 20);
 
   ctx.fillStyle = COLORS.white;
-  ctx.fillText(`Time: ${Math.floor(state.elapsedTime)}s`, 10, 60);
+  ctx.fillText(`Time: ${Math.floor(state.elapsedTime)}s`, 10, 40);
   
   if (state.matchTimeLimit) {
     const timeRemaining = Math.max(0, state.matchTimeLimit - state.elapsedTime);
