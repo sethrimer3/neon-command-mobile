@@ -258,12 +258,65 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
         ctx.arc(targetScreen.x, targetScreen.y, 6, 0, Math.PI * 2);
         ctx.fill();
       }
+      
+      drawBaseHealthBar(ctx, base, screenPos, size, color, state);
     }
-
-    const hpPercent = base.hp / base.maxHp;
-    ctx.fillStyle = '#ff0000';
-    ctx.fillRect(screenPos.x - size / 2, screenPos.y - size / 2 - 10, size * hpPercent, 4);
   });
+}
+
+function drawBaseHealthBar(ctx: CanvasRenderingContext2D, base: Base, screenPos: { x: number; y: number }, baseSize: number, color: string, state: GameState): void {
+  const barWidth = baseSize * 1.2;
+  const barHeight = 8;
+  const barX = screenPos.x - barWidth / 2;
+  const barY = screenPos.y - baseSize / 2 - 20;
+  const hpPercent = base.hp / base.maxHp;
+  
+  ctx.save();
+  
+  ctx.fillStyle = 'oklch(0.20 0 0)';
+  ctx.strokeStyle = 'oklch(0.45 0 0)';
+  ctx.lineWidth = 1.5;
+  ctx.fillRect(barX, barY, barWidth, barHeight);
+  ctx.strokeRect(barX, barY, barWidth, barHeight);
+  
+  const gradient = ctx.createLinearGradient(barX, barY, barX + barWidth * hpPercent, barY);
+  
+  if (hpPercent > 0.6) {
+    gradient.addColorStop(0, 'oklch(0.70 0.20 140)');
+    gradient.addColorStop(1, 'oklch(0.65 0.22 145)');
+  } else if (hpPercent > 0.3) {
+    gradient.addColorStop(0, 'oklch(0.85 0.20 95)');
+    gradient.addColorStop(1, 'oklch(0.78 0.22 85)');
+  } else {
+    gradient.addColorStop(0, 'oklch(0.62 0.28 25)');
+    gradient.addColorStop(1, 'oklch(0.58 0.26 20)');
+  }
+  
+  ctx.fillStyle = gradient;
+  ctx.fillRect(barX, barY, barWidth * hpPercent, barHeight);
+  
+  ctx.shadowColor = hpPercent > 0.6 ? 'oklch(0.70 0.20 140)' : hpPercent > 0.3 ? 'oklch(0.85 0.20 95)' : 'oklch(0.62 0.28 25)';
+  ctx.shadowBlur = 8;
+  ctx.fillRect(barX, barY, barWidth * hpPercent, barHeight);
+  ctx.shadowBlur = 0;
+  
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 6;
+  ctx.strokeRect(barX, barY, barWidth, barHeight);
+  ctx.shadowBlur = 0;
+  
+  ctx.fillStyle = COLORS.white;
+  ctx.font = 'bold 11px Space Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'oklch(0 0 0)';
+  ctx.shadowBlur = 3;
+  ctx.fillText(`${Math.ceil(base.hp)} / ${base.maxHp}`, screenPos.x, barY + barHeight / 2);
+  ctx.shadowBlur = 0;
+  
+  ctx.restore();
 }
 
 function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {

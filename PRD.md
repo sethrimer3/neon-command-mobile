@@ -34,11 +34,11 @@ This is a full real-time strategy game with multiple systems: menu navigation, g
 - **Success criteria**: All 8 maps display correctly, selection persists between sessions, obstacles render properly in-game, collision detection works with all obstacle types
 
 ### Real-Time Match Gameplay
-- **Functionality**: Full RTS match with bases, unit spawning, movement, combat, abilities, and terrain obstacles
-- **Purpose**: Core gameplay loop where players compete to destroy enemy base while navigating terrain
+- **Functionality**: Full RTS match with bases, unit spawning, movement, combat, abilities, and terrain obstacles with prominent visual health indicators
+- **Purpose**: Core gameplay loop where players compete to destroy enemy base while navigating terrain with clear health visibility
 - **Trigger**: Selecting Vs. AI or Vs. Player from menu
-- **Progression**: Match Start → Economy Generation → Unit Production → Tactical Movement (avoiding obstacles) → Combat → Base Destruction → Victory Screen → Return to Menu
-- **Success criteria**: Stable 60fps on mobile, all gesture inputs recognized, units execute commands correctly, units avoid obstacles, win condition triggers properly
+- **Progression**: Match Start → Economy Generation → Unit Production → Tactical Movement (avoiding obstacles) → Combat (with visible base health) → Base Destruction → Victory Screen → Return to Menu
+- **Success criteria**: Stable 60fps on mobile, all gesture inputs recognized, units execute commands correctly, units avoid obstacles, base health bars clearly visible at all times, win condition triggers properly
 
 ### Gesture-Based Unit Commands
 - **Functionality**: Touch gestures for selecting units, issuing movement orders, and casting abilities
@@ -219,6 +219,7 @@ This is a Canvas-based game, so traditional shadcn components are primarily used
   - Map Selection Screen: shadcn `Card`, `ScrollArea`, grid layout of map cards with descriptions
   - Victory Overlay: Custom canvas modal with shadcn-styled `Button` for "Return to Menu"
   - Surrender Button: shadcn `Button` with `Flag` icon, fixed position top-left with click counter
+  - Base Health Bars: Canvas-rendered progress bars with gradient fills, numeric display, and glowing borders
   - Debug HUD: Canvas text rendering, no React components
 - **Customizations**: 
   - Custom canvas gesture handlers for all gameplay input (touch and mouse)
@@ -228,9 +229,11 @@ This is a Canvas-based game, so traditional shadcn components are primarily used
   - Selection rectangle overlay during drag operations (canvas or mouse)
   - Map cards with hover effects and selected state highlighting
   - Obstacle rendering with type-specific neon colors and glow effects
+  - Base health bars with gradient fills (green→yellow→red based on HP %), bordered in player color with glow effects, numeric HP display (current/max)
 - **States**: 
   - Units: default (subtle glow), selected (bright pulsing glow), executing ability (color flash)
   - Base: idle (dim), spawnable sides (bright glow), selected (border pulse), laser cooldown (progress arc)
+  - Base Health: >60% (green gradient), 30-60% (yellow gradient), <30% (red gradient), all with matching glow effects
   - Buttons: rest (medium glow), touch-down (bright), disabled (very dim + "Coming Soon" text)
   - Surrender Button: default (small), showing count (expanded with progress), about to surrender (destructive styling)
   - Unit Slots: unselected (subtle), selected for editing (highlighted ring), hover (scale-up)
@@ -248,6 +251,7 @@ This is a Canvas-based game, so traditional shadcn components are primarily used
   - Surrender button: 16px from top-left corner, compact sizing
   - Unit slot selectors: 80px squares with 32px gap from base center
   - Map selection grid: 16px gap between cards, responsive 1-2 column layout
+  - Base health bars: 20px above base top edge, 120% base width, 8px height with 1.5px border
 - **Mobile**: 
   - Canvas fills entire viewport (100vw/100vh minus minimal chrome)
   - Touch targets minimum 44px for menu buttons and unit slots
