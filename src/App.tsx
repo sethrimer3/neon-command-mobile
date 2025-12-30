@@ -19,7 +19,7 @@ import { MultiplayerLobbyScreen } from './components/MultiplayerLobbyScreen';
 import { StatisticsScreen } from './components/StatisticsScreen';
 import { getMapById, getValidBasePositions } from './lib/maps';
 import { MultiplayerManager, LobbyData } from './lib/multiplayer';
-import { PlayerStatistics, MatchStats, createEmptyStatistics, updateStatistics } from './lib/statistics';
+import { PlayerStatistics, MatchStats, createEmptyStatistics, updateStatistics, calculateMMRChange } from './lib/statistics';
 import { soundManager } from './lib/sound';
 
 function App() {
@@ -145,6 +145,16 @@ function App() {
           updateGame(gameStateRef.current, deltaTime);
           updateAI(gameStateRef.current, deltaTime);
         }
+        
+        if (gameStateRef.current.matchTimeLimit && !gameStateRef.current.timeoutWarningShown) {
+          const timeRemaining = gameStateRef.current.matchTimeLimit - gameStateRef.current.elapsedTime;
+          if (timeRemaining <= 30 && timeRemaining > 29) {
+            gameStateRef.current.timeoutWarningShown = true;
+            toast.warning('30 seconds remaining!', {
+              duration: 3000,
+            });
+          }
+        }
       }
 
       const selectionRect = getActiveSelectionRect();
@@ -206,7 +216,7 @@ function App() {
     setRenderTrigger(prev => prev + 1);
   };
 
-  const returnToMenu = (recordMatch: boolean = false, result?: 'victory' | 'defeat' | 'surrender') => {
+  const returnToMenu = (recordMatch: boolean = false, result?: 'victory' | 'defeat' | 'surrender' | 'draw') => {
     if (result === 'victory') {
       soundManager.playVictory();
     } else if (result === 'defeat') {
@@ -215,28 +225,58 @@ function App() {
     
     if (recordMatch && result && gameStateRef.current.matchStats && gameStateRef.current.vsMode) {
       const duration = (Date.now() - gameStateRef.current.matchStats.startTime) / 1000;
-      const newMatch: MatchStats = {
-        matchId: generateId(),
-        timestamp: Date.now(),
-        result,
-        vsMode: gameStateRef.current.vsMode,
-        opponentName: gameStateRef.current.vsMode === 'ai' ? 'AI' : undefined,
-        mapId: gameStateRef.current.settings.selectedMap,
-        duration,
-        unitsTrainedByPlayer: gameStateRef.current.matchStats.unitsTrainedByPlayer,
-        unitsKilledByPlayer: gameStateRef.current.matchStats.unitsKilledByPlayer,
-        damageDealtByPlayer: gameStateRef.current.matchStats.damageDealtByPlayer,
-        photonsSpentByPlayer: gameStateRef.current.matchStats.photonsSpentByPlayer,
-        basesDestroyedByPlayer: result === 'victory' ? 1 : 0,
-        finalPlayerColor: gameStateRef.current.settings.playerColor,
-        finalEnemyColor: gameStateRef.current.settings.enemyColor,
-      };
       
       setPlayerStatistics((currentStats) => {
-        return updateStatistics(currentStats || createEmptyStatistics(), newMatch);
+        const stats = currentStats || createEmptyStatistics();
+        
+        let mmrChange = 0;
+        let opponentMMR = 1000;
+        let playerMMRBefore = stats.mmr;
+        let playerMMRAfter = stats.mmr;
+        
+        if (gameStateRef.current.vsMode === 'online' && result !== 'surrender') {
+          if (result === 'draw') {
+            mmrChange = calculateMMRChange(stats.mmr, opponentMMR, 'draw');
+          } else {
+            mmrChange = calculateMMRChange(stats.mmr, opponentMMR, result);
+          }
+          playerMMRAfter = stats.mmr + mmrChange;
+        }
+        
+        const newMatch: MatchStats = {
+          matchId: generateId(),
+          timestamp: Date.now(),
+          result,
+          vsMode: gameStateRef.current.vsMode!,
+          opponentName: gameStateRef.current.vsMode === 'ai' ? 'AI' : undefined,
+          opponentMMR: gameStateRef.current.vsMode === 'online' ? opponentMMR : undefined,
+          mapId: gameStateRef.current.settings.selectedMap,
+          duration,
+          unitsTrainedByPlayer: gameStateRef.current.matchStats!.unitsTrainedByPlayer,
+          unitsKilledByPlayer: gameStateRef.current.matchStats!.unitsKilledByPlayer,
+          damageDealtByPlayer: gameStateRef.current.matchStats!.damageDealtByPlayer,
+          photonsSpentByPlayer: gameStateRef.current.matchStats!.photonsSpentByPlayer,
+          basesDestroyedByPlayer: result === 'victory' ? 1 : 0,
+          finalPlayerColor: gameStateRef.current.settings.playerColor,
+          finalEnemyColor: gameStateRef.current.settings.enemyColor,
+          mmrChange: gameStateRef.current.vsMode === 'online' && result !== 'surrender' ? mmrChange : undefined,
+          playerMMRBefore: gameStateRef.current.vsMode === 'online' && result !== 'surrender' ? playerMMRBefore : undefined,
+          playerMMRAfter: gameStateRef.current.vsMode === 'online' && result !== 'surrender' ? playerMMRAfter : undefined,
+          timeoutResult: duration >= 295,
+        };
+        
+        if (gameStateRef.current.vsMode === 'online' && result !== 'surrender') {
+          if (result === 'draw') {
+            toast.info(`Draw! MMR ${mmrChange >= 0 ? '+' : ''}${mmrChange}`);
+          } else {
+            toast.success(`Match saved! MMR ${mmrChange >= 0 ? '+' : ''}${mmrChange}`);
+          }
+        } else {
+          toast.success('Match statistics saved!');
+        }
+        
+        return updateStatistics(stats, newMatch);
       });
-      
-      toast.success('Match statistics saved!');
     }
     
     if (multiplayerManagerRef.current?.getGameId()) {
@@ -691,15 +731,26 @@ function App() {
           <Card className="w-96 max-w-full">
             <CardHeader>
               <CardTitle className="orbitron text-3xl text-center">
-                {gameState.winner === 0 ? 'Victory!' : 'Defeat'}
+                {gameState.winner === -1 ? 'Draw!' : gameState.winner === 0 ? 'Victory!' : 'Defeat'}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-center mb-6">
-                {gameState.winner === 0 ? 'You destroyed the enemy base!' : 'Your base was destroyed.'}
+                {gameState.winner === -1 
+                  ? 'Time limit reached! Both players dealt equal damage.' 
+                  : gameState.winner === 0 
+                    ? gameState.elapsedTime >= (gameState.matchTimeLimit || 300) 
+                      ? 'Time limit reached! Your base took less damage.'
+                      : 'You destroyed the enemy base!' 
+                    : gameState.elapsedTime >= (gameState.matchTimeLimit || 300)
+                      ? 'Time limit reached! Your base took more damage.'
+                      : 'Your base was destroyed.'}
               </p>
               <Button 
-                onClick={() => returnToMenu(true, gameState.winner === 0 ? 'victory' : 'defeat')} 
+                onClick={() => returnToMenu(
+                  true, 
+                  gameState.winner === -1 ? 'draw' : gameState.winner === 0 ? 'victory' : 'defeat'
+                )} 
                 className="w-full orbitron" 
                 variant="default"
               >
@@ -795,7 +846,10 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
       unitsKilledByPlayer: 0,
       damageDealtByPlayer: 0,
       photonsSpentByPlayer: 0,
+      damageToPlayerBase: 0,
+      damageToEnemyBase: 0,
     },
+    matchTimeLimit: 300,
   };
 }
 
@@ -973,7 +1027,10 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean): GameStat
       unitsKilledByPlayer: 0,
       damageDealtByPlayer: 0,
       photonsSpentByPlayer: 0,
+      damageToPlayerBase: 0,
+      damageToEnemyBase: 0,
     },
+    matchTimeLimit: 300,
   };
 }
 

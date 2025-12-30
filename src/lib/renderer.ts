@@ -576,6 +576,27 @@ function drawHUD(ctx: CanvasRenderingContext2D, state: GameState): void {
 
   ctx.fillStyle = COLORS.white;
   ctx.fillText(`Time: ${Math.floor(state.elapsedTime)}s`, 10, 60);
+  
+  if (state.matchTimeLimit) {
+    const timeRemaining = Math.max(0, state.matchTimeLimit - state.elapsedTime);
+    const mins = Math.floor(timeRemaining / 60);
+    const secs = Math.floor(timeRemaining % 60);
+    const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+    
+    if (timeRemaining <= 30) {
+      ctx.fillStyle = 'oklch(0.62 0.28 25)';
+    } else if (timeRemaining <= 60) {
+      ctx.fillStyle = 'oklch(0.85 0.20 95)';
+    } else {
+      ctx.fillStyle = COLORS.white;
+    }
+    
+    ctx.font = '18px Orbitron, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(timeStr, ctx.canvas.width / 2, 30);
+    ctx.textAlign = 'left';
+    ctx.font = '14px Space Grotesk, sans-serif';
+  }
 }
 
 function drawSelectionRect(ctx: CanvasRenderingContext2D, rect: { x1: number; y1: number; x2: number; y2: number }, state: GameState): void {

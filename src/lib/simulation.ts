@@ -25,6 +25,7 @@ export function updateGame(state: GameState, deltaTime: number): void {
   updateUnits(state, deltaTime);
   updateBases(state, deltaTime);
   updateCombat(state, deltaTime);
+  checkTimeLimit(state);
   checkVictory(state);
 }
 
@@ -491,10 +492,19 @@ function updateCombat(state: GameState, deltaTime: number): void {
           soundManager.playAttack();
         }
       } else {
-        (target as Base).hp -= damage;
+        const targetBase = target as Base;
+        targetBase.hp -= damage;
         
-        if (state.matchStats && unit.owner === 0) {
-          state.matchStats.damageDealtByPlayer += damage;
+        if (state.matchStats) {
+          if (targetBase.owner === 0) {
+            state.matchStats.damageToPlayerBase += damage;
+          } else {
+            state.matchStats.damageToEnemyBase += damage;
+          }
+          
+          if (unit.owner === 0) {
+            state.matchStats.damageDealtByPlayer += damage;
+          }
         }
         
         if (unit.owner === 0 && Math.random() < 0.1) {
@@ -538,6 +548,54 @@ function checkVictory(state: GameState): void {
       state.mode = 'victory';
     }
   });
+}
+
+function checkTimeLimit(state: GameState): void {
+  if (!state.matchTimeLimit) return;
+  if (state.winner !== null) return;
+  
+  const timeRemaining = state.matchTimeLimit - state.elapsedTime;
+  
+  if (timeRemaining <= 30 && timeRemaining > 29 && !state.timeoutWarningShown) {
+    state.timeoutWarningShown = true;
+  }
+  
+  if (state.elapsedTime >= state.matchTimeLimit) {
+    const playerBase = state.bases.find(b => b.owner === 0);
+    const enemyBase = state.bases.find(b => b.owner === 1);
+    
+    if (!playerBase || !enemyBase) return;
+    
+    const playerBaseDamage = playerBase.maxHp - playerBase.hp;
+    const enemyBaseDamage = enemyBase.maxHp - enemyBase.hp;
+    
+    if (playerBaseDamage < enemyBaseDamage) {
+      state.winner = 0;
+      state.mode = 'victory';
+    } else if (enemyBaseDamage < playerBaseDamage) {
+      state.winner = 1;
+      state.mode = 'victory';
+    } else {
+      if (state.matchStats) {
+        const playerUnitDamage = state.matchStats.damageDealtByPlayer;
+        const enemyUnitDamage = state.matchStats.damageToPlayerBase;
+        
+        if (playerUnitDamage > enemyUnitDamage) {
+          state.winner = 0;
+          state.mode = 'victory';
+        } else if (enemyUnitDamage > playerUnitDamage) {
+          state.winner = 1;
+          state.mode = 'victory';
+        } else {
+          state.winner = -1;
+          state.mode = 'victory';
+        }
+      } else {
+        state.winner = -1;
+        state.mode = 'victory';
+      }
+    }
+  }
 }
 
 export function spawnUnit(state: GameState, owner: number, type: UnitType, spawnPos: { x: number; y: number }, rallyPos: { x: number; y: number }): void {

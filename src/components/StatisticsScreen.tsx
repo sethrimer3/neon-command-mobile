@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { Separator } from './ui/separator';
-import { ArrowLeft, Trophy, Sword, Target, Lightning, Clock, TrendUp } from '@phosphor-icons/react';
+import { ArrowLeft, Trophy, Sword, Target, Lightning, Clock, TrendUp, Equals } from '@phosphor-icons/react';
 import { PlayerStatistics, formatDuration, formatDate, getWinRate, getAverageMatchDuration } from '../lib/statistics';
 import { getMapById } from '../lib/maps';
 
@@ -23,7 +23,7 @@ export function StatisticsScreen({ statistics, onBack }: StatisticsScreenProps) 
           <CardTitle className="orbitron text-3xl text-center text-primary">Player Statistics</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6 overflow-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="bg-secondary/30 p-4 rounded-lg text-center">
               <Trophy className="mx-auto mb-2 text-primary" size={32} />
               <div className="text-2xl font-bold orbitron">{statistics.victories}</div>
@@ -37,6 +37,12 @@ export function StatisticsScreen({ statistics, onBack }: StatisticsScreenProps) 
             </div>
 
             <div className="bg-secondary/30 p-4 rounded-lg text-center">
+              <Equals className="mx-auto mb-2 text-accent" size={32} />
+              <div className="text-2xl font-bold orbitron">{statistics.draws}</div>
+              <div className="text-xs text-muted-foreground uppercase">Draws</div>
+            </div>
+
+            <div className="bg-secondary/30 p-4 rounded-lg text-center">
               <Sword className="mx-auto mb-2 text-accent" size={32} />
               <div className="text-2xl font-bold orbitron">{statistics.totalUnitsKilled}</div>
               <div className="text-xs text-muted-foreground uppercase">Kills</div>
@@ -47,6 +53,21 @@ export function StatisticsScreen({ statistics, onBack }: StatisticsScreenProps) 
               <div className="text-2xl font-bold orbitron">{statistics.totalMatches}</div>
               <div className="text-xs text-muted-foreground uppercase">Matches</div>
             </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-primary/20 to-accent/20 p-6 rounded-lg border-2 border-primary/50">
+            <div className="flex items-center justify-center gap-4 mb-2">
+              <TrendUp className="text-primary" size={32} />
+              <div className="text-center">
+                <div className="text-4xl font-black orbitron text-primary">{statistics.mmr}</div>
+                <div className="text-xs text-muted-foreground uppercase tracking-wider">Match Making Rating</div>
+              </div>
+            </div>
+            {statistics.peakMMR && statistics.peakMMR > statistics.mmr && (
+              <div className="text-center text-xs text-muted-foreground mt-2">
+                Peak MMR: <span className="font-bold text-foreground">{statistics.peakMMR}</span>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -131,6 +152,8 @@ export function StatisticsScreen({ statistics, onBack }: StatisticsScreenProps) 
                           ? 'bg-primary/10 border-primary/30'
                           : match.result === 'surrender'
                           ? 'bg-muted/20 border-muted-foreground/20'
+                          : match.result === 'draw'
+                          ? 'bg-accent/10 border-accent/30'
                           : 'bg-destructive/10 border-destructive/30'
                       }`}
                     >
@@ -142,6 +165,8 @@ export function StatisticsScreen({ statistics, onBack }: StatisticsScreenProps) 
                                 ? 'default'
                                 : match.result === 'surrender'
                                 ? 'secondary'
+                                : match.result === 'draw'
+                                ? 'outline'
                                 : 'destructive'
                             }
                             className="orbitron text-xs"
@@ -151,6 +176,20 @@ export function StatisticsScreen({ statistics, onBack }: StatisticsScreenProps) 
                           <span className="text-sm text-muted-foreground">
                             {formatDate(match.timestamp)}
                           </span>
+                          {match.mmrChange !== undefined && (
+                            <Badge
+                              variant="outline"
+                              className={`text-xs ${
+                                match.mmrChange > 0
+                                  ? 'text-primary border-primary'
+                                  : match.mmrChange < 0
+                                  ? 'text-destructive border-destructive'
+                                  : 'text-muted-foreground'
+                              }`}
+                            >
+                              {match.mmrChange > 0 ? '+' : ''}{match.mmrChange} MMR
+                            </Badge>
+                          )}
                         </div>
                         <div className="text-xs text-muted-foreground space-mono">
                           {formatDuration(match.duration)}
@@ -169,6 +208,9 @@ export function StatisticsScreen({ statistics, onBack }: StatisticsScreenProps) 
                             <span className="ml-3 text-muted-foreground">vs</span>
                             <span className="ml-2">{match.opponentName}</span>
                           </>
+                        )}
+                        {match.timeoutResult && (
+                          <Badge variant="secondary" className="ml-2 text-xs">TIME</Badge>
                         )}
                       </div>
 

@@ -232,5 +232,10 @@ export interface GameState {
     unitsKilledByPlayer: number;
     damageDealtByPlayer: number;
     photonsSpentByPlayer: number;
+    damageToPlayerBase: number;
+    damageToEnemyBase: number;
   };
+
+  matchTimeLimit?: number;
+  timeoutWarningShown?: boolean;
 }

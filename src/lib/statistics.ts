@@ -1,9 +1,10 @@
 export interface MatchStats {
   matchId: string;
   timestamp: number;
-  result: 'victory' | 'defeat' | 'surrender';
+  result: 'victory' | 'defeat' | 'surrender' | 'draw';
   vsMode: 'ai' | 'player' | 'online';
   opponentName?: string;
+  opponentMMR?: number;
   mapId: string;
   duration: number;
   unitsTrainedByPlayer: number;
@@ -13,6 +14,10 @@ export interface MatchStats {
   basesDestroyedByPlayer: number;
   finalPlayerColor: string;
   finalEnemyColor: string;
+  mmrChange?: number;
+  playerMMRBefore?: number;
+  playerMMRAfter?: number;
+  timeoutResult?: boolean;
 }
 
 export interface PlayerStatistics {
@@ -20,6 +25,7 @@ export interface PlayerStatistics {
   victories: number;
   defeats: number;
   surrenders: number;
+  draws: number;
   totalUnitsTrained: number;
   totalUnitsKilled: number;
   totalDamageDealt: number;
@@ -31,6 +37,8 @@ export interface PlayerStatistics {
   highestDamageMatch?: number;
   longestMatch?: number;
   shortestVictory?: number;
+  mmr: number;
+  peakMMR?: number;
 }
 
 export function createEmptyStatistics(): PlayerStatistics {
@@ -39,6 +47,7 @@ export function createEmptyStatistics(): PlayerStatistics {
     victories: 0,
     defeats: 0,
     surrenders: 0,
+    draws: 0,
     totalUnitsTrained: 0,
     totalUnitsKilled: 0,
     totalDamageDealt: 0,
@@ -46,7 +55,29 @@ export function createEmptyStatistics(): PlayerStatistics {
     totalBasesDestroyed: 0,
     totalPlayTime: 0,
     matchHistory: [],
+    mmr: 1000,
+    peakMMR: 1000,
   };
+}
+
+export function calculateMMRChange(
+  playerMMR: number,
+  opponentMMR: number,
+  result: 'victory' | 'defeat' | 'draw',
+  kFactor: number = 32
+): number {
+  const expectedScore = 1 / (1 + Math.pow(10, (opponentMMR - playerMMR) / 400));
+  
+  let actualScore: number;
+  if (result === 'victory') {
+    actualScore = 1;
+  } else if (result === 'defeat') {
+    actualScore = 0;
+  } else {
+    actualScore = 0.5;
+  }
+  
+  return Math.round(kFactor * (actualScore - expectedScore));
 }
 
 export function updateStatistics(
@@ -60,6 +91,7 @@ export function updateStatistics(
     victories: currentStats.victories + (newMatch.result === 'victory' ? 1 : 0),
     defeats: currentStats.defeats + (newMatch.result === 'defeat' ? 1 : 0),
     surrenders: currentStats.surrenders + (newMatch.result === 'surrender' ? 1 : 0),
+    draws: currentStats.draws + (newMatch.result === 'draw' ? 1 : 0),
     totalUnitsTrained: currentStats.totalUnitsTrained + newMatch.unitsTrainedByPlayer,
     totalUnitsKilled: currentStats.totalUnitsKilled + newMatch.unitsKilledByPlayer,
     totalDamageDealt: currentStats.totalDamageDealt + newMatch.damageDealtByPlayer,
@@ -67,6 +99,8 @@ export function updateStatistics(
     totalBasesDestroyed: currentStats.totalBasesDestroyed + newMatch.basesDestroyedByPlayer,
     totalPlayTime: currentStats.totalPlayTime + newMatch.duration,
     matchHistory,
+    mmr: newMatch.playerMMRAfter ?? currentStats.mmr,
+    peakMMR: Math.max(currentStats.peakMMR || currentStats.mmr, newMatch.playerMMRAfter ?? currentStats.mmr),
   };
 
   const mapCounts: Record<string, number> = {};
