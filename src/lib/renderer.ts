@@ -319,6 +319,39 @@ function drawBaseHealthBar(ctx: CanvasRenderingContext2D, base: Base, screenPos:
   ctx.restore();
 }
 
+function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
+  const barWidth = 24;
+  const barHeight = 4;
+  const barX = screenPos.x - barWidth / 2;
+  const barY = screenPos.y - 18;
+  const hpPercent = unit.hp / unit.maxHp;
+  
+  ctx.save();
+  
+  ctx.fillStyle = 'oklch(0.20 0 0)';
+  ctx.strokeStyle = 'oklch(0.35 0 0)';
+  ctx.lineWidth = 1;
+  ctx.fillRect(barX, barY, barWidth, barHeight);
+  ctx.strokeRect(barX, barY, barWidth, barHeight);
+  
+  if (hpPercent > 0.6) {
+    ctx.fillStyle = 'oklch(0.70 0.20 140)';
+  } else if (hpPercent > 0.3) {
+    ctx.fillStyle = 'oklch(0.85 0.20 95)';
+  } else {
+    ctx.fillStyle = 'oklch(0.62 0.28 25)';
+  }
+  
+  ctx.fillRect(barX, barY, barWidth * hpPercent, barHeight);
+  
+  ctx.shadowColor = hpPercent > 0.6 ? 'oklch(0.70 0.20 140)' : hpPercent > 0.3 ? 'oklch(0.85 0.20 95)' : 'oklch(0.62 0.28 25)';
+  ctx.shadowBlur = 4;
+  ctx.fillRect(barX, barY, barWidth * hpPercent, barHeight);
+  ctx.shadowBlur = 0;
+  
+  ctx.restore();
+}
+
 function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
   state.units.forEach((unit) => {
     const screenPos = positionToPixels(unit.position);
@@ -385,14 +418,12 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
 
     ctx.globalAlpha = 1.0;
 
+    drawUnitHealthBar(ctx, unit, screenPos, color);
+
     ctx.fillStyle = COLORS.white;
     ctx.font = '10px Space Mono, monospace';
     ctx.textAlign = 'center';
     ctx.fillText(`${unit.damageMultiplier.toFixed(1)}x`, screenPos.x, screenPos.y + 20);
-
-    const hpPercent = unit.hp / unit.maxHp;
-    ctx.fillStyle = '#00ff00';
-    ctx.fillRect(screenPos.x - 10, screenPos.y - 18, 20 * hpPercent, 2);
   });
 }
 
