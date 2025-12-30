@@ -23,9 +23,9 @@ function performAIActions(state: GameState): void {
 
   const aiPhotons = state.players[aiPlayer].photons;
 
-  const unitTypes: UnitType[] = ['marine', 'warrior', 'snaker'].filter((type) =>
-    state.settings.enabledUnits.has(type as UnitType)
-  ) as UnitType[];
+  const unitTypes: UnitType[] = (['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor'] as UnitType[]).filter((type) =>
+    state.settings.enabledUnits.has(type)
+  );
 
   if (unitTypes.length === 0) return;
 
@@ -58,6 +58,19 @@ function performAIActions(state: GameState): void {
         if (unit.commandQueue.length < QUEUE_MAX_LENGTH) {
           unit.commandQueue.push({ type: 'move', position: targetPos });
         }
+      }
+
+      if (unit.abilityCooldown === 0 && Math.random() < 0.2 && unit.commandQueue.length < QUEUE_MAX_LENGTH) {
+        const direction = {
+          x: playerBase.position.x - unit.position.x,
+          y: playerBase.position.y - unit.position.y,
+        };
+        
+        unit.commandQueue.push({ 
+          type: 'ability', 
+          position: unit.position, 
+          direction 
+        });
       }
     });
   }

@@ -42,9 +42,9 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
           <line x1="16" y1="4" x2="4" y2="16" stroke={color} strokeWidth="2" />
         </svg>
       );
-    } else {
+    } else if (unitType === 'snaker') {
       return (
-        <svg width={size} height={size} viewBox="0 0 40 20">
+        <svg width={size * 2} height={size} viewBox="0 0 40 20">
           {[0, 1, 2, 3, 4].map((i) => (
             <polygon
               key={i}
@@ -55,7 +55,42 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
           ))}
         </svg>
       );
+    } else if (unitType === 'tank') {
+      return (
+        <svg width={size} height={size} viewBox="0 0 20 20">
+          <rect x="2" y="2" width="16" height="16" fill={color} opacity="0.8" stroke={color} strokeWidth="2" />
+        </svg>
+      );
+    } else if (unitType === 'scout') {
+      return (
+        <svg width={size} height={size} viewBox="0 0 20 20">
+          <polygon points="10,2 17,17 10,14 3,17" fill={color} opacity="0.8" />
+        </svg>
+      );
+    } else if (unitType === 'artillery') {
+      return (
+        <svg width={size} height={size} viewBox="0 0 20 20">
+          <rect x="3" y="8" width="14" height="6" fill={color} opacity="0.8" />
+          <line x1="10" y1="11" x2="17" y2="3" stroke={color} strokeWidth="2" />
+        </svg>
+      );
+    } else if (unitType === 'medic') {
+      return (
+        <svg width={size} height={size} viewBox="0 0 20 20">
+          <circle cx="10" cy="10" r="8" fill={color} opacity="0.8" />
+          <rect x="7" y="4" width="6" height="12" fill="white" />
+          <rect x="4" y="7" width="12" height="6" fill="white" />
+        </svg>
+      );
+    } else if (unitType === 'interceptor') {
+      return (
+        <svg width={size} height={size} viewBox="0 0 20 20">
+          <polygon points="10,2 15,10 10,16 5,10" fill={color} opacity="0.8" />
+        </svg>
+      );
     }
+    
+    return null;
   };
 
   return (
@@ -130,19 +165,21 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
           {selectedSlot && (
             <div className="space-y-2">
               <p className="text-sm text-center orbitron">Select unit for {selectedSlot} slot:</p>
-              <div className="flex gap-2 justify-center">
-                {(['marine', 'warrior', 'snaker'] as UnitType[]).map((unitType) => (
+              <div className="grid grid-cols-4 gap-2 justify-center max-w-md mx-auto">
+                {(['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor'] as UnitType[]).map((unitType) => (
                   <button
                     key={unitType}
                     onClick={() => handleUnitSelect(unitType)}
-                    className="w-24 h-24 border-2 rounded-lg flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all"
+                    className="w-20 h-20 border-2 rounded-lg flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all"
                     style={{
                       borderColor: playerColor || COLORS.playerDefault,
                       backgroundColor: `${playerColor || COLORS.playerDefault}20`,
                     }}
                   >
-                    {renderUnitIcon(unitType, 32)}
-                    <span className="text-xs capitalize">{unitType}</span>
+                    <div className="flex items-center justify-center h-8">
+                      {renderUnitIcon(unitType, 24)}
+                    </div>
+                    <span className="text-xs capitalize leading-tight">{unitType}</span>
                     <span className="text-xs text-muted-foreground">{UNIT_DEFINITIONS[unitType].cost}◈</span>
                   </button>
                 ))}

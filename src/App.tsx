@@ -23,7 +23,7 @@ function App() {
 
   const [playerColor, setPlayerColor] = useKV('player-color', COLORS.playerDefault);
   const [enemyColor, setEnemyColor] = useKV('enemy-color', COLORS.enemyDefault);
-  const [enabledUnits, setEnabledUnits] = useKV<string[]>('enabled-units', ['marine', 'warrior', 'snaker']);
+  const [enabledUnits, setEnabledUnits] = useKV<string[]>('enabled-units', ['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor']);
   const [unitSlots, setUnitSlots] = useKV<Record<string, UnitType>>('unit-slots', { left: 'marine', up: 'warrior', down: 'snaker' });
 
   const gameState = gameStateRef.current;
@@ -32,7 +32,7 @@ function App() {
     gameStateRef.current.settings = {
       playerColor: playerColor || COLORS.playerDefault,
       enemyColor: enemyColor || COLORS.enemyDefault,
-      enabledUnits: new Set((enabledUnits || ['marine', 'warrior', 'snaker']) as UnitType[]),
+      enabledUnits: new Set((enabledUnits || ['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor']) as UnitType[]),
       unitSlots: (unitSlots || { left: 'marine', up: 'warrior', down: 'snaker' }) as Record<'left' | 'up' | 'down', UnitType>,
     };
     gameStateRef.current.players = gameStateRef.current.players.map((p, i) => ({
@@ -357,7 +357,7 @@ function createInitialState(): GameState {
     settings: {
       playerColor: COLORS.playerDefault,
       enemyColor: COLORS.enemyDefault,
-      enabledUnits: new Set(['marine', 'warrior', 'snaker']),
+      enabledUnits: new Set(['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor']),
       unitSlots: { left: 'marine', up: 'warrior', down: 'snaker' },
     },
     surrenderClicks: 0,

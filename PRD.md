@@ -82,6 +82,23 @@ This is a full real-time strategy game with multiple systems: menu navigation, g
 - **Progression**: Click 1 → Counter Shows (1/5) → Clicks 2-4 → Counter Updates → Click 5 → Match Ends as Defeat → OR → Click Canvas → Counter Resets
 - **Success criteria**: Button shows progress, 5 clicks triggers defeat, clicking elsewhere cancels, toast notifications show remaining clicks
 
+### Unit Types & Strategic Roles
+The game features 8 distinct unit types, each with unique strategic roles and abilities:
+
+#### Basic Units
+- **Marine**: Standard ranged attacker with burst fire ability (10 rapid shots). Balanced all-rounder for early pressure and sustained damage.
+- **Warrior**: Melee bruiser with execute dash ability (teleports to enemies within 2m radius, dealing 5x damage). Effective against clustered enemies.
+- **Snaker**: Fast harassment unit with line jump ability (telegraphs 0.5s, then dashes along a line dealing 20 damage to intersected units). Cannot damage structures.
+
+#### Advanced Units
+- **Tank**: Heavy defensive unit with shield dome ability (creates 4m radius shield for 5s that reduces damage by 70% for allies inside). Protects vulnerable allies and pushes objectives.
+- **Scout**: Fast reconnaissance unit with cloak ability (becomes invisible for 6s, untargetable by enemies). Ideal for flanking, scouting enemy positions, and harassment.
+- **Artillery**: Long-range siege unit with bombardment ability (marks target area, impacts after 1.5s dealing area damage for 0.5s). Excels at destroying bases and controlling zones.
+- **Medic**: Support unit with heal pulse ability (instantly heals all allies within 5m radius for 50 HP, bases for 100 HP). Essential for sustaining pushes.
+- **Interceptor**: Fast anti-air specialist with missile barrage ability (fires 6 homing missiles at enemies in a direction, each dealing 15 damage). Great for burst damage on priority targets.
+
+Each unit has distinct visual representation, cost, stats, and ability cooldowns to create diverse tactical compositions and counter-play opportunities.
+
 ## Edge Case Handling
 
 - **Out of Bounds Movement** - Commands beyond arena boundaries get clamped to valid positions

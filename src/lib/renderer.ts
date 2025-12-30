@@ -186,12 +186,26 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     const screenPos = positionToPixels(unit.position);
     const color = state.players[unit.owner].color;
 
+    if (unit.cloaked) {
+      ctx.globalAlpha = 0.3;
+    }
+
     ctx.save();
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
 
     if (unit.type === 'snaker') {
       drawSnaker(ctx, unit, screenPos, color);
+    } else if (unit.type === 'tank') {
+      drawTank(ctx, unit, screenPos, color);
+    } else if (unit.type === 'scout') {
+      drawScout(ctx, unit, screenPos, color);
+    } else if (unit.type === 'artillery') {
+      drawArtillery(ctx, unit, screenPos, color);
+    } else if (unit.type === 'medic') {
+      drawMedic(ctx, unit, screenPos, color);
+    } else if (unit.type === 'interceptor') {
+      drawInterceptor(ctx, unit, screenPos, color);
     } else {
       const radius = metersToPixels(UNIT_SIZE_METERS / 2);
 
@@ -214,6 +228,24 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     }
 
     ctx.restore();
+
+    if (unit.shieldActive) {
+      drawShieldDome(ctx, unit, screenPos, color);
+    }
+
+    if (unit.healPulseActive) {
+      drawHealPulse(ctx, unit, screenPos, color);
+    }
+
+    if (unit.missileBarrageActive) {
+      drawMissileBarrage(ctx, unit, screenPos, color);
+    }
+
+    if (unit.bombardmentActive) {
+      drawBombardment(ctx, unit, color, state);
+    }
+
+    ctx.globalAlpha = 1.0;
 
     ctx.fillStyle = COLORS.white;
     ctx.font = '10px Space Mono, monospace';
@@ -242,6 +274,183 @@ function drawSnaker(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: n
     ctx.lineTo(screenPos.x - offset + wobble, screenPos.y + segmentSize);
     ctx.closePath();
     ctx.fill();
+  }
+}
+
+function drawTank(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
+  const size = metersToPixels(UNIT_SIZE_METERS);
+
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+
+  ctx.fillRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+  ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+}
+
+function drawScout(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
+  const radius = metersToPixels(UNIT_SIZE_METERS / 2) * 0.7;
+
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = color;
+
+  ctx.beginPath();
+  ctx.moveTo(screenPos.x, screenPos.y - radius * 1.2);
+  ctx.lineTo(screenPos.x + radius, screenPos.y + radius);
+  ctx.lineTo(screenPos.x - radius, screenPos.y + radius);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawArtillery(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
+  const radius = metersToPixels(UNIT_SIZE_METERS / 2);
+
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = color;
+
+  ctx.fillRect(screenPos.x - radius, screenPos.y - radius / 2, radius * 2, radius);
+
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(screenPos.x, screenPos.y);
+  ctx.lineTo(screenPos.x + radius * 1.5, screenPos.y - radius);
+  ctx.stroke();
+}
+
+function drawMedic(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
+  const radius = metersToPixels(UNIT_SIZE_METERS / 2);
+
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = color;
+
+  ctx.beginPath();
+  ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = COLORS.white;
+  const crossSize = radius * 0.6;
+  ctx.fillRect(screenPos.x - crossSize / 2, screenPos.y - crossSize / 6, crossSize, crossSize / 3);
+  ctx.fillRect(screenPos.x - crossSize / 6, screenPos.y - crossSize / 2, crossSize / 3, crossSize);
+}
+
+function drawInterceptor(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
+  const radius = metersToPixels(UNIT_SIZE_METERS / 2) * 0.8;
+
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = color;
+
+  ctx.beginPath();
+  ctx.moveTo(screenPos.x, screenPos.y - radius * 1.4);
+  ctx.lineTo(screenPos.x + radius * 0.6, screenPos.y);
+  ctx.lineTo(screenPos.x, screenPos.y + radius);
+  ctx.lineTo(screenPos.x - radius * 0.6, screenPos.y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawShieldDome(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
+  if (!unit.shieldActive) return;
+
+  const radius = metersToPixels(unit.shieldActive.radius);
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.4;
+  ctx.setLineDash([5, 5]);
+
+  ctx.beginPath();
+  ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.1;
+  ctx.fillStyle = color;
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawHealPulse(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
+  if (!unit.healPulseActive) return;
+
+  const progress = (Date.now() - (unit.healPulseActive.endTime - 1000)) / 1000;
+  const radius = metersToPixels(unit.healPulseActive.radius * progress);
+
+  ctx.save();
+  ctx.strokeStyle = '#00ff00';
+  ctx.lineWidth = 3;
+  ctx.globalAlpha = Math.max(0, 1 - progress);
+
+  ctx.beginPath();
+  ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawMissileBarrage(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
+  if (!unit.missileBarrageActive) return;
+
+  const progress = (Date.now() - (unit.missileBarrageActive.endTime - 1500)) / 1500;
+
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 8;
+
+  unit.missileBarrageActive.missiles.forEach((missile) => {
+    const currentPos = {
+      x: missile.position.x + (missile.target.x - missile.position.x) * progress,
+      y: missile.position.y + (missile.target.y - missile.position.y) * progress,
+    };
+    const currentScreenPos = positionToPixels(currentPos);
+
+    ctx.beginPath();
+    ctx.arc(currentScreenPos.x, currentScreenPos.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  ctx.restore();
+}
+
+function drawBombardment(ctx: CanvasRenderingContext2D, unit: Unit, color: string, state: GameState): void {
+  if (!unit.bombardmentActive) return;
+
+  const targetScreen = positionToPixels(unit.bombardmentActive.targetPos);
+  const now = Date.now();
+
+  if (now < unit.bombardmentActive.impactTime) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.globalAlpha = 0.6;
+
+    ctx.beginPath();
+    ctx.arc(targetScreen.x, targetScreen.y, metersToPixels(3), 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.restore();
+  } else {
+    const explosionProgress = (now - unit.bombardmentActive.impactTime) / (unit.bombardmentActive.endTime - unit.bombardmentActive.impactTime);
+    const radius = metersToPixels(3 * (1 + explosionProgress * 0.5));
+
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.globalAlpha = Math.max(0, 0.6 - explosionProgress * 0.6);
+
+    ctx.beginPath();
+    ctx.arc(targetScreen.x, targetScreen.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
   }
 }
 

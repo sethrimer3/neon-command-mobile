@@ -3,6 +3,7 @@ import {
   Unit,
   Base,
   UnitType,
+  Vector2,
   UNIT_DEFINITIONS,
   CommandNode,
   PROMOTION_DISTANCE_THRESHOLD,
@@ -47,6 +48,8 @@ function updateUnits(state: GameState, deltaTime: number): void {
     if (unit.abilityCooldown > 0) {
       unit.abilityCooldown = Math.max(0, unit.abilityCooldown - deltaTime);
     }
+
+    updateAbilityEffects(unit, state, deltaTime);
 
     if (unit.lineJumpTelegraph) {
       const elapsed = Date.now() - unit.lineJumpTelegraph.startTime;
@@ -113,6 +116,59 @@ function updateUnits(state: GameState, deltaTime: number): void {
   });
 }
 
+function updateAbilityEffects(unit: Unit, state: GameState, deltaTime: number): void {
+  const now = Date.now();
+
+  if (unit.shieldActive && now > unit.shieldActive.endTime) {
+    unit.shieldActive = undefined;
+  }
+
+  if (unit.cloaked && now > unit.cloaked.endTime) {
+    unit.cloaked = undefined;
+  }
+
+  if (unit.bombardmentActive) {
+    if (now > unit.bombardmentActive.impactTime && now < unit.bombardmentActive.endTime) {
+      const enemies = state.units.filter((u) => u.owner !== unit.owner);
+      enemies.forEach((enemy) => {
+        if (distance(enemy.position, unit.bombardmentActive!.targetPos) <= 3) {
+          enemy.hp -= 40 * unit.damageMultiplier * deltaTime;
+        }
+      });
+
+      const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
+      enemyBases.forEach((base) => {
+        if (distance(base.position, unit.bombardmentActive!.targetPos) <= 3) {
+          base.hp -= 80 * unit.damageMultiplier * deltaTime;
+        }
+      });
+    }
+
+    if (now > unit.bombardmentActive.endTime) {
+      unit.bombardmentActive = undefined;
+    }
+  }
+
+  if (unit.healPulseActive && now > unit.healPulseActive.endTime) {
+    unit.healPulseActive = undefined;
+  }
+
+  if (unit.missileBarrageActive) {
+    const progress = Math.min(1, (now - (unit.missileBarrageActive.endTime - 1500)) / 1500);
+    
+    if (progress >= 1) {
+      unit.missileBarrageActive.missiles.forEach((missile) => {
+        const enemies = state.units.filter((u) => u.owner !== unit.owner);
+        const target = enemies.find((e) => distance(e.position, missile.target) < 0.5);
+        if (target) {
+          target.hp -= missile.damage;
+        }
+      });
+      unit.missileBarrageActive = undefined;
+    }
+  }
+}
+
 function updateBases(state: GameState, deltaTime: number): void {
   state.bases.forEach((base) => {
     if (base.laserCooldown > 0) {
@@ -151,6 +207,21 @@ function executeAbility(state: GameState, unit: Unit, node: CommandNode): void {
       endPos: add(unit.position, scale(normalize(node.direction), Math.min(distance({ x: 0, y: 0 }, node.direction), 10))),
       direction: normalize(node.direction),
     };
+    unit.abilityCooldown = def.abilityCooldown;
+  } else if (unit.type === 'tank') {
+    executeShieldDome(state, unit);
+    unit.abilityCooldown = def.abilityCooldown;
+  } else if (unit.type === 'scout') {
+    executeCloak(state, unit);
+    unit.abilityCooldown = def.abilityCooldown;
+  } else if (unit.type === 'artillery') {
+    executeArtilleryBombardment(state, unit, node.position);
+    unit.abilityCooldown = def.abilityCooldown;
+  } else if (unit.type === 'medic') {
+    executeHealPulse(state, unit);
+    unit.abilityCooldown = def.abilityCooldown;
+  } else if (unit.type === 'interceptor') {
+    executeMissileBarrage(state, unit, node.direction);
     unit.abilityCooldown = def.abilityCooldown;
   }
 }
@@ -246,12 +317,86 @@ function executeLineJump(state: GameState, unit: Unit): void {
   unit.position = endPos;
 }
 
+function executeShieldDome(state: GameState, unit: Unit): void {
+  unit.shieldActive = {
+    endTime: Date.now() + 5000,
+    radius: 4,
+  };
+}
+
+function executeCloak(state: GameState, unit: Unit): void {
+  unit.cloaked = {
+    endTime: Date.now() + 6000,
+  };
+}
+
+function executeArtilleryBombardment(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  unit.bombardmentActive = {
+    endTime: Date.now() + 2000,
+    targetPos,
+    impactTime: Date.now() + 1500,
+  };
+}
+
+function executeHealPulse(state: GameState, unit: Unit): void {
+  const healAmount = 50;
+  const healRadius = 5;
+  
+  unit.healPulseActive = {
+    endTime: Date.now() + 1000,
+    radius: healRadius,
+  };
+
+  const allies = state.units.filter((u) => u.owner === unit.owner);
+  allies.forEach((ally) => {
+    if (distance(ally.position, unit.position) <= healRadius) {
+      ally.hp = Math.min(ally.hp + healAmount, ally.maxHp);
+    }
+  });
+
+  const allyBases = state.bases.filter((b) => b.owner === unit.owner);
+  allyBases.forEach((base) => {
+    if (distance(base.position, unit.position) <= healRadius) {
+      base.hp = Math.min(base.hp + healAmount * 2, base.maxHp);
+    }
+  });
+}
+
+function executeMissileBarrage(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  const dir = normalize(direction);
+  
+  const missiles: Array<{ position: Vector2; target: Vector2; damage: number }> = [];
+  
+  const enemiesInDirection = enemies.filter((e) => {
+    const toEnemy = subtract(e.position, unit.position);
+    const dist = distance(unit.position, e.position);
+    if (dist > 12) return false;
+    
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    return projectedDist > 0;
+  }).sort((a, b) => distance(unit.position, a.position) - distance(unit.position, b.position));
+
+  for (let i = 0; i < Math.min(6, enemiesInDirection.length); i++) {
+    missiles.push({
+      position: { ...unit.position },
+      target: { ...enemiesInDirection[i].position },
+      damage: 15 * unit.damageMultiplier,
+    });
+  }
+
+  unit.missileBarrageActive = {
+    endTime: Date.now() + 1500,
+    missiles,
+  };
+}
+
 function updateCombat(state: GameState, deltaTime: number): void {
   state.units.forEach((unit) => {
     const def = UNIT_DEFINITIONS[unit.type];
     if (def.attackType === 'none') return;
 
-    const enemies = state.units.filter((u) => u.owner !== unit.owner);
+    const enemies = state.units.filter((u) => u.owner !== unit.owner && !u.cloaked);
     const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
 
     let target: Unit | Base | null = null;
@@ -277,10 +422,25 @@ function updateCombat(state: GameState, deltaTime: number): void {
     }
 
     if (target) {
+      let damage = def.attackDamage * def.attackRate * deltaTime * unit.damageMultiplier;
+
       if ('type' in target) {
-        (target as Unit).hp -= def.attackDamage * def.attackRate * deltaTime * unit.damageMultiplier;
+        const targetUnit = target as Unit;
+        
+        if (targetUnit.shieldActive) {
+          const allies = state.units.filter((u) => 
+            u.owner === targetUnit.owner && 
+            u.shieldActive && 
+            distance(u.position, targetUnit.position) <= u.shieldActive.radius
+          );
+          if (allies.length > 0) {
+            damage *= 0.3;
+          }
+        }
+
+        targetUnit.hp -= damage;
       } else {
-        (target as Base).hp -= def.attackDamage * def.attackRate * deltaTime * unit.damageMultiplier;
+        (target as Base).hp -= damage;
       }
     }
   });

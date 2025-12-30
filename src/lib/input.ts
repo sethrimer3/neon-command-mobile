@@ -3,6 +3,7 @@ import {
   Unit,
   CommandNode,
   Base,
+  UnitType,
   QUEUE_MAX_LENGTH,
   ABILITY_MAX_RANGE,
   LASER_RANGE,
@@ -248,7 +249,7 @@ function handleBaseSwipe(state: GameState, base: Base, swipe: { x: number; y: nu
   const angle = Math.atan2(-swipe.y, swipe.x);
   const angleDeg = (angle * 180) / Math.PI;
 
-  let spawnType: 'marine' | 'warrior' | 'snaker' | null = null;
+  let spawnType: UnitType | null = null;
   let rallyOffset = { x: 0, y: 0 };
 
   if (angleDeg >= -45 && angleDeg < 45) {
@@ -266,7 +267,9 @@ function handleBaseSwipe(state: GameState, base: Base, swipe: { x: number; y: nu
   }
 
   const rallyPos = add(base.position, rallyOffset);
-  spawnUnit(state, playerIndex, spawnType, base.position, rallyPos);
+  if (spawnType) {
+    spawnUnit(state, playerIndex, spawnType, base.position, rallyPos);
+  }
 }
 
 function handleTap(state: GameState, screenPos: { x: number; y: number }, canvas: HTMLCanvasElement, playerIndex: number): void {

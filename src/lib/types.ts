@@ -46,6 +46,11 @@ export interface Unit {
   abilityCooldown: number;
   dashExecuting?: boolean;
   lineJumpTelegraph?: { startTime: number; endPos: Vector2; direction: Vector2 };
+  shieldActive?: { endTime: number; radius: number };
+  cloaked?: { endTime: number };
+  bombardmentActive?: { endTime: number; targetPos: Vector2; impactTime: number };
+  healPulseActive?: { endTime: number; radius: number };
+  missileBarrageActive?: { endTime: number; missiles: Array<{ position: Vector2; target: Vector2; damage: number }> };
 }
 
 export interface Base {
@@ -59,7 +64,7 @@ export interface Base {
   laserCooldown: number;
 }
 
-export type UnitType = 'marine' | 'warrior' | 'snaker';
+export type UnitType = 'marine' | 'warrior' | 'snaker' | 'tank' | 'scout' | 'artillery' | 'medic' | 'interceptor';
 
 export interface UnitDefinition {
   name: string;
@@ -114,6 +119,71 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     abilityName: 'Line Jump',
     abilityCooldown: 6,
     canDamageStructures: false,
+  },
+  tank: {
+    name: 'Heavy Tank',
+    hp: 200,
+    moveSpeed: 2,
+    attackType: 'ranged',
+    attackRange: 6,
+    attackDamage: 12,
+    attackRate: 0.8,
+    cost: 60,
+    abilityName: 'Shield Dome',
+    abilityCooldown: 12,
+    canDamageStructures: true,
+  },
+  scout: {
+    name: 'Scout',
+    hp: 30,
+    moveSpeed: 6,
+    attackType: 'ranged',
+    attackRange: 5,
+    attackDamage: 4,
+    attackRate: 3,
+    cost: 20,
+    abilityName: 'Cloak',
+    abilityCooldown: 15,
+    canDamageStructures: false,
+  },
+  artillery: {
+    name: 'Artillery',
+    hp: 50,
+    moveSpeed: 2.5,
+    attackType: 'ranged',
+    attackRange: 15,
+    attackDamage: 8,
+    attackRate: 0.5,
+    cost: 50,
+    abilityName: 'Bombardment',
+    abilityCooldown: 10,
+    canDamageStructures: true,
+  },
+  medic: {
+    name: 'Medic',
+    hp: 60,
+    moveSpeed: 3.5,
+    attackType: 'none',
+    attackRange: 0,
+    attackDamage: 0,
+    attackRate: 0,
+    cost: 35,
+    abilityName: 'Heal Pulse',
+    abilityCooldown: 7,
+    canDamageStructures: false,
+  },
+  interceptor: {
+    name: 'Interceptor',
+    hp: 55,
+    moveSpeed: 5.5,
+    attackType: 'ranged',
+    attackRange: 10,
+    attackDamage: 5,
+    attackRate: 2.5,
+    cost: 45,
+    abilityName: 'Missile Barrage',
+    abilityCooldown: 8,
+    canDamageStructures: true,
   },
 };
 
