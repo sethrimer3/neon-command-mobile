@@ -188,7 +188,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
 };
 
 export interface GameState {
-  mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection' | 'multiplayerLobby';
+  mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection' | 'multiplayerLobby' | 'countdown';
   vsMode: 'ai' | 'player' | 'online' | null;
   
   units: Unit[];
@@ -218,4 +218,11 @@ export interface GameState {
 
   surrenderClicks: number;
   lastSurrenderClickTime: number;
+  surrenderExpanded: boolean;
+
+  countdownStartTime?: number;
+  matchStartAnimation?: {
+    startTime: number;
+    phase: 'bases-sliding' | 'go';
+  };
 }

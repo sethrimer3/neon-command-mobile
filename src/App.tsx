@@ -87,9 +87,33 @@ function App() {
       const deltaTime = Math.min((now - lastTimeRef.current) / 1000, 0.1);
       lastTimeRef.current = now;
 
+      if (gameStateRef.current.mode === 'countdown') {
+        const elapsed = now - (gameStateRef.current.countdownStartTime || now);
+        if (elapsed >= 3000) {
+          gameStateRef.current.mode = 'game';
+          gameStateRef.current.matchStartAnimation = {
+            startTime: now,
+            phase: 'bases-sliding',
+          };
+          delete gameStateRef.current.countdownStartTime;
+        }
+      }
+
       if (gameStateRef.current.mode === 'game') {
-        updateGame(gameStateRef.current, deltaTime);
-        updateAI(gameStateRef.current, deltaTime);
+        const anim = gameStateRef.current.matchStartAnimation;
+        if (anim) {
+          const animElapsed = now - anim.startTime;
+          if (anim.phase === 'bases-sliding' && animElapsed >= 1500) {
+            anim.phase = 'go';
+          } else if (anim.phase === 'go' && animElapsed >= 2500) {
+            delete gameStateRef.current.matchStartAnimation;
+          }
+        }
+
+        if (!gameStateRef.current.matchStartAnimation || (gameStateRef.current.matchStartAnimation.phase === 'go')) {
+          updateGame(gameStateRef.current, deltaTime);
+          updateAI(gameStateRef.current, deltaTime);
+        }
       }
 
       const selectionRect = getActiveSelectionRect();
@@ -139,14 +163,14 @@ function App() {
   }, []);
 
   const startGame = (mode: 'ai' | 'player') => {
-    gameStateRef.current = createGameState(mode, gameStateRef.current.settings);
+    gameStateRef.current = createCountdownState(mode, gameStateRef.current.settings);
     setRenderTrigger(prev => prev + 1);
   };
 
   const startOnlineGame = () => {
     if (!currentLobby) return;
     const isHost = multiplayerManagerRef.current?.getIsHost() || false;
-    gameStateRef.current = createOnlineGameState(currentLobby, isHost);
+    gameStateRef.current = createOnlineCountdownState(currentLobby, isHost);
     setRenderTrigger(prev => prev + 1);
   };
 
@@ -210,19 +234,23 @@ function App() {
     
     state.surrenderClicks++;
     state.lastSurrenderClickTime = now;
+    state.surrenderExpanded = true;
     
     if (state.surrenderClicks >= 5) {
-      state.mode = 'victory';
-      state.winner = 1;
+      returnToMenu();
       toast.error('You surrendered!');
     } else {
       toast.warning(`Click ${5 - state.surrenderClicks} more times to surrender`);
     }
+    
+    setRenderTrigger(prev => prev + 1);
   };
 
   const handleCanvasSurrenderReset = () => {
     if (gameStateRef.current.surrenderClicks > 0 && gameStateRef.current.surrenderClicks < 5) {
       gameStateRef.current.surrenderClicks = 0;
+      gameStateRef.current.surrenderExpanded = false;
+      setRenderTrigger(prev => prev + 1);
     }
   };
 
@@ -320,13 +348,40 @@ function App() {
       {gameState.mode === 'game' && (
         <Button
           onClick={handleSurrenderClick}
-          className="absolute top-4 left-4 orbitron"
+          className={`absolute top-4 left-4 orbitron transition-all duration-300 overflow-hidden ${
+            gameState.surrenderExpanded ? 'w-48' : 'w-12'
+          }`}
           variant="destructive"
           size="sm"
         >
-          <Flag className="mr-2" size={16} />
-          Surrender {gameState.surrenderClicks > 0 && `(${gameState.surrenderClicks}/5)`}
+          <Flag className={gameState.surrenderExpanded ? "mr-2" : ""} size={16} />
+          {gameState.surrenderExpanded && (
+            <span className="whitespace-nowrap">
+              Surrender? ({5 - gameState.surrenderClicks})
+            </span>
+          )}
         </Button>
+      )}
+
+      {gameState.mode === 'countdown' && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="text-center">
+            <h2 className="orbitron text-3xl font-bold mb-8 text-primary">
+              {getMapById(gameState.settings.selectedMap)?.name || 'Map Preview'}
+            </h2>
+            <div className="orbitron text-8xl font-black text-foreground animate-pulse">
+              {Math.ceil(3 - (Date.now() - (gameState.countdownStartTime || Date.now())) / 1000)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {gameState.mode === 'game' && gameState.matchStartAnimation?.phase === 'go' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="orbitron text-9xl font-black text-primary animate-bounce">
+            GO!
+          </div>
+        </div>
       )}
 
       {gameState.mode === 'menu' && (
@@ -537,6 +592,58 @@ function createInitialState(): GameState {
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
+    surrenderExpanded: false,
+  };
+}
+
+function createCountdownState(mode: 'ai' | 'player', settings: GameState['settings']): GameState {
+  const arenaWidth = window.innerWidth / 20;
+  const arenaHeight = window.innerHeight / 20;
+
+  const selectedMapDef = getMapById(settings.selectedMap) || getMapById('open')!;
+  const obstacles = selectedMapDef.obstacles;
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles);
+
+  return {
+    mode: 'countdown',
+    vsMode: mode,
+    units: [],
+    obstacles: obstacles,
+    bases: [
+      {
+        id: generateId(),
+        owner: 0,
+        position: basePositions.player,
+        hp: 1000,
+        maxHp: 1000,
+        movementTarget: null,
+        isSelected: false,
+        laserCooldown: 0,
+      },
+      {
+        id: generateId(),
+        owner: 1,
+        position: basePositions.enemy,
+        hp: 1000,
+        maxHp: 1000,
+        movementTarget: null,
+        isSelected: false,
+        laserCooldown: 0,
+      },
+    ],
+    players: [
+      { photons: 0, incomeRate: 1, color: settings.playerColor },
+      { photons: 0, incomeRate: 1, color: settings.enemyColor },
+    ],
+    selectedUnits: new Set(),
+    elapsedTime: 0,
+    lastIncomeTime: 0,
+    winner: null,
+    settings,
+    surrenderClicks: 0,
+    lastSurrenderClickTime: 0,
+    surrenderExpanded: false,
+    countdownStartTime: Date.now(),
   };
 }
 
@@ -586,6 +693,11 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
     settings,
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
+    surrenderExpanded: false,
+    matchStartAnimation: {
+      startTime: Date.now(),
+      phase: 'bases-sliding',
+    },
   };
 }
 
@@ -641,6 +753,68 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
+    surrenderExpanded: false,
+    matchStartAnimation: {
+      startTime: Date.now(),
+      phase: 'bases-sliding',
+    },
+  };
+}
+
+function createOnlineCountdownState(lobby: LobbyData, isHost: boolean): GameState {
+  const arenaWidth = window.innerWidth / 20;
+  const arenaHeight = window.innerHeight / 20;
+
+  const selectedMapDef = getMapById(lobby.mapId) || getMapById('open')!;
+  const obstacles = selectedMapDef.obstacles;
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles);
+
+  return {
+    mode: 'countdown',
+    vsMode: 'online',
+    units: [],
+    obstacles: obstacles,
+    bases: [
+      {
+        id: generateId(),
+        owner: 0,
+        position: basePositions.player,
+        hp: 1000,
+        maxHp: 1000,
+        movementTarget: null,
+        isSelected: false,
+        laserCooldown: 0,
+      },
+      {
+        id: generateId(),
+        owner: 1,
+        position: basePositions.enemy,
+        hp: 1000,
+        maxHp: 1000,
+        movementTarget: null,
+        isSelected: false,
+        laserCooldown: 0,
+      },
+    ],
+    players: [
+      { photons: 0, incomeRate: 1, color: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault },
+      { photons: 0, incomeRate: 1, color: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor },
+    ],
+    selectedUnits: new Set(),
+    elapsedTime: 0,
+    lastIncomeTime: 0,
+    winner: null,
+    settings: {
+      playerColor: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault,
+      enemyColor: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor,
+      enabledUnits: new Set(lobby.enabledUnits as UnitType[]),
+      unitSlots: { left: 'marine', up: 'warrior', down: 'snaker' },
+      selectedMap: lobby.mapId,
+    },
+    surrenderClicks: 0,
+    lastSurrenderClickTime: 0,
+    surrenderExpanded: false,
+    countdownStartTime: Date.now(),
   };
 }
 

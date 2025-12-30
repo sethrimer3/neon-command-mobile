@@ -15,16 +15,19 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
 
   drawBackground(ctx, canvas);
 
-  if (state.mode === 'game') {
+  if (state.mode === 'game' || state.mode === 'countdown') {
     drawObstacles(ctx, state);
-    drawCommandQueues(ctx, state);
     drawBases(ctx, state);
-    drawUnits(ctx, state);
-    drawSelectionIndicators(ctx, state);
-    if (selectionRect) {
-      drawSelectionRect(ctx, selectionRect, state);
+    
+    if (state.mode === 'game') {
+      drawCommandQueues(ctx, state);
+      drawUnits(ctx, state);
+      drawSelectionIndicators(ctx, state);
+      if (selectionRect) {
+        drawSelectionRect(ctx, selectionRect, state);
+      }
+      drawHUD(ctx, state);
     }
-    drawHUD(ctx, state);
   }
 }
 
@@ -177,9 +180,25 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
 
 function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
   state.bases.forEach((base) => {
-    const screenPos = positionToPixels(base.position);
+    let screenPos = positionToPixels(base.position);
     const size = metersToPixels(BASE_SIZE_METERS);
     const color = state.players[base.owner].color;
+
+    if (state.matchStartAnimation && state.matchStartAnimation.phase === 'bases-sliding') {
+      const elapsed = Date.now() - state.matchStartAnimation.startTime;
+      const progress = Math.min(elapsed / 1500, 1);
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+      
+      if (base.owner === 0) {
+        const startY = -size;
+        const endY = screenPos.y;
+        screenPos = { x: screenPos.x, y: startY + (endY - startY) * easeProgress };
+      } else {
+        const startY = ctx.canvas.height + size;
+        const endY = screenPos.y;
+        screenPos = { x: screenPos.x, y: startY + (endY - startY) * easeProgress };
+      }
+    }
 
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
@@ -198,45 +217,47 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.globalAlpha = 1.0;
     ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
 
-    const doorSize = size / 3;
-    const playerPhotons = state.players[base.owner].photons;
+    if (state.mode === 'game' && (!state.matchStartAnimation || state.matchStartAnimation.phase === 'go')) {
+      const doorSize = size / 3;
+      const playerPhotons = state.players[base.owner].photons;
 
-    const doorPositions = [
-      { x: screenPos.x, y: screenPos.y - size / 2, type: state.settings.unitSlots.up },
-      { x: screenPos.x - size / 2, y: screenPos.y, type: state.settings.unitSlots.left },
-      { x: screenPos.x, y: screenPos.y + size / 2, type: state.settings.unitSlots.down },
-    ];
+      const doorPositions = [
+        { x: screenPos.x, y: screenPos.y - size / 2, type: state.settings.unitSlots.up },
+        { x: screenPos.x - size / 2, y: screenPos.y, type: state.settings.unitSlots.left },
+        { x: screenPos.x, y: screenPos.y + size / 2, type: state.settings.unitSlots.down },
+      ];
 
-    doorPositions.forEach((door) => {
-      const def = UNIT_DEFINITIONS[door.type];
+      doorPositions.forEach((door) => {
+        const def = UNIT_DEFINITIONS[door.type];
 
-      const canAfford = playerPhotons >= def.cost;
+        const canAfford = playerPhotons >= def.cost;
 
-      if (canAfford && !base.isSelected) {
-        ctx.save();
-        ctx.fillStyle = color;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 15;
-        ctx.globalAlpha = 0.8;
+        if (canAfford && !base.isSelected) {
+          ctx.save();
+          ctx.fillStyle = color;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 15;
+          ctx.globalAlpha = 0.8;
 
-        if (door.y < screenPos.y) {
-          ctx.fillRect(door.x - doorSize / 2, door.y, doorSize, 3);
-        } else if (door.y > screenPos.y) {
-          ctx.fillRect(door.x - doorSize / 2, door.y - 3, doorSize, 3);
-        } else if (door.x < screenPos.x) {
-          ctx.fillRect(door.x, door.y - doorSize / 2, 3, doorSize);
+          if (door.y < screenPos.y) {
+            ctx.fillRect(door.x - doorSize / 2, door.y, doorSize, 3);
+          } else if (door.y > screenPos.y) {
+            ctx.fillRect(door.x - doorSize / 2, door.y - 3, doorSize, 3);
+          } else if (door.x < screenPos.x) {
+            ctx.fillRect(door.x, door.y - doorSize / 2, 3, doorSize);
+          }
+
+          ctx.restore();
         }
+      });
 
-        ctx.restore();
+      if (base.movementTarget) {
+        const targetScreen = positionToPixels(base.movementTarget);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(targetScreen.x, targetScreen.y, 6, 0, Math.PI * 2);
+        ctx.fill();
       }
-    });
-
-    if (base.movementTarget) {
-      const targetScreen = positionToPixels(base.movementTarget);
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(targetScreen.x, targetScreen.y, 6, 0, Math.PI * 2);
-      ctx.fill();
     }
 
     const hpPercent = base.hp / base.maxHp;
