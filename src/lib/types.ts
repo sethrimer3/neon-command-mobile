@@ -28,6 +28,14 @@ export const COLORS = {
 
 export type Vector2 = { x: number; y: number };
 
+// Particle physics for visual effects
+export interface Particle {
+  id: string;
+  position: Vector2;
+  velocity: Vector2;
+  color: string;
+}
+
 export type CommandNode = 
   | { type: 'move'; position: Vector2 }
   | { type: 'ability'; position: Vector2; direction: Vector2 };
@@ -51,6 +59,7 @@ export interface Unit {
   bombardmentActive?: { endTime: number; targetPos: Vector2; impactTime: number };
   healPulseActive?: { endTime: number; radius: number };
   missileBarrageActive?: { endTime: number; missiles: Array<{ position: Vector2; target: Vector2; damage: number }> };
+  particles?: Particle[]; // Particles attracted to the unit
 }
 
 export interface Base {

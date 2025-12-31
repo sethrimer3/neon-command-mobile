@@ -119,7 +119,8 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
       touchState.isDragging = true;
 
       const elapsed = Date.now() - touchState.startTime;
-      if (elapsed > HOLD_TIME_MS && !touchState.touchedBase) {
+      // Create selection rect if: no base touched AND (no units selected OR held long enough)
+      if (!touchState.touchedBase && (state.selectedUnits.size === 0 || elapsed > HOLD_TIME_MS)) {
         touchState.selectionRect = {
           x1: touchState.startPos.x,
           y1: touchState.startPos.y,

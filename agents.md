@@ -1,5 +1,10 @@
 # Agents Documentation Guidelines
 
+## Build Information
+**Current Build Number:** 1
+
+**Note:** With each pull request, increment the build number by one.
+
 ## Purpose
 This document provides guidelines for AI agents working with the SoL-RTS codebase. Following these guidelines ensures code quality, maintainability, and effective collaboration between agents and developers.
 

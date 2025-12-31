@@ -38,8 +38,9 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - **Purpose:** Handles dragging and selection box
 - **Notes:**
   - Enters drag mode after 10px movement
+  - Creates selection rectangle when no units selected OR after hold time (200ms)
+  - This allows immediate box selection on mobile when no units are selected
   - Updates base movement target
-  - Creates selection rectangle
   - Handles movement dot dragging
 
 #### handleTouchEnd/handleMouseUp
@@ -129,6 +130,7 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - Implemented split-screen two-player
 - Added base movement via dragging
 - Added unit spawn hold mechanic
+- **2025-12-31**: Fixed mobile selection box to create immediately when no units are selected (removed hold time requirement for empty selection)
 
 ## Watch Out For
 - Always prevent default on touch events to avoid scrolling

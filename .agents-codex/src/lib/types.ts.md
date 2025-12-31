@@ -44,6 +44,17 @@ type Vector2 = { x: number; y: number }
 ```
 Represents 2D positions and directions in game space (meters, not pixels).
 
+### Particle Interface
+```typescript
+interface Particle {
+  id: string;
+  position: Vector2;
+  velocity: Vector2;
+  color: string;
+}
+```
+Represents a visual particle in the particle physics system. Particles are attracted to their parent unit and orbit around it, creating visual interest.
+
 ### CommandNode Type
 Union type for unit commands:
 - `move` - Move to a position
@@ -55,6 +66,7 @@ Represents a game unit with:
 - Command system: commandQueue for queued actions
 - Progression: damageMultiplier, distanceTraveled, distanceCredit
 - Ability states: dashExecuting, lineJumpTelegraph, shieldActive, cloaked, bombardmentActive, healPulseActive, missileBarrageActive
+- Visual effects: particles (optional array of Particle objects, currently used for marines)
 
 ### Base Interface
 Represents a player base with:
@@ -140,6 +152,7 @@ None currently identified
 - Initial creation with 8 unit types and core game mechanics
 - Added match statistics and time limit support
 - Added topography lines for visual enhancement
+- **2025-12-31**: Added Particle interface and particle physics system for visual effects on marines (10 particles per marine that orbit using attraction forces)
 
 ## Watch Out For
 - Always use meters for game logic, only convert to pixels for rendering

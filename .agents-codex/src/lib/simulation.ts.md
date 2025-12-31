@@ -30,6 +30,7 @@ Contains the core game simulation loop and logic. Handles unit movement, combat,
 - **Purpose:** Updates all unit positions, abilities, and command queues
 - **Notes:** 
   - Handles ability cooldowns and active effects
+  - Updates particle physics for marines (attraction-based orbital motion)
   - Processes line jump telegraphs (0.5s delay before execution)
   - Executes movement from command queues
   - Applies promotion system based on distance traveled
@@ -59,6 +60,14 @@ Contains the core game simulation loop and logic. Handles unit movement, combat,
   - Initializes unit with full HP
   - Sets initial command queue to rally position
   - Updates match statistics
+  - Initializes 10 particles for marines in an orbital pattern
+
+### Particle Physics Functions
+- **createParticlesForUnit(unit, count):** Creates particles in circular formation around unit
+- **updateParticles(unit, deltaTime):** Updates particle positions using attraction forces
+  - Particles attracted to unit center with spring-like force
+  - Damping applied to prevent excessive velocity
+  - Maintains desired orbit distance of 0.8 meters
 
 ### executeLineJump(state: GameState, unit: Unit): void
 - **Purpose:** Executes the Snaker's line jump ability
@@ -113,6 +122,7 @@ Multiple functions for unit abilities:
 - Implemented 8 unique unit abilities
 - Added match statistics tracking
 - Added time limit support
+- **2025-12-31**: Added particle physics system for marines with 10 particles per unit that orbit using attraction forces
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds

@@ -54,11 +54,19 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 #### drawUnits(ctx, state): void
 - **Purpose:** Draws all units with effects
 - **Notes:**
+  - Draws particles first (behind unit) for marines
   - Circle for unit body
   - HP bar (optional numeric display)
   - Active ability effects (shields, cloaking, etc.)
   - Attack animations (ranged/melee)
   - Promotion indicators (color intensity)
+
+#### drawParticles(ctx, unit): void
+- **Purpose:** Renders particle physics effects for units
+- **Notes:**
+  - Small glowing circles (2px radius)
+  - Uses unit's color with shadow blur for glow effect
+  - Currently used only for marines (10 particles per marine)
 
 #### drawSelectionIndicators(ctx, state): void
 - **Purpose:** Shows which units are selected
@@ -117,7 +125,6 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 
 ### Needed
 - Viewport culling to skip off-screen rendering
-- Particle effects for abilities and impacts
 - Unit death animations
 - Better attack visualizations
 - Minimap rendering
@@ -131,6 +138,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - Added numeric HP display option
 - Implemented ability effect visuals
 - Added match statistics to HUD
+- **2025-12-31**: Added particle physics rendering for marines with glowing effect
 
 ## Watch Out For
 - Always convert game positions to pixels before drawing
