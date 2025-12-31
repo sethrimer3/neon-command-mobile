@@ -33,6 +33,15 @@ function getTeamHighlightColor(owner: number): string {
     : 'oklch(0.95 0.15 25)'; // Enemy color highlight
 }
 
+// Helper function to check if an object is visible on screen
+function isOnScreen(position: Vector2, canvas: HTMLCanvasElement, margin: number = 100): boolean {
+  const screenPos = positionToPixels(position);
+  return screenPos.x >= -margin && 
+         screenPos.x <= canvas.width + margin && 
+         screenPos.y >= -margin && 
+         screenPos.y <= canvas.height + margin;
+}
+
 export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canvas: HTMLCanvasElement, selectionRect?: { x1: number; y1: number; x2: number; y2: number } | null): void {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -487,6 +496,11 @@ function drawLaserBeam(ctx: CanvasRenderingContext2D, base: Base, screenPos: { x
 
 function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void {
   state.projectiles.forEach((projectile) => {
+    // Skip projectiles that are off-screen for performance
+    if (!isOnScreen(projectile.position, ctx.canvas, 50)) {
+      return;
+    }
+    
     const screenPos = positionToPixels(projectile.position);
     
     ctx.save();
@@ -577,6 +591,11 @@ function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos:
 
 function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
   state.units.forEach((unit) => {
+    // Skip units that are off-screen for performance
+    if (!isOnScreen(unit.position, ctx.canvas, 50)) {
+      return;
+    }
+    
     const screenPos = positionToPixels(unit.position);
     const color = state.players[unit.owner].color;
     
@@ -1060,6 +1079,62 @@ function drawHUD(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.fillText(`${state.fps} FPS`, ctx.canvas.width - 10, 20);
     ctx.textAlign = 'left';
   }
+  
+  // Draw tooltip if visible
+  if (state.tooltip && state.tooltip.visible && state.tooltip.text.length > 0) {
+    drawTooltip(ctx, state.tooltip.text, state.tooltip.position);
+  }
+}
+
+function drawTooltip(ctx: CanvasRenderingContext2D, text: string[], position: Vector2): void {
+  const screenPos = positionToPixels(position);
+  const padding = 8;
+  const lineHeight = 16;
+  const maxWidth = 200;
+  
+  ctx.font = '12px Space Grotesk, sans-serif';
+  
+  // Measure text
+  const lines = text;
+  let width = 0;
+  lines.forEach(line => {
+    const measure = ctx.measureText(line);
+    width = Math.max(width, measure.width);
+  });
+  width = Math.min(width + padding * 2, maxWidth);
+  const height = lines.length * lineHeight + padding * 2;
+  
+  // Position tooltip to not go off screen
+  let x = screenPos.x + 15;
+  let y = screenPos.y - height - 5;
+  
+  if (x + width > ctx.canvas.width) {
+    x = screenPos.x - width - 15;
+  }
+  if (y < 0) {
+    y = screenPos.y + 20;
+  }
+  
+  // Draw background
+  ctx.save();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+  ctx.strokeStyle = 'oklch(0.65 0.25 240)';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = 'oklch(0.65 0.25 240)';
+  ctx.shadowBlur = 10;
+  
+  ctx.fillRect(x, y, width, height);
+  ctx.strokeRect(x, y, width, height);
+  
+  // Draw text
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = COLORS.white;
+  ctx.textAlign = 'left';
+  lines.forEach((line, i) => {
+    ctx.fillText(line, x + padding, y + padding + lineHeight * (i + 0.7));
+  });
+  
+  ctx.restore();
 }
 
 function drawSelectionRect(ctx: CanvasRenderingContext2D, rect: { x1: number; y1: number; x2: number; y2: number }, state: GameState): void {

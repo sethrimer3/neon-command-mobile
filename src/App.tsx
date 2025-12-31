@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useKV } from './hooks/useKV';
+import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS } from './lib/types';
 import { generateId, generateTopographyLines, generateStarfield, isPortraitOrientation } from './lib/gameUtils';
 import { updateGame } from './lib/simulation';
@@ -560,6 +561,38 @@ function App() {
     setCurrentLobby(null);
     toast.info('Left the lobby');
   };
+  
+  // Keyboard controls for desktop
+  useKeyboardControls({
+    onEscape: () => {
+      if (gameState.mode === 'game') {
+        // Deselect all units
+        gameStateRef.current.selectedUnits.clear();
+        gameStateRef.current.bases.forEach(b => b.isSelected = false);
+        setRenderTrigger(prev => prev + 1);
+      } else if (gameState.mode !== 'menu') {
+        backToMenu();
+      }
+    },
+    onSelectAll: () => {
+      if (gameState.mode === 'game') {
+        // Select all player units
+        gameStateRef.current.selectedUnits.clear();
+        gameStateRef.current.units
+          .filter(u => u.owner === 0)
+          .forEach(u => gameStateRef.current.selectedUnits.add(u.id));
+        setRenderTrigger(prev => prev + 1);
+        soundManager.playButtonClick();
+      }
+    },
+    onDeselect: () => {
+      if (gameState.mode === 'game') {
+        gameStateRef.current.selectedUnits.clear();
+        gameStateRef.current.bases.forEach(b => b.isSelected = false);
+        setRenderTrigger(prev => prev + 1);
+      }
+    },
+  }, gameState.mode === 'game' || gameState.mode !== 'menu');
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-background" onClick={handleCanvasSurrenderReset}>
@@ -878,15 +911,15 @@ function App() {
       )}
 
       {gameState.mode === 'victory' && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-          <Card className="w-96 max-w-full">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-500">
+          <Card className="w-96 max-w-full animate-in zoom-in-95 slide-in-from-bottom-4 duration-700">
             <CardHeader>
-              <CardTitle className="orbitron text-3xl text-center">
+              <CardTitle className="orbitron text-3xl text-center animate-in slide-in-from-top-2 duration-500 delay-300">
                 {gameState.winner === -1 ? 'Draw!' : gameState.winner === 0 ? 'Victory!' : 'Defeat'}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-center mb-6">
+            <CardContent className="space-y-4">
+              <p className="text-center animate-in fade-in slide-in-from-bottom-2 duration-500 delay-500">
                 {gameState.winner === -1 
                   ? 'Time limit reached! Both players dealt equal damage.' 
                   : gameState.winner === 0 
@@ -902,7 +935,7 @@ function App() {
                   true, 
                   gameState.winner === -1 ? 'draw' : gameState.winner === 0 ? 'victory' : 'defeat'
                 )} 
-                className="w-full orbitron" 
+                className="w-full orbitron animate-in fade-in slide-in-from-bottom-2 duration-500 delay-700" 
                 variant="default"
               >
                 Return to Menu

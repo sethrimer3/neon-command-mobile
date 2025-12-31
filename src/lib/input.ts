@@ -13,6 +13,7 @@ import {
   LASER_COOLDOWN,
   BASE_SIZE_METERS,
   UNIT_SIZE_METERS,
+  UNIT_DEFINITIONS,
 } from './types';
 import { distance, normalize, scale, add, subtract, pixelsToPosition, positionToPixels } from './gameUtils';
 import { spawnUnit } from './simulation';
@@ -420,11 +421,43 @@ export function handleMouseDown(e: MouseEvent, state: GameState, canvas: HTMLCan
 
 export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCanvasElement): void {
   if (state.mode !== 'game') return;
-  if (!mouseState) return;
-  e.preventDefault();
-
+  
   const rect = canvas.getBoundingClientRect();
   const { x, y } = transformCoordinates(e.clientX, e.clientY, rect);
+  
+  // Update tooltip if not dragging
+  if (!mouseState || !mouseState.isDragging) {
+    const worldPos = pixelsToPosition({ x, y });
+    
+    // Check for unit hover
+    const hoveredUnit = state.units.find(unit => {
+      if (unit.owner !== 0) return false; // Only show tooltips for player units
+      const dist = distance(worldPos, unit.position);
+      return dist < 0.8; // Within unit radius
+    });
+    
+    if (hoveredUnit) {
+      const def = UNIT_DEFINITIONS[hoveredUnit.type];
+      state.tooltip = {
+        text: [
+          `${def.name}`,
+          `HP: ${Math.ceil(hoveredUnit.hp)}/${def.hp}`,
+          `Dmg: ${Math.ceil(def.damage * hoveredUnit.damageMultiplier)}`,
+          `Ability: ${def.ability}`,
+          hoveredUnit.abilityCooldown > 0 
+            ? `Cooldown: ${hoveredUnit.abilityCooldown.toFixed(1)}s`
+            : 'Ready',
+        ],
+        position: worldPos,
+        visible: true,
+      };
+    } else {
+      state.tooltip = { text: [], position: { x: 0, y: 0 }, visible: false };
+    }
+  }
+  
+  if (!mouseState) return;
+  e.preventDefault();
 
   const dx = x - mouseState.startPos.x;
   const dy = y - mouseState.startPos.y;
