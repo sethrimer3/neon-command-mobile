@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useKV } from '@github/spark/hooks';
 import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS } from './lib/types';
-import { generateId } from './lib/gameUtils';
+import { generateId, generateTopographyLines } from './lib/gameUtils';
 import { updateGame } from './lib/simulation';
 import { updateAI } from './lib/ai';
 import { renderGame } from './lib/renderer';
@@ -15,6 +15,8 @@ import { GameController, Robot, ListChecks, GearSix, ArrowLeft, Flag, MapPin, Wi
 import { toast } from 'sonner';
 import { UnitSelectionScreen } from './components/UnitSelectionScreen';
 import { MapSelectionScreen } from './components/MapSelectionScreen';
+import { LevelSelectionScreen } from './components/LevelSelectionScreen';
+import { OnlineModeScreen } from './components/OnlineModeScreen';
 import { MultiplayerLobbyScreen } from './components/MultiplayerLobbyScreen';
 import { StatisticsScreen } from './components/StatisticsScreen';
 import { getMapById, getValidBasePositions } from './lib/maps';
@@ -206,16 +208,17 @@ function App() {
     };
   }, []);
 
-  const startGame = (mode: 'ai' | 'player') => {
+  const startGame = (mode: 'ai' | 'player', mapId?: string) => {
     soundManager.playButtonClick();
-    gameStateRef.current = createCountdownState(mode, gameStateRef.current.settings);
+    const finalMapId = mapId || gameStateRef.current.settings.selectedMap;
+    gameStateRef.current = createCountdownState(mode, { ...gameStateRef.current.settings, selectedMap: finalMapId }, canvasRef.current!);
     setRenderTrigger(prev => prev + 1);
   };
 
   const startOnlineGame = () => {
     if (!currentLobby) return;
     const isHost = multiplayerManagerRef.current?.getIsHost() || false;
-    gameStateRef.current = createOnlineCountdownState(currentLobby, isHost);
+    gameStateRef.current = createOnlineCountdownState(currentLobby, isHost, canvasRef.current!);
     setRenderTrigger(prev => prev + 1);
   };
 
@@ -317,11 +320,29 @@ function App() {
     setRenderTrigger(prev => prev + 1);
   };
 
+  const goToLevelSelection = () => {
+    soundManager.playButtonClick();
+    gameStateRef.current.mode = 'levelSelection';
+    setRenderTrigger(prev => prev + 1);
+  };
+
+  const goToOnlineMode = () => {
+    soundManager.playButtonClick();
+    gameStateRef.current.mode = 'onlineMode';
+    setRenderTrigger(prev => prev + 1);
+  };
+
   const goToMultiplayer = () => {
     soundManager.playButtonClick();
     gameStateRef.current.mode = 'multiplayerLobby';
     refreshLobbies();
     setRenderTrigger(prev => prev + 1);
+  };
+
+  const goToMatchmaking = () => {
+    soundManager.playButtonClick();
+    toast.info('Matchmaking coming soon!');
+    // TODO: Implement matchmaking logic
   };
 
   const backToMenu = () => {
@@ -339,6 +360,12 @@ function App() {
   const handleMapSelect = (mapId: string) => {
     setSelectedMap(mapId);
     toast.success(`Map changed to ${getMapById(mapId)?.name || mapId}`);
+  };
+
+  const handleLevelSelect = (mapId: string) => {
+    soundManager.playButtonClick();
+    setSelectedMap(mapId);
+    startGame('ai', mapId);
   };
 
   const handleSurrenderClick = (e: React.MouseEvent) => {
@@ -510,7 +537,7 @@ function App() {
             </h1>
 
             <Button
-              onClick={() => startGame('ai')}
+              onClick={goToLevelSelection}
               className="h-14 text-lg orbitron uppercase tracking-wider"
               variant="default"
             >
@@ -519,7 +546,7 @@ function App() {
             </Button>
 
             <Button
-              onClick={goToMultiplayer}
+              onClick={goToOnlineMode}
               className="h-14 text-lg orbitron uppercase tracking-wider"
               variant="default"
             >
@@ -720,6 +747,22 @@ function App() {
         />
       )}
 
+      {gameState.mode === 'levelSelection' && (
+        <LevelSelectionScreen
+          onBack={backToMenu}
+          onSelectLevel={handleLevelSelect}
+          currentMap={selectedMap || 'open'}
+        />
+      )}
+
+      {gameState.mode === 'onlineMode' && (
+        <OnlineModeScreen
+          onBack={backToMenu}
+          onMatchmaking={goToMatchmaking}
+          onCustomGame={goToMultiplayer}
+        />
+      )}
+
       {gameState.mode === 'multiplayerLobby' && (
         <MultiplayerLobbyScreen
           onBack={backToMenu}
@@ -808,13 +851,16 @@ function createInitialState(): GameState {
   };
 }
 
-function createCountdownState(mode: 'ai' | 'player', settings: GameState['settings']): GameState {
+function createCountdownState(mode: 'ai' | 'player', settings: GameState['settings'], canvas: HTMLCanvasElement): GameState {
   const arenaWidth = window.innerWidth / 20;
   const arenaHeight = window.innerHeight / 20;
 
   const selectedMapDef = getMapById(settings.selectedMap) || getMapById('open')!;
   const obstacles = selectedMapDef.obstacles;
   const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles);
+  
+  // Generate topography lines for this level
+  const topographyLines = generateTopographyLines(canvas.width, canvas.height);
 
   return {
     mode: 'countdown',
@@ -866,6 +912,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
       damageToEnemyBase: 0,
     },
     matchTimeLimit: 300,
+    topographyLines,
   };
 }
 
@@ -984,13 +1031,16 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
   };
 }
 
-function createOnlineCountdownState(lobby: LobbyData, isHost: boolean): GameState {
+function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: HTMLCanvasElement): GameState {
   const arenaWidth = window.innerWidth / 20;
   const arenaHeight = window.innerHeight / 20;
 
   const selectedMapDef = getMapById(lobby.mapId) || getMapById('open')!;
   const obstacles = selectedMapDef.obstacles;
   const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles);
+  
+  // Generate topography lines for this level
+  const topographyLines = generateTopographyLines(canvas.width, canvas.height);
 
   return {
     mode: 'countdown',
@@ -1049,6 +1099,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean): GameStat
       damageToEnemyBase: 0,
     },
     matchTimeLimit: 300,
+    topographyLines,
   };
 }
 

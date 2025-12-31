@@ -58,3 +58,35 @@ export function lerp(a: number, b: number, t: number): number {
 export function generateId(): string {
   return Math.random().toString(36).substring(2, 15);
 }
+
+export function generateTopographyLines(canvasWidth: number, canvasHeight: number): Array<{ x1: number; y1: number; x2: number; y2: number }> {
+  const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+  const numLines = 15 + Math.floor(Math.random() * 10); // 15-25 lines
+  
+  for (let i = 0; i < numLines; i++) {
+    // Generate random contour lines that go roughly horizontal across the screen
+    const y = Math.random() * canvasHeight;
+    const points: Array<{ x: number; y: number }> = [];
+    
+    // Create a wavy line with random segments
+    const numSegments = 8 + Math.floor(Math.random() * 8); // 8-16 segments
+    for (let j = 0; j <= numSegments; j++) {
+      const x = (j / numSegments) * canvasWidth;
+      const yOffset = (Math.random() - 0.5) * 80; // Random vertical offset
+      points.push({ x, y: y + yOffset });
+    }
+    
+    // Connect the points to create line segments
+    for (let j = 0; j < points.length - 1; j++) {
+      lines.push({
+        x1: points[j].x,
+        y1: points[j].y,
+        x2: points[j + 1].x,
+        y2: points[j + 1].y,
+      });
+    }
+  }
+  
+  return lines;
+}
+
