@@ -79,6 +79,9 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
       drawProjectiles(ctx, state);
       drawUnits(ctx, state);
       drawExplosionParticles(ctx, state);
+      drawHitSparks(ctx, state);
+      drawEnergyPulses(ctx, state);
+      drawSpawnEffects(ctx, state);
       drawImpactEffects(ctx, state);
       drawDamageNumbers(ctx, state);
       drawSelectionIndicators(ctx, state);
@@ -1281,19 +1284,143 @@ function drawExplosionParticles(ctx: CanvasRenderingContext2D, state: GameState)
     ctx.save();
     ctx.globalAlpha = particle.alpha;
     
-    // Draw particle with glow
-    ctx.fillStyle = particle.color;
-    ctx.shadowColor = particle.color;
+    // Apply rotation if available
+    if (particle.rotation !== undefined) {
+      ctx.translate(screenPos.x, screenPos.y);
+      ctx.rotate(particle.rotation);
+      
+      // Draw rotated square for debris
+      ctx.fillStyle = particle.color;
+      ctx.shadowColor = particle.color;
+      ctx.shadowBlur = size * 2;
+      ctx.fillRect(-size / 2, -size / 2, size, size);
+      
+      // Add extra glow layer
+      ctx.globalAlpha = particle.alpha * 0.4;
+      ctx.shadowBlur = size * 4;
+      ctx.fillRect(-size / 2, -size / 2, size, size);
+    } else {
+      // Draw particle with glow (for sparks)
+      ctx.fillStyle = particle.color;
+      ctx.shadowColor = particle.color;
+      ctx.shadowBlur = size * 3;
+      
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Add extra glow layer
+      ctx.globalAlpha = particle.alpha * 0.4;
+      ctx.shadowBlur = size * 6;
+      ctx.fill();
+    }
+    
+    ctx.restore();
+  });
+}
+
+// Draw hit spark effects
+function drawHitSparks(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.hitSparks) return;
+  
+  const now = Date.now();
+  state.hitSparks.forEach((spark) => {
+    const age = (now - spark.createdAt) / 1000;
+    const progress = age / spark.lifetime;
+    const alpha = 1 - progress;
+    
+    const screenPos = positionToPixels(spark.position);
+    const size = metersToPixels(spark.size);
+    
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = spark.color;
+    ctx.shadowColor = spark.color;
     ctx.shadowBlur = size * 3;
     
     ctx.beginPath();
-    ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+    ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
     ctx.fill();
     
-    // Add extra glow layer
-    ctx.globalAlpha = particle.alpha * 0.4;
-    ctx.shadowBlur = size * 6;
+    ctx.restore();
+  });
+}
+
+// Draw energy pulse effects
+function drawEnergyPulses(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.energyPulses) return;
+  
+  const now = Date.now();
+  state.energyPulses.forEach((pulse) => {
+    const age = (now - pulse.startTime) / 1000;
+    const progress = age / pulse.duration;
+    const alpha = 1 - progress;
+    
+    const screenPos = positionToPixels(pulse.position);
+    const radius = metersToPixels(pulse.radius);
+    
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.6;
+    ctx.strokeStyle = pulse.color;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = pulse.color;
+    ctx.shadowBlur = 15;
+    
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Draw inner pulse
+    ctx.globalAlpha = alpha * 0.4;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, radius * 0.7, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    ctx.restore();
+  });
+}
+
+// Draw spawn effects
+function drawSpawnEffects(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.spawnEffects) return;
+  
+  const now = Date.now();
+  state.spawnEffects.forEach((effect) => {
+    const age = (now - effect.startTime) / 1000;
+    const progress = age / effect.duration;
+    const alpha = 1 - progress;
+    const scale = 0.5 + progress * 0.5;
+    
+    const screenPos = positionToPixels(effect.position);
+    
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.fillStyle = effect.color;
+    ctx.shadowColor = effect.color;
+    ctx.shadowBlur = 20;
+    
+    // Draw expanding circle
+    const radius = metersToPixels(1.5 * scale);
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
     ctx.fill();
+    
+    // Draw cross pattern
+    ctx.strokeStyle = effect.color;
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = alpha;
+    const lineLen = metersToPixels(2 * scale);
+    
+    ctx.beginPath();
+    ctx.moveTo(screenPos.x - lineLen, screenPos.y);
+    ctx.lineTo(screenPos.x + lineLen, screenPos.y);
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(screenPos.x, screenPos.y - lineLen);
+    ctx.lineTo(screenPos.x, screenPos.y + lineLen);
+    ctx.stroke();
     
     ctx.restore();
   });
