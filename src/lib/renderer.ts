@@ -792,12 +792,14 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
 function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
   if (!unit.particles || unit.particles.length === 0) return;
   
-  unit.particles.forEach((particle) => {
+  const time = Date.now() / 1000;
+  
+  unit.particles.forEach((particle, index) => {
     const screenPos = positionToPixels(particle.position);
     
     ctx.save();
     
-    // Draw trail first (behind the particle)
+    // Draw trail first (behind the particle) with enhanced effects
     if (particle.trail && particle.trail.length > 1) {
       ctx.strokeStyle = particle.color;
       ctx.lineCap = 'round';
@@ -811,10 +813,10 @@ function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
         // Calculate opacity based on position in trail (fade towards end)
         // Safe division: trail.length is guaranteed to be > 1 from the outer check
         const alpha = 1 - (i / Math.max(particle.trail.length, 1));
-        ctx.globalAlpha = alpha * 0.7;
-        ctx.lineWidth = 2 * alpha;
+        ctx.globalAlpha = alpha * 0.8;
+        ctx.lineWidth = 2.5 * alpha;
         ctx.shadowColor = particle.color;
-        ctx.shadowBlur = 5 * alpha;
+        ctx.shadowBlur = 6 * alpha;
         
         ctx.beginPath();
         ctx.moveTo(trailPos1.x, trailPos1.y);
@@ -826,20 +828,33 @@ function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
     ctx.globalAlpha = 1.0;
     ctx.shadowBlur = 0;
     
-    // Draw particle with enhanced glow effect
+    // Add subtle size variation based on orbital position
+    const sizeVariation = Math.sin(time * 3 + index * 0.5) * 0.3 + 1;
+    const particleSize = 3 * sizeVariation;
+    
+    // Draw particle with enhanced glow effect and color variation
     ctx.fillStyle = particle.color;
     ctx.shadowColor = particle.color;
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = 14;
     
-    // Draw main particle circle
+    // Outer glow layer
+    ctx.globalAlpha = 0.3;
     ctx.beginPath();
-    ctx.arc(screenPos.x, screenPos.y, 3, 0, Math.PI * 2);
+    ctx.arc(screenPos.x, screenPos.y, particleSize * 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Main particle circle
+    ctx.globalAlpha = 1.0;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, particleSize, 0, Math.PI * 2);
     ctx.fill();
     
     // Draw brighter inner core with stronger glow
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 22;
+    ctx.globalAlpha = 0.9;
     ctx.beginPath();
-    ctx.arc(screenPos.x, screenPos.y, 2, 0, Math.PI * 2);
+    ctx.arc(screenPos.x, screenPos.y, particleSize * 0.6, 0, Math.PI * 2);
     ctx.fill();
     
     ctx.restore();
@@ -1659,33 +1674,47 @@ function drawDamageNumbers(ctx: CanvasRenderingContext2D, state: GameState): voi
     
     if (progress >= 1) return; // Skip completed numbers
     
-    // Float upward
-    const floatDistance = 20 * progress;
+    // Enhanced float animation with easing
+    const easeProgress = 1 - Math.pow(1 - progress, 3); // Ease out cubic
+    const floatDistance = 30 * easeProgress;
     const screenPos = positionToPixels(damageNum.position);
-    const alpha = 1 - progress;
+    
+    // Fade with slight delay at start for readability
+    const fadeStart = 0.3;
+    const alpha = progress < fadeStart ? 1 : 1 - ((progress - fadeStart) / (1 - fadeStart));
     
     ctx.save();
     
-    // Draw damage number with outline
-    const fontSize = 16 + (1 - progress) * 6; // Start bigger, shrink
+    // Draw damage number with enhanced styling
+    const fontSize = 18 + (1 - progress) * 8; // Start bigger, shrink
     ctx.font = `bold ${fontSize}px Space Mono, monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
-    const x = screenPos.x;
+    const x = screenPos.x + (Math.random() - 0.5) * 4 * (1 - progress); // Slight horizontal wobble
     const y = screenPos.y - floatDistance - 10;
     
-    // Draw outline
-    ctx.strokeStyle = 'rgba(0, 0, 0, ' + (alpha * 0.8) + ')';
-    ctx.lineWidth = 3;
+    // Draw shadow/outline
+    ctx.strokeStyle = 'rgba(0, 0, 0, ' + (alpha * 0.9) + ')';
+    ctx.lineWidth = 4;
+    ctx.lineJoin = 'round';
     ctx.strokeText(damageNum.damage.toString(), x, y);
     
-    // Draw fill
+    // Draw glow effect
+    ctx.shadowColor = damageNum.color;
+    ctx.shadowBlur = 15 * alpha;
+    
+    // Draw fill with gradient-like effect
     ctx.fillStyle = damageNum.color;
     ctx.globalAlpha = alpha;
-    ctx.shadowColor = damageNum.color;
-    ctx.shadowBlur = 10;
     ctx.fillText(damageNum.damage.toString(), x, y);
+    
+    // Draw brighter center for pop effect
+    if (progress < 0.2) {
+      ctx.shadowBlur = 25;
+      ctx.globalAlpha = alpha * (1 - progress / 0.2);
+      ctx.fillText(damageNum.damage.toString(), x, y);
+    }
     
     ctx.restore();
   });
