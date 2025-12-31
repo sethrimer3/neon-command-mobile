@@ -32,6 +32,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
       drawCommandQueues(ctx, state);
       drawProjectiles(ctx, state);
       drawUnits(ctx, state);
+      drawImpactEffects(ctx, state);
       drawSelectionIndicators(ctx, state);
       if (selectionRect) {
         drawSelectionRect(ctx, selectionRect, state);
@@ -45,6 +46,28 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
 function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, state?: GameState): void {
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw animated starfield
+  if (state?.stars && state.stars.length > 0) {
+    const time = Date.now() / 1000;
+    state.stars.forEach(star => {
+      const twinkle = Math.sin(time * star.twinkleSpeed + star.twinkleOffset) * 0.3 + 0.7;
+      const alpha = star.brightness * twinkle;
+      
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Add subtle glow for larger stars
+      if (star.size > 1.5) {
+        ctx.shadowColor = `rgba(200, 220, 255, ${alpha * 0.6})`;
+        ctx.shadowBlur = star.size * 3;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    });
+  }
 
   // Draw topography lines if available
   if (state?.topographyLines && state.topographyLines.length > 0) {
@@ -1017,5 +1040,49 @@ function drawVisualFeedback(ctx: CanvasRenderingContext2D, state: GameState): vo
       
       ctx.restore();
     }
+  });
+}
+
+function drawImpactEffects(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.impactEffects || state.impactEffects.length === 0) return;
+  
+  const now = Date.now();
+  
+  state.impactEffects.forEach((effect) => {
+    const elapsed = (now - effect.startTime) / 1000;
+    const progress = Math.min(elapsed / effect.duration, 1);
+    
+    if (progress >= 1) return; // Skip completed effects
+    
+    const screenPos = positionToPixels(effect.position);
+    const maxRadius = metersToPixels(effect.size);
+    const currentRadius = maxRadius * progress;
+    const alpha = 1 - progress;
+    
+    ctx.save();
+    
+    // Draw expanding ring
+    ctx.strokeStyle = effect.color;
+    ctx.lineWidth = 3 * (1 - progress * 0.7);
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.shadowColor = effect.color;
+    ctx.shadowBlur = 20;
+    
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, currentRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Draw inner flash
+    if (progress < 0.3) {
+      const flashAlpha = (1 - progress / 0.3) * alpha;
+      ctx.globalAlpha = flashAlpha * 0.6;
+      ctx.fillStyle = effect.color;
+      ctx.shadowBlur = 30;
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, currentRadius * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
+    ctx.restore();
   });
 }

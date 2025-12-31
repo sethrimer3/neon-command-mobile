@@ -94,3 +94,37 @@ export function generateTopographyLines(canvasWidth: number, canvasHeight: numbe
   return lines;
 }
 
+export function generateStarfield(canvasWidth: number, canvasHeight: number): Array<{
+  x: number;
+  y: number;
+  size: number;
+  brightness: number;
+  twinkleSpeed: number;
+  twinkleOffset: number;
+}> {
+  const stars: Array<{
+    x: number;
+    y: number;
+    size: number;
+    brightness: number;
+    twinkleSpeed: number;
+    twinkleOffset: number;
+  }> = [];
+  
+  const numStars = 100 + Math.floor(Math.random() * 50); // 100-150 stars
+  
+  for (let i = 0; i < numStars; i++) {
+    const size = Math.random() * Math.random() * 2; // Quadratic distribution for more small stars
+    stars.push({
+      x: Math.random() * canvasWidth,
+      y: Math.random() * canvasHeight,
+      size: 0.5 + size,
+      brightness: 0.3 + Math.random() * 0.7,
+      twinkleSpeed: 0.5 + Math.random() * 2,
+      twinkleOffset: Math.random() * Math.PI * 2,
+    });
+  }
+  
+  return stars;
+}
+

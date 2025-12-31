@@ -282,4 +282,24 @@ export interface GameState {
     startTime: number;
     endPosition?: Vector2;
   }>;
+  
+  // Background stars for visual effect
+  stars?: Array<{
+    x: number;
+    y: number;
+    size: number;
+    brightness: number;
+    twinkleSpeed: number;
+    twinkleOffset: number;
+  }>;
+  
+  // Impact effects for hits and explosions
+  impactEffects?: Array<{
+    id: string;
+    position: Vector2;
+    color: string;
+    startTime: number;
+    duration: number;
+    size: number;
+  }>;
 }

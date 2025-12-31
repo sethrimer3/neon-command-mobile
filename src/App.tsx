@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useKV } from './hooks/useKV';
 import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS } from './lib/types';
-import { generateId, generateTopographyLines, isPortraitOrientation } from './lib/gameUtils';
+import { generateId, generateTopographyLines, generateStarfield, isPortraitOrientation } from './lib/gameUtils';
 import { updateGame } from './lib/simulation';
 import { updateAI } from './lib/ai';
 import { renderGame } from './lib/renderer';
@@ -926,8 +926,9 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
   const obstacles = selectedMapDef.obstacles;
   const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
   
-  // Generate topography lines for this level
+  // Generate topography lines and starfield for this level
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
+  const stars = generateStarfield(canvas.width, canvas.height);
 
   return {
     mode: 'countdown',
@@ -981,6 +982,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     },
     matchTimeLimit: 300,
     topographyLines,
+    stars,
     isPortrait: isPortraitOrientation(),
   };
 }
@@ -1112,8 +1114,9 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
   const obstacles = selectedMapDef.obstacles;
   const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
   
-  // Generate topography lines for this level
+  // Generate topography lines and starfield for this level
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
+  const stars = generateStarfield(canvas.width, canvas.height);
 
   return {
     mode: 'countdown',
@@ -1174,6 +1177,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
     },
     matchTimeLimit: 300,
     topographyLines,
+    stars,
     isPortrait: isPortraitOrientation(),
   };
 }

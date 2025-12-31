@@ -147,6 +147,29 @@ function createProjectile(state: GameState, sourceUnit: Unit, target: Vector2, t
   };
 }
 
+// Create an impact effect
+function createImpactEffect(state: GameState, position: Vector2, color: string, size: number = 1): void {
+  if (!state.impactEffects) {
+    state.impactEffects = [];
+  }
+  
+  state.impactEffects.push({
+    id: generateId(),
+    position: { ...position },
+    color,
+    startTime: Date.now(),
+    duration: 0.5, // 0.5 seconds
+    size,
+  });
+  
+  // Clean up old effects (older than 1 second)
+  const now = Date.now();
+  state.impactEffects = state.impactEffects.filter((effect) => {
+    const age = (now - effect.startTime) / 1000;
+    return age < 1;
+  });
+}
+
 // Update projectiles - movement and collision
 function updateProjectiles(state: GameState, deltaTime: number): void {
   const now = Date.now();
@@ -168,6 +191,9 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
     if (distToTarget < 0.5 || age > projectile.lifetime) {
       // Hit target or expired
       if (distToTarget < 0.5) {
+        // Create impact effect
+        createImpactEffect(state, projectile.position, projectile.color, 0.8);
+        
         // Apply damage if target still exists
         if (projectile.targetUnit) {
           const target = state.units.find((u) => u.id === projectile.targetUnit);
@@ -744,7 +770,14 @@ function updateCombat(state: GameState, deltaTime: number): void {
           };
         } else {
           const targetBase = target as Base;
+          const prevHp = targetBase.hp;
           targetBase.hp -= damage;
+          
+          // Create impact effect for base damage
+          if (prevHp > 0 && targetBase.hp < prevHp) {
+            const color = state.players[unit.owner].color;
+            createImpactEffect(state, targetBase.position, color, 2.5);
+          }
           
           if (state.matchStats) {
             if (targetBase.owner === 0) {
@@ -781,8 +814,11 @@ function updateCombat(state: GameState, deltaTime: number): void {
   const oldUnits = [...state.units];
   state.units = state.units.filter((u) => u.hp > 0);
   
+  // Create impact effects for dead units
   oldUnits.forEach(u => {
     if (u.hp <= 0) {
+      const color = state.players[u.owner].color;
+      createImpactEffect(state, u.position, color, 1.2);
       soundManager.playUnitDeath();
     }
   });
