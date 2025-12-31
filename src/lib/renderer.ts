@@ -227,26 +227,26 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.restore();
     }
 
-    ctx.globalAlpha = 0.3;
-    ctx.fillRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
-    ctx.globalAlpha = 1.0;
+    // Draw only the outline, not the filled rectangle
     ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
 
     if (state.mode === 'game' && (!state.matchStartAnimation || state.matchStartAnimation.phase === 'go')) {
       const doorSize = size / 3;
       const playerPhotons = state.players[base.owner].photons;
+      const player = state.players[base.owner];
 
       const doorPositions = [
-        { x: screenPos.x, y: screenPos.y - size / 2, type: state.settings.unitSlots.up },
-        { x: screenPos.x - size / 2, y: screenPos.y, type: state.settings.unitSlots.left },
-        { x: screenPos.x, y: screenPos.y + size / 2, type: state.settings.unitSlots.down },
-        { x: screenPos.x + size / 2, y: screenPos.y, type: state.settings.unitSlots.right },
+        { x: screenPos.x, y: screenPos.y - size / 2, type: state.settings.unitSlots.up, isLeft: false },
+        { x: screenPos.x - size / 2, y: screenPos.y, type: state.settings.unitSlots.left, isLeft: true },
+        { x: screenPos.x, y: screenPos.y + size / 2, type: state.settings.unitSlots.down, isLeft: false },
+        { x: screenPos.x + size / 2, y: screenPos.y, type: state.settings.unitSlots.right, isLeft: false },
       ];
 
       doorPositions.forEach((door) => {
         const def = UNIT_DEFINITIONS[door.type];
-
-        const canAfford = playerPhotons >= def.cost;
+        // Left door trains workers instead
+        const cost = door.isLeft ? 2 * (player.workerCount + 1) : def.cost;
+        const canAfford = playerPhotons >= cost;
 
         if (canAfford && !base.isSelected) {
           ctx.save();
@@ -681,10 +681,11 @@ function drawHUD(ctx: CanvasRenderingContext2D, state: GameState): void {
 
   const p1 = state.players[0];
   ctx.fillStyle = p1.color;
-  ctx.fillText(`Photons: ${Math.floor(p1.photons)} (+${p1.incomeRate}/s)`, 10, 20);
+  ctx.fillText(`Photons: ${Math.floor(p1.photons)} (+${p1.incomeRate}/s, +${p1.incomePerKill}/kill)`, 10, 20);
 
   ctx.fillStyle = COLORS.white;
-  ctx.fillText(`Time: ${Math.floor(state.elapsedTime)}s`, 10, 40);
+  ctx.fillText(`Workers: ${p1.workerCount}`, 10, 40);
+  ctx.fillText(`Time: ${Math.floor(state.elapsedTime)}s`, 10, 60);
   
   if (state.matchTimeLimit) {
     const timeRemaining = Math.max(0, state.matchTimeLimit - state.elapsedTime);
