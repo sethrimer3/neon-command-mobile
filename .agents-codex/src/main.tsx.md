@@ -82,6 +82,7 @@ Application entry point. Sets up React root, error boundary, and global styles. 
 - Added error boundary
 - Added Spark framework integration
 - Added toast notifications
+- Re-created file during persistence hook refactor (no behavior change)
 
 ## Watch Out For
 - Root element must exist before script runs

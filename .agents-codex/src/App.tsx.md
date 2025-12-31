@@ -6,7 +6,7 @@ Main application component that orchestrates the entire game. Manages game state
 ## Dependencies
 ### Imports
 - `react` - Component lifecycle and state management
-- `@github/spark/hooks` - useKV for persistent storage
+- `./hooks/useKV` - Local storage-backed useKV for persistent storage
 - `./lib/*` - All game logic modules
 - `./components/*` - UI components and screens
 - `@phosphor-icons/react` - Icon library
@@ -100,7 +100,7 @@ Main application component that orchestrates the entire game. Manages game state
 ## Terminology
 - **Game Loop**: Continuous update and render cycle
 - **Delta Time**: Time elapsed between frames
-- **useKV**: Spark hook for persistent key-value storage
+- **useKV**: Local storage-backed hook for persistent key-value storage
 - **Render Trigger**: State variable that forces re-render
 - **Animation Frame**: Browser API for smooth animations
 - **Countdown**: 3-second delay before match start
@@ -125,7 +125,7 @@ Main application component that orchestrates the entire game. Manages game state
 - Settings updates batched in useEffect
 
 ### Persistence Strategy
-- useKV hooks auto-save to Spark storage
+- useKV hooks auto-save to localStorage
 - Settings restored on page reload
 - Statistics accumulated across sessions
 - Match history limited to 50 most recent
@@ -157,6 +157,7 @@ Main application component that orchestrates the entire game. Manages game state
 - Added match start animations
 - Added surrender mechanic
 - Added time limit support
+- Switched persistence hook to local storage to avoid Spark-only dependencies
 
 ## Watch Out For
 - Game state ref vs React state - use correctly for performance

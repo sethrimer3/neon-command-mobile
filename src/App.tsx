@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useKV } from '@github/spark/hooks';
+import { useKV } from './hooks/useKV';
 import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS } from './lib/types';
 import { generateId, generateTopographyLines } from './lib/gameUtils';
 import { updateGame } from './lib/simulation';
