@@ -1,0 +1,147 @@
+# renderer.ts
+
+## Purpose
+Handles all game rendering to HTML5 canvas. Draws game state including units, bases, obstacles, command queues, HUD elements, and visual effects. Separates rendering concerns from game logic.
+
+## Dependencies
+### Imports
+- `./types` - All game types, colors, and constants
+- `./gameUtils` - Coordinate conversions and vector math
+- `./maps` - Obstacle type
+
+### Used By
+- `App.tsx` - Main render loop calls renderGame()
+
+## Key Components
+
+### renderGame(ctx, state, canvas, selectionRect?): void
+- **Purpose:** Main rendering entry point
+- **Parameters:** Canvas context, game state, canvas element, optional selection rectangle
+- **Notes:** 
+  - Clears canvas each frame
+  - Only renders game elements when in 'game' or 'countdown' mode
+  - Draws in specific layer order for proper visual hierarchy
+
+### Drawing Functions
+
+#### drawBackground(ctx, canvas, state?): void
+- **Purpose:** Renders background with topography lines and grid pattern
+- **Notes:**
+  - Dark background color
+  - Topography lines at 15% opacity for subtle effect
+  - Dot grid pattern (40px spacing)
+  - Vertical and horizontal lines (80px spacing)
+
+#### drawObstacles(ctx, state): void
+- **Purpose:** Draws map obstacles
+- **Notes:** Semi-transparent dark rectangles
+
+#### drawBases(ctx, state): void
+- **Purpose:** Renders player bases with HP bars and effects
+- **Notes:**
+  - Shows laser firing animation
+  - Health bar with color coding (green→yellow→red)
+  - Pulsing selection indicator
+  - Movement target indicator (dot)
+
+#### drawCommandQueues(ctx, state): void
+- **Purpose:** Visualizes unit command queues
+- **Notes:**
+  - Lines connecting waypoints
+  - Different colors for move vs ability commands
+  - Telegraph indicators for pending abilities
+
+#### drawUnits(ctx, state): void
+- **Purpose:** Draws all units with effects
+- **Notes:**
+  - Circle for unit body
+  - HP bar (optional numeric display)
+  - Active ability effects (shields, cloaking, etc.)
+  - Attack animations (ranged/melee)
+  - Promotion indicators (color intensity)
+
+#### drawSelectionIndicators(ctx, state): void
+- **Purpose:** Shows which units are selected
+- **Notes:** Pulsing circle around selected units
+
+#### drawSelectionRect(ctx, selectionRect, state): void
+- **Purpose:** Shows drag selection box
+- **Notes:** Semi-transparent rectangle during box select
+
+#### drawHUD(ctx, state): void
+- **Purpose:** Displays game information overlay
+- **Notes:**
+  - Player resources (photons)
+  - Income rate
+  - Unit counts
+  - Timer
+  - Victory/defeat messages
+
+## Terminology
+- **Canvas Context**: 2D drawing API (CanvasRenderingContext2D)
+- **Layer Order**: Order in which elements are drawn (back to front)
+- **Telegraph**: Visual indicator for pending abilities
+- **HUD**: Heads-Up Display for game information
+- **Pixel Space**: Screen coordinates (vs. game meter coordinates)
+
+## Implementation Notes
+
+### Critical Details
+- Uses positionToPixels() for all game-to-screen coordinate conversion
+- Drawing order matters: background → obstacles → bases → queues → units → selection → HUD
+- HP bars show percentage with color gradient
+- Promotion level affects unit color intensity
+- Ability effects have distinct visual styles
+- Selection pulses using sine wave animation
+- All positions must be converted from meters to pixels before drawing
+
+### Rendering Optimizations
+- Clears only once per frame
+- Draws in batch by type (all units together)
+- Uses simple shapes for performance
+
+### Visual Design
+- OKLCH color space for consistent appearance
+- Dark theme with neon accent colors
+- Subtle background pattern doesn't distract from gameplay
+- Clear visual hierarchy (important elements stand out)
+
+### Known Issues
+- No culling for off-screen entities (draws everything)
+- Large unit counts may impact performance
+
+## Future Changes
+
+### Planned
+- None currently scheduled
+
+### Needed
+- Viewport culling to skip off-screen rendering
+- Particle effects for abilities and impacts
+- Unit death animations
+- Better attack visualizations
+- Minimap rendering
+- Fog of war implementation
+- Camera zoom/pan support
+- Performance profiling and optimization
+
+## Change History
+- Initial creation with basic rendering
+- Added topography lines for visual polish
+- Added numeric HP display option
+- Implemented ability effect visuals
+- Added match statistics to HUD
+
+## Watch Out For
+- Always convert game positions to pixels before drawing
+- Save/restore canvas context when changing global properties
+- fillStyle and strokeStyle persist between draws
+- Text rendering can be expensive - minimize in HUD
+- Transparency (globalAlpha) affects performance
+- Canvas transforms (translate, rotate, scale) must be properly saved/restored
+- Z-order is determined by draw order, not depth value
+- Line width is in pixels, not game meters
+- Selection rect coordinates are in pixel space
+- Ability telegraphs need timing calculations for animations
+- HP bars must clamp to [0, 1] range
+- Color interpolation for HP bars uses RGB, not OKLCH

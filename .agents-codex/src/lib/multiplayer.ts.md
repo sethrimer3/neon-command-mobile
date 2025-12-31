@@ -1,0 +1,169 @@
+# multiplayer.ts
+
+## Purpose
+Manages online multiplayer functionality including lobby creation, matchmaking, game synchronization, and command transmission. Uses Spark KV store for real-time multiplayer state management.
+
+## Dependencies
+### Imports
+- `./types` - Game state types and command structures
+
+### Used By
+- `App.tsx` - Multiplayer game coordination
+- `OnlineModeScreen.tsx` - Lobby browser
+- `MultiplayerLobbyScreen.tsx` - Lobby management UI
+
+## Key Components
+
+### Types
+
+#### MultiplayerState
+- **gameId**: Unique game identifier
+- **hostId/guestId**: Player identifiers
+- **hostReady/guestReady**: Ready status flags
+- **gameStarted**: Game in progress
+- **turnNumber**: Synchronization counter
+- **lastUpdate**: Timestamp for timeout detection
+
+#### GameCommand
+Represents player actions to be synchronized:
+- **playerId**: Command issuer
+- **timestamp**: When command was issued
+- **commands**: Array of action objects (spawn, move, ability, etc.)
+
+#### LobbyData
+Public lobby information:
+- Player info (names, colors, IDs)
+- **status**: 'waiting', 'ready', 'playing', 'finished'
+- Game settings (map, enabled units)
+- **created**: Timestamp for lobby expiration
+
+### Constants
+- **GAME_UPDATE_INTERVAL**: `100`ms - Sync frequency
+- **LOBBY_TIMEOUT**: `300000`ms (5 minutes) - Lobby expiration
+
+### MultiplayerManager Class
+
+#### Constructor(playerId: string)
+- **Purpose:** Initialize manager with player ID
+- **Notes:** Player ID used for authentication
+
+#### createGame(...): Promise<string>
+- **Purpose:** Host creates new multiplayer lobby
+- **Parameters:** Host name, color, map ID, enabled units
+- **Returns:** Game ID
+- **Notes:** 
+  - Creates lobby in KV store
+  - Adds to lobby list
+  - Sets host flag
+
+#### joinGame(gameId, guestName, guestColor): Promise<boolean>
+- **Purpose:** Join existing lobby as guest
+- **Returns:** Success status
+- **Notes:** Updates lobby with guest info
+
+#### startGameCountdown(): Promise<void>
+- **Purpose:** Begin game start sequence
+- **Notes:** Both players must be ready
+
+#### sendCommand(command: GameCommand): Promise<void>
+- **Purpose:** Queue command for transmission
+- **Notes:** Commands batched and sent periodically
+
+#### getGameState(): Promise<MultiplayerState | null>
+- **Purpose:** Fetch current multiplayer state
+- **Notes:** Returns null if game doesn't exist
+
+#### syncGameState(localState: GameState): Promise<void>
+- **Purpose:** Synchronize local game state with opponent
+- **Notes:** 
+  - Sends commands to opponent
+  - Receives and applies opponent commands
+  - Maintains turn-based consistency
+
+#### leaveGame(): Promise<void>
+- **Purpose:** Exit multiplayer game
+- **Notes:** Cleans up lobby and state
+
+### Helper Functions
+
+#### addToLobbyList/removeFromLobbyList
+- **Purpose:** Manage global lobby list
+- **Notes:** Used for matchmaking browser
+
+#### cleanupOldLobbies
+- **Purpose:** Remove expired lobbies
+- **Notes:** Prevents stale lobby accumulation
+
+## Terminology
+- **Host**: Player who created the lobby (player 0)
+- **Guest**: Player who joined the lobby (player 1)
+- **Lobby**: Pre-game waiting room
+- **KV Store**: Key-value storage system (Spark KV)
+- **Sync**: Keeping both players' game states consistent
+- **Command Queue**: Batched actions awaiting transmission
+- **Turn Number**: Counter for synchronization ordering
+
+## Implementation Notes
+
+### Critical Details
+- Uses Spark KV for distributed state storage
+- Commands batched to reduce network calls
+- Turn-based synchronization prevents desync
+- Lobby list maintained separately for browsing
+- Lobbies expire after 5 minutes of inactivity
+- Both players must be ready before game starts
+- Host is always player 0, guest is player 1
+
+### Synchronization Strategy
+1. Each player maintains local game state
+2. Actions recorded as commands
+3. Commands sent to shared KV storage
+4. Both players apply all commands in turn order
+5. Turn number increments ensure consistency
+
+### Network Optimization
+- 100ms update interval balances responsiveness and bandwidth
+- Command batching reduces API calls
+- Lobby list cached to minimize reads
+
+### Known Issues
+- No reconnection support if connection lost
+- Limited error handling for network failures
+- Turn-based sync may feel laggy for fast actions
+
+## Future Changes
+
+### Planned
+- None currently scheduled
+
+### Needed
+- Reconnection support
+- Better error handling and retry logic
+- Peer-to-peer networking (bypass KV store)
+- Spectator mode
+- Replays
+- Ranked matchmaking
+- ELO/MMR system integration
+- Chat system
+- Game invitations
+- Friend list
+- Tournament brackets
+- Optimistic prediction for lower latency feel
+
+## Change History
+- Initial creation with basic lobby system
+- Added command synchronization
+- Implemented lobby browser and matchmaking
+
+## Watch Out For
+- KV store operations are async - always await
+- Host must be player 0, guest player 1 for consistency
+- Turn number critical for command ordering
+- Commands must be deterministic for sync
+- Lobby timeout prevents infinite old lobbies
+- Game ID collisions theoretically possible (very rare)
+- Network latency affects gameplay responsiveness
+- Both players must have same game version
+- Command format must match exactly between players
+- Empty command batches still trigger sync
+- Lobby list can grow large - pagination may be needed
