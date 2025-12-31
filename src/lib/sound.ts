@@ -188,6 +188,11 @@ export class SoundManager {
     this.playTone(1500, 0.03, 'sine', 0.08);
   }
 
+  playError() {
+    this.playTone(200, 0.15, 'square', 0.25);
+    setTimeout(() => this.playTone(150, 0.2, 'square', 0.2), 100);
+  }
+
   loadAudioFile(name: string, url: string) {
     const audio = new Audio(url);
     const isMusic = name.startsWith('music_');

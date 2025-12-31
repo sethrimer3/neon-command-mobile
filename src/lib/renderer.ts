@@ -225,6 +225,7 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
         { x: screenPos.x, y: screenPos.y - size / 2, type: state.settings.unitSlots.up },
         { x: screenPos.x - size / 2, y: screenPos.y, type: state.settings.unitSlots.left },
         { x: screenPos.x, y: screenPos.y + size / 2, type: state.settings.unitSlots.down },
+        { x: screenPos.x + size / 2, y: screenPos.y, type: state.settings.unitSlots.right },
       ];
 
       doorPositions.forEach((door) => {
@@ -245,6 +246,8 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
             ctx.fillRect(door.x - doorSize / 2, door.y - 3, doorSize, 3);
           } else if (door.x < screenPos.x) {
             ctx.fillRect(door.x, door.y - doorSize / 2, 3, doorSize);
+          } else if (door.x > screenPos.x) {
+            ctx.fillRect(door.x - 3, door.y - doorSize / 2, 3, doorSize);
           }
 
           ctx.restore();

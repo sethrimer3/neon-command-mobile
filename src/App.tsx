@@ -36,7 +36,7 @@ function App() {
   const [playerColor, setPlayerColor] = useKV('player-color', COLORS.playerDefault);
   const [enemyColor, setEnemyColor] = useKV('enemy-color', COLORS.enemyDefault);
   const [enabledUnits, setEnabledUnits] = useKV<string[]>('enabled-units', ['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor']);
-  const [unitSlots, setUnitSlots] = useKV<Record<string, UnitType>>('unit-slots', { left: 'marine', up: 'warrior', down: 'snaker' });
+  const [unitSlots, setUnitSlots] = useKV<Record<string, UnitType>>('unit-slots', { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' });
   const [selectedMap, setSelectedMap] = useKV('selected-map', 'open');
   const [playerStatistics, setPlayerStatistics] = useKV<PlayerStatistics>('player-statistics', createEmptyStatistics());
   const [soundEnabled, setSoundEnabled] = useKV<boolean>('sound-enabled', true);
@@ -82,7 +82,7 @@ function App() {
       playerColor: playerColor || COLORS.playerDefault,
       enemyColor: enemyColor || COLORS.enemyDefault,
       enabledUnits: new Set((enabledUnits || ['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor']) as UnitType[]),
-      unitSlots: (unitSlots || { left: 'marine', up: 'warrior', down: 'snaker' }) as Record<'left' | 'up' | 'down', UnitType>,
+      unitSlots: (unitSlots || { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' }) as Record<'left' | 'up' | 'down' | 'right', UnitType>,
       selectedMap: selectedMap || 'open',
       showNumericHP: showNumericHP ?? true,
     };
@@ -372,9 +372,9 @@ function App() {
     }
   };
 
-  const handleSlotChange = (slot: 'left' | 'up' | 'down', unitType: UnitType) => {
+  const handleSlotChange = (slot: 'left' | 'up' | 'down' | 'right', unitType: UnitType) => {
     setUnitSlots((current) => ({
-      ...(current || { left: 'marine', up: 'warrior', down: 'snaker' }),
+      ...(current || { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' }),
       [slot]: unitType,
     }));
   };
@@ -506,7 +506,7 @@ function App() {
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="flex flex-col gap-4 w-80 max-w-[90vw]">
             <h1 className="orbitron text-4xl font-bold text-center text-primary mb-4 tracking-wider uppercase">
-              Neon Command
+              Speed of Light RTS
             </h1>
 
             <Button
@@ -705,7 +705,7 @@ function App() {
 
       {gameState.mode === 'unitSelection' && (
         <UnitSelectionScreen
-          unitSlots={unitSlots as Record<'left' | 'up' | 'down', UnitType>}
+          unitSlots={unitSlots as Record<'left' | 'up' | 'down' | 'right', UnitType>}
           onSlotChange={handleSlotChange}
           onBack={backToMenu}
           playerColor={playerColor || COLORS.playerDefault}
@@ -798,7 +798,7 @@ function createInitialState(): GameState {
       playerColor: COLORS.playerDefault,
       enemyColor: COLORS.enemyDefault,
       enabledUnits: new Set(['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor']),
-      unitSlots: { left: 'marine', up: 'warrior', down: 'snaker' },
+      unitSlots: { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' },
       selectedMap: 'open',
       showNumericHP: true,
     },
@@ -970,7 +970,7 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
       playerColor: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault,
       enemyColor: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor,
       enabledUnits: new Set(lobby.enabledUnits as UnitType[]),
-      unitSlots: { left: 'marine', up: 'warrior', down: 'snaker' },
+      unitSlots: { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' },
       selectedMap: lobby.mapId,
       showNumericHP: true,
     },
@@ -1031,7 +1031,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean): GameStat
       playerColor: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault,
       enemyColor: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor,
       enabledUnits: new Set(lobby.enabledUnits as UnitType[]),
-      unitSlots: { left: 'marine', up: 'warrior', down: 'snaker' },
+      unitSlots: { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' },
       selectedMap: lobby.mapId,
       showNumericHP: true,
     },

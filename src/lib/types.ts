@@ -212,7 +212,7 @@ export interface GameState {
     playerColor: string;
     enemyColor: string;
     enabledUnits: Set<UnitType>;
-    unitSlots: Record<'left' | 'up' | 'down', UnitType>;
+    unitSlots: Record<'left' | 'up' | 'down' | 'right', UnitType>;
     selectedMap: string;
     showNumericHP: boolean;
   };

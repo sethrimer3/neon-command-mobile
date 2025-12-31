@@ -5,16 +5,16 @@ import { ArrowLeft } from '@phosphor-icons/react';
 import { UnitType, UNIT_DEFINITIONS, COLORS } from '../lib/types';
 
 interface UnitSelectionScreenProps {
-  unitSlots: Record<'left' | 'up' | 'down', UnitType>;
-  onSlotChange: (slot: 'left' | 'up' | 'down', unitType: UnitType) => void;
+  unitSlots: Record<'left' | 'up' | 'down' | 'right', UnitType>;
+  onSlotChange: (slot: 'left' | 'up' | 'down' | 'right', unitType: UnitType) => void;
   onBack: () => void;
   playerColor: string;
 }
 
 export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerColor }: UnitSelectionScreenProps) {
-  const [selectedSlot, setSelectedSlot] = useState<'left' | 'up' | 'down' | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<'left' | 'up' | 'down' | 'right' | null>(null);
 
-  const handleSlotClick = (slot: 'left' | 'up' | 'down') => {
+  const handleSlotClick = (slot: 'left' | 'up' | 'down' | 'right') => {
     setSelectedSlot(slot);
   };
 
@@ -159,6 +159,21 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
               {renderUnitIcon(unitSlots.down, 32)}
               <span className="text-xs capitalize">{unitSlots.down}</span>
               <span className="text-xs text-muted-foreground">{UNIT_DEFINITIONS[unitSlots.down].cost}◈</span>
+            </button>
+
+            <button
+              onClick={() => handleSlotClick('right')}
+              className={`absolute right-8 top-1/2 -translate-y-1/2 w-20 h-20 border-2 rounded-lg flex flex-col items-center justify-center gap-1 transition-all ${
+                selectedSlot === 'right' ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
+              }`}
+              style={{
+                borderColor: playerColor || COLORS.playerDefault,
+                backgroundColor: selectedSlot === 'right' ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
+              }}
+            >
+              {renderUnitIcon(unitSlots.right, 32)}
+              <span className="text-xs capitalize">{unitSlots.right}</span>
+              <span className="text-xs text-muted-foreground">{UNIT_DEFINITIONS[unitSlots.right].cost}◈</span>
             </button>
           </div>
 

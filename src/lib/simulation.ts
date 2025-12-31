@@ -598,11 +598,11 @@ function checkTimeLimit(state: GameState): void {
   }
 }
 
-export function spawnUnit(state: GameState, owner: number, type: UnitType, spawnPos: { x: number; y: number }, rallyPos: { x: number; y: number }): void {
+export function spawnUnit(state: GameState, owner: number, type: UnitType, spawnPos: { x: number; y: number }, rallyPos: { x: number; y: number }): boolean {
   const def = UNIT_DEFINITIONS[type];
 
-  if (state.players[owner].photons < def.cost) return;
-  if (!state.settings.enabledUnits.has(type)) return;
+  if (state.players[owner].photons < def.cost) return false;
+  if (!state.settings.enabledUnits.has(type)) return false;
 
   state.players[owner].photons -= def.cost;
 
@@ -630,4 +630,5 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
   };
 
   state.units.push(unit);
+  return true;
 }

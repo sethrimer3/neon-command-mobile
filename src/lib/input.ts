@@ -81,7 +81,7 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
       touchState.isDragging = true;
 
       const elapsed = Date.now() - touchState.startTime;
-      if (elapsed > HOLD_TIME_MS) {
+      if (elapsed > HOLD_TIME_MS && !touchState.touchedBase) {
         touchState.selectionRect = {
           x1: touchState.startPos.x,
           y1: touchState.startPos.y,
@@ -260,7 +260,7 @@ function handleBaseSwipe(state: GameState, base: Base, swipe: { x: number; y: nu
   let rallyOffset = { x: 0, y: 0 };
 
   if (angleDeg >= -45 && angleDeg < 45) {
-    spawnType = state.settings.unitSlots.left;
+    spawnType = state.settings.unitSlots.right;
     rallyOffset = { x: 8, y: 0 };
   } else if (angleDeg >= 45 && angleDeg < 135) {
     spawnType = state.settings.unitSlots.up;
@@ -275,7 +275,10 @@ function handleBaseSwipe(state: GameState, base: Base, swipe: { x: number; y: nu
 
   const rallyPos = add(base.position, rallyOffset);
   if (spawnType) {
-    spawnUnit(state, playerIndex, spawnType, base.position, rallyPos);
+    const success = spawnUnit(state, playerIndex, spawnType, base.position, rallyPos);
+    if (!success) {
+      soundManager.playError();
+    }
   }
 }
 
@@ -380,12 +383,14 @@ export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCan
   if (dist > 10 && !mouseState.isDragging) {
     mouseState.isDragging = true;
 
-    mouseState.selectionRect = {
-      x1: mouseState.startPos.x,
-      y1: mouseState.startPos.y,
-      x2: x,
-      y2: y,
-    };
+    if (!mouseState.touchedBase) {
+      mouseState.selectionRect = {
+        x1: mouseState.startPos.x,
+        y1: mouseState.startPos.y,
+        x2: x,
+        y2: y,
+      };
+    }
   }
 
   if (mouseState.selectionRect) {
