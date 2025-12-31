@@ -526,7 +526,7 @@ function updateCombat(state: GameState, deltaTime: number): void {
   oldUnits.forEach(u => {
     if (u.hp <= 0) {
       soundManager.playUnitDeath();
-      // Add income per kill to the player who killed this unit
+      // Add income per kill to the opponent (game is always 1v1: player 0 vs player 1)
       const killerOwner = u.owner === 0 ? 1 : 0;
       state.players[killerOwner].photons += state.players[killerOwner].incomePerKill;
     }
