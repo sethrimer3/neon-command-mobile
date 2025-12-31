@@ -3,7 +3,7 @@ export const BASE_SIZE_METERS = 3;
 export const UNIT_SIZE_METERS = 1;
 
 export const ABILITY_MAX_RANGE = 10;
-export const QUEUE_MAX_LENGTH = 20;
+export const QUEUE_MAX_LENGTH = 3;
 
 export const LASER_RANGE = 20;
 export const LASER_WIDTH = 0.5;
@@ -285,6 +285,10 @@ export interface GameState {
     startTime: number;
     endPosition?: Vector2;
   }>;
+  
+  // Double-tap tracking
+  lastTapTime?: number;
+  lastTapPosition?: Vector2;
   
   // Background stars for visual effect
   stars?: Array<{

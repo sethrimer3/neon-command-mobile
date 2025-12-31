@@ -19,6 +19,10 @@ import { checkObstacleCollision } from './maps';
 import { soundManager } from './sound';
 import { createSpawnEffect, createHitSparks, createAbilityEffect, createEnhancedDeathExplosion } from './visualEffects';
 
+// Unit collision constants
+const UNIT_COLLISION_RADIUS = UNIT_SIZE_METERS / 2; // Minimum distance between unit centers
+const UNIT_COLLISION_SQUEEZE_FACTOR = 0.8; // Allow units to squeeze past each other (80% of full diameter)
+
 // Particle physics constants
 const PARTICLE_ATTRACTION_STRENGTH = 6.0; // How strongly particles are attracted to their unit
 const PARTICLE_DAMPING = 0.92; // Velocity damping factor - reduces velocity to prevent excessive speeds
@@ -52,6 +56,26 @@ const SCREEN_SHAKE_MULTI_KILL_THRESHOLD = 3; // minimum units for multi-kill sha
 
 // Motion trail constants - exported for use in renderer
 export const MOTION_TRAIL_DURATION = 0.5; // seconds for motion trail fade
+
+// Check if a position would collide with any existing unit
+function checkUnitCollision(position: Vector2, currentUnitId: string, allUnits: Unit[]): boolean {
+  // Use a slightly smaller collision radius to allow units to squeeze past each other
+  const collisionRadius = (UNIT_COLLISION_RADIUS * 2) * UNIT_COLLISION_SQUEEZE_FACTOR;
+  
+  for (const otherUnit of allUnits) {
+    // Skip checking against self
+    if (otherUnit.id === currentUnitId) continue;
+    
+    // Calculate distance between units
+    const dist = distance(position, otherUnit.position);
+    
+    // Check if units would overlap (within combined radii)
+    if (dist < collisionRadius) {
+      return true; // Collision detected
+    }
+  }
+  return false; // No collision
+}
 
 // Create particles for a unit
 function createParticlesForUnit(unit: Unit, count: number): Particle[] {
@@ -643,10 +667,13 @@ function updateUnits(state: GameState, deltaTime: number): void {
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
       
-      if (!checkObstacleCollision(newPosition, UNIT_SIZE_METERS / 2, state.obstacles)) {
+      // Check for both obstacle and unit collisions
+      if (!checkObstacleCollision(newPosition, UNIT_SIZE_METERS / 2, state.obstacles) &&
+          !checkUnitCollision(newPosition, unit.id, state.units)) {
         unit.position = newPosition;
       } else {
-        unit.commandQueue.shift();
+        // Collision detected - unit waits and will retry movement next frame
+        // Units naturally unstick as other units move away
         return;
       }
 
@@ -697,10 +724,13 @@ function updateUnits(state: GameState, deltaTime: number): void {
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
       
-      if (!checkObstacleCollision(newPosition, UNIT_SIZE_METERS / 2, state.obstacles)) {
+      // Check for both obstacle and unit collisions
+      if (!checkObstacleCollision(newPosition, UNIT_SIZE_METERS / 2, state.obstacles) &&
+          !checkUnitCollision(newPosition, unit.id, state.units)) {
         unit.position = newPosition;
       } else {
-        unit.commandQueue.shift();
+        // Collision detected - unit waits and will retry movement next frame
+        // Units naturally unstick as other units move away
         return;
       }
 

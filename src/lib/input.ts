@@ -35,6 +35,8 @@ let mouseState: TouchState | null = null;
 const SWIPE_THRESHOLD_PX = 30;
 const TAP_TIME_MS = 300;
 const HOLD_TIME_MS = 200;
+const DOUBLE_TAP_TIME_MS = 400; // Time window for double-tap detection
+const DOUBLE_TAP_DISTANCE_PX = 50; // Max distance between taps to count as double-tap
 
 function addVisualFeedback(state: GameState, type: 'tap' | 'drag', position: { x: number; y: number }, endPosition?: { x: number; y: number }): void {
   if (!state.visualFeedback) {
@@ -332,7 +334,59 @@ function handleBaseSwipe(state: GameState, base: Base, swipe: { x: number; y: nu
   }
 }
 
+// Check if this is a double-tap and handle it
+function isDoubleTap(state: GameState, screenPos: { x: number; y: number }): boolean {
+  const now = Date.now();
+  
+  if (state.lastTapPosition && state.lastTapTime) {
+    const dx = screenPos.x - state.lastTapPosition.x;
+    const dy = screenPos.y - state.lastTapPosition.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const timeSinceLastTap = now - state.lastTapTime;
+    
+    if (timeSinceLastTap < DOUBLE_TAP_TIME_MS && dist < DOUBLE_TAP_DISTANCE_PX) {
+      // Reset double-tap tracking
+      state.lastTapTime = undefined;
+      state.lastTapPosition = undefined;
+      return true;
+    }
+  }
+  
+  // Update last tap tracking
+  state.lastTapTime = now;
+  state.lastTapPosition = { x: screenPos.x, y: screenPos.y };
+  return false;
+}
+
+// Handle double-tap: deselect all units and remove last move command
+function handleDoubleTap(state: GameState): void {
+  // Remove the last move command from all selected units
+  state.units.forEach((unit) => {
+    if (state.selectedUnits.has(unit.id) && unit.commandQueue.length > 0) {
+      // Find and remove the last move command
+      for (let i = unit.commandQueue.length - 1; i >= 0; i--) {
+        if (unit.commandQueue[i].type === 'move') {
+          unit.commandQueue.splice(i, 1);
+          break;
+        }
+      }
+    }
+  });
+  
+  // Deselect all units and bases
+  state.selectedUnits.clear();
+  state.bases.forEach((b) => (b.isSelected = false));
+  
+  soundManager.playUnitSelect(); // Play feedback sound
+}
+
 function handleTap(state: GameState, screenPos: { x: number; y: number }, canvas: HTMLCanvasElement, playerIndex: number): void {
+  // Check for double-tap first
+  if (isDoubleTap(state, screenPos)) {
+    handleDoubleTap(state);
+    return;
+  }
+  
   const worldPos = pixelsToPosition(screenPos);
 
   const tappedUnit = state.units.find((unit) => {
