@@ -219,6 +219,109 @@ function createScreenShake(state: GameState, intensity: number, duration: number
   }
 }
 
+// Create explosion particles for unit death
+function createExplosionParticles(state: GameState, position: Vector2, color: string, count: number = 12): void {
+  if (!state.explosionParticles) {
+    state.explosionParticles = [];
+  }
+  
+  const now = Date.now();
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count;
+    const speed = 8 + Math.random() * 4;
+    state.explosionParticles.push({
+      id: generateId(),
+      position: { ...position },
+      velocity: {
+        x: Math.cos(angle) * speed,
+        y: Math.sin(angle) * speed,
+      },
+      color,
+      size: 0.2 + Math.random() * 0.3,
+      lifetime: 0.6 + Math.random() * 0.4,
+      createdAt: now,
+      alpha: 1.0,
+    });
+  }
+  
+  // Clean up old particles
+  state.explosionParticles = state.explosionParticles.filter((particle) => {
+    const age = (now - particle.createdAt) / 1000;
+    return age < particle.lifetime;
+  });
+}
+
+// Update explosion particles
+function updateExplosionParticles(state: GameState, deltaTime: number): void {
+  if (!state.explosionParticles) return;
+  
+  const now = Date.now();
+  state.explosionParticles.forEach((particle) => {
+    // Update position
+    particle.position.x += particle.velocity.x * deltaTime;
+    particle.position.y += particle.velocity.y * deltaTime;
+    
+    // Apply gravity/deceleration
+    particle.velocity.x *= 0.96;
+    particle.velocity.y *= 0.96;
+    
+    // Update alpha based on lifetime
+    const age = (now - particle.createdAt) / 1000;
+    particle.alpha = Math.max(0, 1 - age / particle.lifetime);
+  });
+  
+  // Remove dead particles
+  state.explosionParticles = state.explosionParticles.filter((particle) => {
+    const age = (now - particle.createdAt) / 1000;
+    return age < particle.lifetime;
+  });
+}
+
+// Update motion trails for fast units
+function updateMotionTrails(state: GameState): void {
+  if (!state.motionTrails) {
+    state.motionTrails = [];
+  }
+  
+  const now = Date.now();
+  const trailDuration = 0.5; // seconds
+  
+  // Update trails for each unit
+  state.units.forEach((unit) => {
+    // Only create trails for fast units (scout, interceptor, snaker)
+    if (unit.type !== 'scout' && unit.type !== 'interceptor' && unit.type !== 'snaker') {
+      return;
+    }
+    
+    // Check if unit is moving
+    const velocity = unit.commandQueue.length > 0 ? 1 : 0;
+    if (velocity === 0) return;
+    
+    let trail = state.motionTrails?.find(t => t.unitId === unit.id);
+    if (!trail) {
+      trail = {
+        unitId: unit.id,
+        positions: [],
+        color: state.players[unit.owner].color,
+      };
+      state.motionTrails!.push(trail);
+    }
+    
+    // Add current position
+    trail.positions.push({
+      pos: { ...unit.position },
+      timestamp: now,
+    });
+    
+    // Remove old positions
+    trail.positions = trail.positions.filter(p => (now - p.timestamp) / 1000 < trailDuration);
+  });
+  
+  // Clean up trails for dead units
+  const unitIds = new Set(state.units.map(u => u.id));
+  state.motionTrails = state.motionTrails.filter(t => unitIds.has(t.unitId));
+}
+
 // Update projectiles - movement and collision
 function updateProjectiles(state: GameState, deltaTime: number): void {
   const now = Date.now();
@@ -315,6 +418,8 @@ export function updateGame(state: GameState, deltaTime: number): void {
   updateBases(state, deltaTime);
   updateProjectiles(state, deltaTime);
   updateCombat(state, deltaTime);
+  updateExplosionParticles(state, deltaTime);
+  updateMotionTrails(state);
   checkTimeLimit(state);
   checkVictory(state);
 }
@@ -873,6 +978,7 @@ function updateCombat(state: GameState, deltaTime: number): void {
     deadUnits.forEach(u => {
       const color = state.players[u.owner].color;
       createImpactEffect(state, u.position, color, 1.2);
+      createExplosionParticles(state, u.position, color, 12);
       soundManager.playUnitDeath();
     });
     
@@ -902,6 +1008,7 @@ function checkVictory(state: GameState): void {
       // Big impact effect for base destruction
       const color = state.players[base.owner === 0 ? 1 : 0].color; // Use attacker's color
       createImpactEffect(state, base.position, color, 4.0);
+      createExplosionParticles(state, base.position, color, 24);
       state.winner = base.owner === 0 ? 1 : 0;
       state.mode = 'victory';
     }

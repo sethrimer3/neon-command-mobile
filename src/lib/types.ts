@@ -334,4 +334,23 @@ export interface GameState {
   
   // Minimap settings
   showMinimap?: boolean;
+  
+  // Explosion particles for unit deaths
+  explosionParticles?: Array<{
+    id: string;
+    position: Vector2;
+    velocity: Vector2;
+    color: string;
+    size: number;
+    lifetime: number;
+    createdAt: number;
+    alpha: number;
+  }>;
+  
+  // Motion trails for fast units
+  motionTrails?: Array<{
+    unitId: string;
+    positions: Array<{ pos: Vector2; timestamp: number }>;
+    color: string;
+  }>;
 }

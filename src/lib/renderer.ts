@@ -62,8 +62,10 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
     
     if (state.mode === 'game') {
       drawCommandQueues(ctx, state);
+      drawMotionTrails(ctx, state);
       drawProjectiles(ctx, state);
       drawUnits(ctx, state);
+      drawExplosionParticles(ctx, state);
       drawImpactEffects(ctx, state);
       drawDamageNumbers(ctx, state);
       drawSelectionIndicators(ctx, state);
@@ -308,11 +310,22 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
+    
+    // Add pulsing glow effect
+    const time = Date.now() / 1000;
+    const pulseIntensity = Math.sin(time * 1.5) * 0.3 + 0.7; // Pulse between 0.4 and 1.0
 
     if (base.isSelected) {
       ctx.save();
       ctx.shadowColor = color;
-      ctx.shadowBlur = 20;
+      ctx.shadowBlur = 20 * pulseIntensity;
+      ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+      ctx.restore();
+    } else {
+      // Add subtle pulsing glow even when not selected
+      ctx.save();
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 10 * pulseIntensity;
       ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
       ctx.restore();
     }
@@ -342,8 +355,8 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
           ctx.save();
           ctx.fillStyle = color;
           ctx.shadowColor = color;
-          ctx.shadowBlur = 15;
-          ctx.globalAlpha = 0.8;
+          ctx.shadowBlur = 15 * pulseIntensity;
+          ctx.globalAlpha = 0.6 + 0.2 * pulseIntensity;
 
           if (door.y < screenPos.y) {
             ctx.fillRect(door.x - doorSize / 2, door.y, doorSize, 3);
@@ -1173,6 +1186,73 @@ function drawImpactEffects(ctx: CanvasRenderingContext2D, state: GameState): voi
       ctx.beginPath();
       ctx.arc(screenPos.x, screenPos.y, currentRadius * 0.5, 0, Math.PI * 2);
       ctx.fill();
+    }
+    
+    ctx.restore();
+  });
+}
+
+function drawExplosionParticles(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.explosionParticles || state.explosionParticles.length === 0) return;
+  
+  state.explosionParticles.forEach((particle) => {
+    const screenPos = positionToPixels(particle.position);
+    const size = metersToPixels(particle.size);
+    
+    ctx.save();
+    ctx.globalAlpha = particle.alpha;
+    
+    // Draw particle with glow
+    ctx.fillStyle = particle.color;
+    ctx.shadowColor = particle.color;
+    ctx.shadowBlur = size * 3;
+    
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Add extra glow layer
+    ctx.globalAlpha = particle.alpha * 0.4;
+    ctx.shadowBlur = size * 6;
+    ctx.fill();
+    
+    ctx.restore();
+  });
+}
+
+function drawMotionTrails(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.motionTrails || state.motionTrails.length === 0) return;
+  
+  const now = Date.now();
+  
+  state.motionTrails.forEach((trail) => {
+    if (trail.positions.length < 2) return;
+    
+    ctx.save();
+    ctx.strokeStyle = trail.color;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    // Draw trail from oldest to newest
+    for (let i = 0; i < trail.positions.length - 1; i++) {
+      const age = (now - trail.positions[i].timestamp) / 1000;
+      const alpha = Math.max(0, 1 - age / 0.5); // 0.5s fade
+      const width = 2 * alpha;
+      
+      if (alpha <= 0) continue;
+      
+      const pos1 = positionToPixels(trail.positions[i].pos);
+      const pos2 = positionToPixels(trail.positions[i + 1].pos);
+      
+      ctx.globalAlpha = alpha * 0.6;
+      ctx.lineWidth = width;
+      ctx.shadowColor = trail.color;
+      ctx.shadowBlur = 8;
+      
+      ctx.beginPath();
+      ctx.moveTo(pos1.x, pos1.y);
+      ctx.lineTo(pos2.x, pos2.y);
+      ctx.stroke();
     }
     
     ctx.restore();
