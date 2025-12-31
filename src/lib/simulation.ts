@@ -17,7 +17,7 @@ import {
 import { distance, normalize, scale, add, subtract, generateId } from './gameUtils';
 import { checkObstacleCollision } from './maps';
 import { soundManager } from './sound';
-import { createSpawnEffect, createHitSparks, createAbilityEffect } from './visualEffects';
+import { createSpawnEffect, createHitSparks, createAbilityEffect, createEnhancedDeathExplosion } from './visualEffects';
 
 // Particle physics constants
 const PARTICLE_ATTRACTION_STRENGTH = 6.0; // How strongly particles are attracted to their unit
@@ -568,6 +568,7 @@ export function updateGame(state: GameState, deltaTime: number): void {
   updateBases(state, deltaTime);
   updateProjectiles(state, deltaTime);
   updateCombat(state, deltaTime);
+  cleanupDeadUnits(state); // Clean up dead units after combat
   updateExplosionParticles(state, deltaTime);
   updateEnergyPulses(state);
   updateHitSparks(state, deltaTime);
@@ -650,6 +651,60 @@ function updateUnits(state: GameState, deltaTime: number): void {
       }
 
       const queueMovementNodes = unit.commandQueue.filter((n) => n.type === 'move').length;
+      const creditMultiplier = 1.0 + QUEUE_BONUS_PER_NODE * queueMovementNodes;
+      unit.distanceCredit += moveDist * creditMultiplier;
+
+      while (unit.distanceCredit >= PROMOTION_DISTANCE_THRESHOLD) {
+        unit.distanceCredit -= PROMOTION_DISTANCE_THRESHOLD;
+        unit.damageMultiplier *= PROMOTION_MULTIPLIER;
+      }
+
+      unit.distanceTraveled += moveDist;
+    } else if (currentNode.type === 'attack-move') {
+      // Attack-move: move towards position but attack any enemies in range
+      const def = UNIT_DEFINITIONS[unit.type];
+      
+      // Check for enemies in attack range
+      let targetEnemy: Unit | null = null;
+      let minDist = Infinity;
+      
+      state.units.forEach((enemy) => {
+        if (enemy.owner !== unit.owner && enemy.hp > 0) {
+          const dist = distance(unit.position, enemy.position);
+          if (dist <= def.attackRange && dist < minDist) {
+            targetEnemy = enemy;
+            minDist = dist;
+          }
+        }
+      });
+      
+      // If enemy in range, attack it
+      if (targetEnemy && (!unit.attackCooldown || unit.attackCooldown <= 0)) {
+        performAttack(state, unit, targetEnemy);
+        unit.attackCooldown = 1 / def.attackRate;
+      }
+      
+      // Continue moving towards destination
+      const dist = distance(unit.position, currentNode.position);
+      if (dist < 0.1) {
+        unit.commandQueue.shift();
+        return;
+      }
+
+      const direction = normalize(subtract(currentNode.position, unit.position));
+      const movement = scale(direction, def.moveSpeed * deltaTime);
+
+      const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
+      const newPosition = add(unit.position, scale(direction, moveDist));
+      
+      if (!checkObstacleCollision(newPosition, UNIT_SIZE_METERS / 2, state.obstacles)) {
+        unit.position = newPosition;
+      } else {
+        unit.commandQueue.shift();
+        return;
+      }
+
+      const queueMovementNodes = unit.commandQueue.filter((n) => n.type === 'move' || n.type === 'attack-move').length;
       const creditMultiplier = 1.0 + QUEUE_BONUS_PER_NODE * queueMovementNodes;
       unit.distanceCredit += moveDist * creditMultiplier;
 
@@ -1049,94 +1104,105 @@ function updateCombat(state: GameState, deltaTime: number): void {
     }
 
     if (target) {
-      // Reset attack cooldown
-      unit.attackCooldown = 1.0 / def.attackRate;
-      
-      if (def.attackType === 'ranged') {
-        // Spawn projectile for ranged attacks
-        const targetPos = target.position;
-        const targetUnit = 'type' in target ? (target as Unit) : undefined;
-        const projectile = createProjectile(state, unit, targetPos, targetUnit);
-        state.projectiles.push(projectile);
-        
-        if (unit.owner === 0 && Math.random() < 0.3) {
-          soundManager.playAttack();
-        }
-      } else if (def.attackType === 'melee') {
-        // Apply instant damage for melee and create visual effect
-        let damage = def.attackDamage * unit.damageMultiplier;
-
-        if ('type' in target) {
-          const targetUnit = target as Unit;
-          
-          if (targetUnit.shieldActive) {
-            const allies = state.units.filter((u) => 
-              u.owner === targetUnit.owner && 
-              u.shieldActive && 
-              distance(u.position, targetUnit.position) <= u.shieldActive.radius
-            );
-            if (allies.length > 0) {
-              damage *= 0.3;
-            }
-          }
-
-          targetUnit.hp -= damage;
-          
-          if (state.matchStats && unit.owner === 0) {
-            state.matchStats.damageDealtByPlayer += damage;
-          }
-          
-          // Create melee attack visual effect
-          unit.meleeAttackEffect = {
-            endTime: Date.now() + MELEE_EFFECT_DURATION * 1000,
-            targetPos: { ...targetUnit.position },
-          };
-        } else {
-          const targetBase = target as Base;
-          const prevHp = targetBase.hp;
-          targetBase.hp -= damage;
-          
-          // Create impact effect and screen shake for base damage
-          if (prevHp > 0 && targetBase.hp < prevHp) {
-            const color = state.players[unit.owner].color;
-            createImpactEffect(state, targetBase.position, color, 2.5);
-            // Stronger shake for base damage (scales with damage)
-            createScreenShake(state, Math.min(damage / SCREEN_SHAKE_BASE_DAMAGE, SCREEN_SHAKE_MAX_INTENSITY), SCREEN_SHAKE_DURATION_MEDIUM);
-          }
-          
-          if (state.matchStats) {
-            if (targetBase.owner === 0) {
-              state.matchStats.damageToPlayerBase += damage;
-            } else {
-              state.matchStats.damageToEnemyBase += damage;
-            }
-            
-            if (unit.owner === 0) {
-              state.matchStats.damageDealtByPlayer += damage;
-            }
-          }
-          
-          // Create melee attack visual effect
-          unit.meleeAttackEffect = {
-            endTime: Date.now() + MELEE_EFFECT_DURATION * 1000,
-            targetPos: { ...targetBase.position },
-          };
-        }
-        
-        if (unit.owner === 0 && Math.random() < 0.3) {
-          soundManager.playAttack();
-        }
-      }
+      performAttack(state, unit, target);
     }
   });
+}
 
-  const beforeFilter = state.units.length;
-  const unitsByOwner = state.units.reduce((acc, u) => {
+// Helper function to perform an attack
+function performAttack(state: GameState, unit: Unit, target: Unit | Base): void {
+  const def = UNIT_DEFINITIONS[unit.type];
+  
+  // Reset attack cooldown
+  unit.attackCooldown = 1.0 / def.attackRate;
+  
+  if (def.attackType === 'ranged') {
+    // Spawn projectile for ranged attacks
+    const targetPos = target.position;
+    const targetUnit = 'type' in target ? (target as Unit) : undefined;
+    const projectile = createProjectile(state, unit, targetPos, targetUnit);
+    state.projectiles.push(projectile);
+    
+    if (unit.owner === 0 && Math.random() < 0.3) {
+      soundManager.playAttack();
+    }
+  } else if (def.attackType === 'melee') {
+    // Apply instant damage for melee and create visual effect
+    let damage = def.attackDamage * unit.damageMultiplier;
+
+    if ('type' in target) {
+      const targetUnit = target as Unit;
+      
+      if (targetUnit.shieldActive) {
+        const allies = state.units.filter((u) => 
+          u.owner === targetUnit.owner && 
+          u.shieldActive && 
+          distance(u.position, targetUnit.position) <= u.shieldActive.radius
+        );
+        if (allies.length > 0) {
+          damage *= 0.3;
+        }
+      }
+
+      targetUnit.hp -= damage;
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+      
+      // Create melee attack visual effect
+      unit.meleeAttackEffect = {
+        endTime: Date.now() + MELEE_EFFECT_DURATION * 1000,
+        targetPos: { ...targetUnit.position },
+      };
+    } else {
+      const targetBase = target as Base;
+      const prevHp = targetBase.hp;
+      targetBase.hp -= damage;
+      
+      // Create impact effect and screen shake for base damage
+      if (prevHp > 0 && targetBase.hp < prevHp) {
+        const color = state.players[unit.owner].color;
+        createImpactEffect(state, targetBase.position, color, 2.5);
+        // Stronger shake for base damage (scales with damage)
+        createScreenShake(state, Math.min(damage / SCREEN_SHAKE_BASE_DAMAGE, SCREEN_SHAKE_MAX_INTENSITY), SCREEN_SHAKE_DURATION_MEDIUM);
+      }
+      
+      if (state.matchStats) {
+        if (targetBase.owner === 0) {
+          state.matchStats.damageToPlayerBase += damage;
+        } else {
+          state.matchStats.damageToEnemyBase += damage;
+        }
+        
+        if (unit.owner === 0) {
+          state.matchStats.damageDealtByPlayer += damage;
+        }
+      }
+      
+      // Create melee attack visual effect
+      unit.meleeAttackEffect = {
+        endTime: Date.now() + MELEE_EFFECT_DURATION * 1000,
+        targetPos: { ...targetBase.position },
+      };
+    }
+    
+    if (unit.owner === 0 && Math.random() < 0.3) {
+      soundManager.playAttack();
+    }
+  }
+}
+
+function cleanupDeadUnits(state: GameState): void {
+  
+  const oldUnits = [...state.units];
+  
+  // Count units by owner before filtering
+  const unitsByOwner = oldUnits.reduce((acc, u) => {
     acc[u.owner] = (acc[u.owner] || 0) + 1;
     return acc;
   }, {} as Record<number, number>);
   
-  const oldUnits = [...state.units];
   state.units = state.units.filter((u) => u.hp > 0);
   
   // Create impact effects for dead units and screen shake for multiple deaths
@@ -1145,7 +1211,8 @@ function updateCombat(state: GameState, deltaTime: number): void {
     deadUnits.forEach(u => {
       const color = state.players[u.owner].color;
       createImpactEffect(state, u.position, color, 1.2);
-      createExplosionParticles(state, u.position, color, 12);
+      // Enhanced death explosion with multiple layers
+      createEnhancedDeathExplosion(state, u.position, color, 1.0);
       soundManager.playUnitDeath();
     });
     
@@ -1172,10 +1239,10 @@ function checkVictory(state: GameState): void {
       soundManager.playBaseDestroyed();
       // Big screen shake for base destruction
       createScreenShake(state, SCREEN_SHAKE_BASE_DESTROY_INTENSITY, SCREEN_SHAKE_DURATION_LONG);
-      // Big impact effect for base destruction
+      // Big impact effect for base destruction with enhanced explosion
       const color = state.players[base.owner === 0 ? 1 : 0].color; // Use attacker's color
       createImpactEffect(state, base.position, color, 4.0);
-      createExplosionParticles(state, base.position, color, 24);
+      createEnhancedDeathExplosion(state, base.position, color, 2.5); // Much larger explosion for bases
       state.winner = base.owner === 0 ? 1 : 0;
       state.mode = 'victory';
     }

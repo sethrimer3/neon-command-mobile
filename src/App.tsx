@@ -8,7 +8,7 @@ import { updateAI } from './lib/ai';
 import { renderGame } from './lib/renderer';
 import { handleTouchStart, handleTouchMove, handleTouchEnd, handleMouseDown, handleMouseMove, handleMouseUp, getActiveSelectionRect } from './lib/input';
 import { initializeCamera, updateCamera, zoomCamera, panCamera, resetCamera } from './lib/camera';
-import { updateVisualEffects } from './lib/visualEffects';
+import { updateVisualEffects, createCelebrationParticles } from './lib/visualEffects';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Label } from './components/ui/label';
@@ -54,6 +54,7 @@ function App() {
   const [enableCameraControls, setEnableCameraControls] = useKV<boolean>('enable-camera-controls', true);
 
   const gameState = gameStateRef.current;
+  const lastVictoryStateRef = useRef<boolean>(false);
 
   useEffect(() => {
     const initUser = async () => {
@@ -222,6 +223,18 @@ function App() {
             });
           }
         }
+      }
+      
+      // Update visual effects even in victory mode
+      if (gameStateRef.current.mode === 'victory') {
+        // Trigger celebration particles on first victory frame
+        if (!lastVictoryStateRef.current && canvas) {
+          createCelebrationParticles(gameStateRef.current, canvas.width, canvas.height);
+          lastVictoryStateRef.current = true;
+        }
+        updateVisualEffects(gameStateRef.current, deltaTime);
+      } else {
+        lastVictoryStateRef.current = false;
       }
 
       const updateEndTime = performance.now();

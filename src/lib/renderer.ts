@@ -100,6 +100,11 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
     }
   }
   
+  // Draw celebration particles for victory screen
+  if (state.mode === 'victory') {
+    drawCelebrationParticles(ctx, state);
+  }
+  
   // Restore context if shake was applied
   if (state.screenShake && (Date.now() - state.screenShake.startTime) / 1000 < state.screenShake.duration) {
     ctx.restore();
@@ -331,6 +336,55 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
         ctx.fill();
 
         ctx.restore();
+
+        lastPos = node.position;
+      } else if (node.type === 'attack-move') {
+        // Draw attack-move nodes with cross-hair symbol
+        const screenPos = positionToPixels(node.position);
+
+        // Draw path line to this position
+        if (lastPos) {
+          const lastScreenPos = positionToPixels(lastPos);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          ctx.globalAlpha = 0.4;
+          ctx.setLineDash([5, 5]);
+          ctx.beginPath();
+          ctx.moveTo(lastScreenPos.x, lastScreenPos.y);
+          ctx.lineTo(screenPos.x, screenPos.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        // Draw cross-hair symbol
+        ctx.fillStyle = color;
+        ctx.strokeStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 8;
+        ctx.globalAlpha = 0.8;
+        
+        // Outer circle
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y, 8, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Cross lines
+        ctx.beginPath();
+        ctx.moveTo(screenPos.x - 10, screenPos.y);
+        ctx.lineTo(screenPos.x + 10, screenPos.y);
+        ctx.moveTo(screenPos.x, screenPos.y - 10);
+        ctx.lineTo(screenPos.x, screenPos.y + 10);
+        ctx.stroke();
+        
+        // Center dot with pulse
+        const pulse = Math.sin(time * 3 + i * 0.3) * 0.5 + 0.5;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y, 3 + pulse * 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 0.7;
 
         lastPos = node.position;
       }
@@ -662,8 +716,20 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     const screenPos = positionToPixels(unit.position);
     const color = state.players[unit.owner].color;
     
-    // Draw particles first (behind the unit)
-    if (unit.particles && unit.particles.length > 0) {
+    // Calculate distance from camera center for LOD
+    const cameraCenter = { x: ctx.canvas.width / 2, y: ctx.canvas.height / 2 };
+    const distFromCenter = Math.sqrt(
+      Math.pow(screenPos.x - cameraCenter.x, 2) + 
+      Math.pow(screenPos.y - cameraCenter.y, 2)
+    );
+    const maxDist = Math.sqrt(Math.pow(ctx.canvas.width / 2, 2) + Math.pow(ctx.canvas.height / 2, 2));
+    const distanceRatio = distFromCenter / maxDist;
+    
+    // LOD: Simplify distant units
+    const useLOD = distanceRatio > 0.7;
+    
+    // Draw particles first (behind the unit) - skip for LOD
+    if (!useLOD && unit.particles && unit.particles.length > 0) {
       drawParticles(ctx, unit);
     }
 
@@ -1643,6 +1709,68 @@ function drawHitSparks(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
     ctx.fill();
+    
+    ctx.restore();
+  });
+}
+
+// Draw celebration particles for victory screen
+function drawCelebrationParticles(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.celebrationParticles || state.celebrationParticles.length === 0) return;
+  
+  const now = Date.now();
+  state.celebrationParticles.forEach((particle) => {
+    const age = (now - particle.createdAt) / 1000;
+    if (age < 0 || age >= particle.lifetime) return;
+    
+    const progress = age / particle.lifetime;
+    const alpha = 1 - progress;
+    
+    const screenPos = positionToPixels(particle.position);
+    const size = metersToPixels(particle.size);
+    
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(screenPos.x, screenPos.y);
+    ctx.rotate(particle.rotation);
+    
+    // Draw colorful confetti-like shapes
+    ctx.fillStyle = particle.color;
+    ctx.shadowColor = particle.color;
+    ctx.shadowBlur = size * 2;
+    
+    // Alternate between stars and rectangles
+    const isRect = Math.floor(particle.createdAt) % 2 === 0;
+    if (isRect) {
+      ctx.fillRect(-size / 2, -size / 2, size, size / 3);
+    } else {
+      // Draw simple star shape
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const angle = (i * 4 * Math.PI) / 5;
+        const radius = i % 2 === 0 ? size : size / 2;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+    
+    // Add extra glow
+    ctx.globalAlpha = alpha * 0.5;
+    ctx.shadowBlur = size * 4;
+    if (isRect) {
+      ctx.fillRect(-size / 2, -size / 2, size, size / 3);
+    } else {
+      ctx.beginPath();
+      ctx.arc(0, 0, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
     
     ctx.restore();
   });

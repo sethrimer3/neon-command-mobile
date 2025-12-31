@@ -55,7 +55,8 @@ export interface Projectile {
 
 export type CommandNode = 
   | { type: 'move'; position: Vector2 }
-  | { type: 'ability'; position: Vector2; direction: Vector2 };
+  | { type: 'ability'; position: Vector2; direction: Vector2 }
+  | { type: 'attack-move'; position: Vector2 };
 
 export interface Unit {
   id: string;
@@ -415,5 +416,18 @@ export interface GameState {
     unitId: string;
     positions: Array<{ pos: Vector2; timestamp: number }>;
     color: string;
+  }>;
+  
+  // Victory celebration particles
+  celebrationParticles?: Array<{
+    id: string;
+    position: Vector2;
+    velocity: Vector2;
+    color: string;
+    size: number;
+    lifetime: number;
+    createdAt: number;
+    rotation: number;
+    rotationSpeed: number;
   }>;
 }
