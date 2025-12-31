@@ -167,6 +167,10 @@ class ParticlePool {
 
 export const particlePool = new ParticlePool();
 
+// Cloud generation constants
+const MIN_NEBULA_CLOUDS = 5;
+const MAX_ADDITIONAL_CLOUDS = 5;
+
 // Generate nebula clouds for atmospheric background effect
 export function generateNebulaClouds(canvasWidth: number, canvasHeight: number): Array<{
   x: number;
@@ -185,7 +189,7 @@ export function generateNebulaClouds(canvasWidth: number, canvasHeight: number):
     driftSpeed: number;
   }> = [];
   
-  const numClouds = 5 + Math.floor(Math.random() * 5); // 5-10 clouds
+  const numClouds = MIN_NEBULA_CLOUDS + Math.floor(Math.random() * MAX_ADDITIONAL_CLOUDS);
   const colors = [
     'rgba(65, 105, 225, ', // Royal blue
     'rgba(138, 43, 226, ', // Blue violet

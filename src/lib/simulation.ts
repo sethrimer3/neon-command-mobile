@@ -222,6 +222,10 @@ function createScreenShake(state: GameState, intensity: number, duration: number
   }
 }
 
+// Particle color constants for explosion effects
+const BRIGHT_BLUE_SPARK = 'oklch(0.85 0.25 240)';
+const BRIGHT_RED_SPARK = 'oklch(0.85 0.28 25)';
+
 // Create explosion particles for unit death
 function createExplosionParticles(state: GameState, position: Vector2, color: string, count: number = 12): void {
   if (!state.explosionParticles) {
@@ -251,7 +255,7 @@ function createExplosionParticles(state: GameState, position: Vector2, color: st
   
   // Add some colored sparks for variety
   const sparkCount = Math.floor(count / 2);
-  const brightColor = color === 'oklch(0.65 0.25 240)' ? 'oklch(0.85 0.25 240)' : 'oklch(0.85 0.28 25)';
+  const brightColor = color === 'oklch(0.65 0.25 240)' ? BRIGHT_BLUE_SPARK : BRIGHT_RED_SPARK;
   for (let i = 0; i < sparkCount; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 12 + Math.random() * 8;
@@ -324,13 +328,6 @@ function createEnergyPulse(state: GameState, position: Vector2, color: string, m
     startTime: Date.now(),
     duration,
     maxRadius,
-  });
-  
-  // Clean up old pulses
-  const now = Date.now();
-  state.energyPulses = state.energyPulses.filter((pulse) => {
-    const age = (now - pulse.startTime) / 1000;
-    return age < pulse.duration;
   });
 }
 

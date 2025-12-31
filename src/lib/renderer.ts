@@ -263,6 +263,8 @@ function drawObstacles(ctx: CanvasRenderingContext2D, state: GameState): void {
 }
 
 function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): void {
+  const time = Date.now() / 1000; // Calculate once for efficiency
+  
   state.units.forEach((unit) => {
     const color = state.players[unit.owner].color;
     
@@ -289,7 +291,7 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
         ctx.shadowBlur = 0;
 
         // Draw waypoint with pulsing animation
-        const pulse = Math.sin((Date.now() / 1000) * 2 + index) * 0.3 + 0.7;
+        const pulse = Math.sin(time * 2 + index) * 0.3 + 0.7;
         ctx.globalAlpha = 0.8 * pulse;
         ctx.shadowColor = color;
         ctx.shadowBlur = 12;
