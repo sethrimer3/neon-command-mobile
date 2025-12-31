@@ -63,7 +63,7 @@ export class MultiplayerManager {
       throw new Error('Multiplayer features require the Spark runtime environment');
     }
     
-    const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const gameId = `game_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
     
     const lobby: LobbyData = {
       gameId,
