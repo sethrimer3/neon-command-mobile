@@ -331,4 +331,7 @@ export interface GameState {
     position: Vector2;
     visible: boolean;
   };
+  
+  // Minimap settings
+  showMinimap?: boolean;
 }

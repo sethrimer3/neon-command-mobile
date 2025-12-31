@@ -58,6 +58,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
       }
       drawVisualFeedback(ctx, state);
       drawHUD(ctx, state);
+      drawMinimap(ctx, state, canvas);
     }
   }
   
@@ -1205,4 +1206,74 @@ function drawDamageNumbers(ctx: CanvasRenderingContext2D, state: GameState): voi
     
     ctx.restore();
   });
+}
+
+function drawMinimap(ctx: CanvasRenderingContext2D, state: GameState, canvas: HTMLCanvasElement): void {
+  if (!state.showMinimap) return;
+  
+  // Minimap configuration
+  const minimapSize = Math.min(canvas.width, canvas.height) * 0.2;
+  const minimapX = canvas.width - minimapSize - 10;
+  const minimapY = canvas.height - minimapSize - 10;
+  
+  // Calculate arena bounds
+  const arenaWidth = canvas.width / 20; // meters
+  const arenaHeight = canvas.height / 20; // meters
+  
+  ctx.save();
+  
+  // Draw minimap background
+  ctx.fillStyle = 'rgba(10, 10, 10, 0.8)';
+  ctx.fillRect(minimapX, minimapY, minimapSize, minimapSize);
+  
+  // Draw minimap border
+  ctx.strokeStyle = COLORS.pattern;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(minimapX, minimapY, minimapSize, minimapSize);
+  
+  // Helper to convert game position to minimap position
+  const toMinimapPos = (pos: Vector2) => {
+    return {
+      x: minimapX + (pos.x / arenaWidth) * minimapSize,
+      y: minimapY + (pos.y / arenaHeight) * minimapSize,
+    };
+  };
+  
+  // Draw obstacles
+  state.obstacles.forEach(obstacle => {
+    const pos = toMinimapPos(obstacle.position);
+    ctx.fillStyle = 'rgba(100, 100, 100, 0.6)';
+    const size = Math.max(2, (obstacle.width / arenaWidth) * minimapSize);
+    ctx.fillRect(pos.x - size / 2, pos.y - size / 2, size, size);
+  });
+  
+  // Draw bases
+  state.bases.forEach(base => {
+    const pos = toMinimapPos(base.position);
+    const color = state.players[base.owner].color;
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 4;
+    const size = 8;
+    ctx.fillRect(pos.x - size / 2, pos.y - size / 2, size, size);
+    ctx.shadowBlur = 0;
+  });
+  
+  // Draw units
+  state.units.forEach(unit => {
+    const pos = toMinimapPos(unit.position);
+    const color = state.players[unit.owner].color;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, 2, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  
+  // Draw minimap title
+  ctx.fillStyle = COLORS.white;
+  ctx.font = '10px Space Grotesk, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('TACTICAL', minimapX + minimapSize / 2, minimapY - 5);
+  
+  ctx.restore();
 }

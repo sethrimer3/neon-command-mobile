@@ -46,6 +46,7 @@ function App() {
   const [sfxVolume, setSfxVolume] = useKV<number>('sfx-volume', 0.7);
   const [musicVolume, setMusicVolume] = useKV<number>('music-volume', 0.5);
   const [showNumericHP, setShowNumericHP] = useKV<boolean>('show-numeric-hp', true);
+  const [showMinimap, setShowMinimap] = useKV<boolean>('show-minimap', true);
 
   const gameState = gameStateRef.current;
 
@@ -96,11 +97,12 @@ function App() {
       selectedMap: selectedMap || 'open',
       showNumericHP: showNumericHP ?? true,
     };
+    gameStateRef.current.showMinimap = showMinimap ?? true;
     gameStateRef.current.players = gameStateRef.current.players.map((p, i) => ({
       ...p,
       color: i === 0 ? (playerColor || COLORS.playerDefault) : (enemyColor || COLORS.enemyDefault),
     }));
-  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP]);
+  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showMinimap]);
 
   // Cleanup interval on unmount
   useEffect(() => {
@@ -791,6 +793,18 @@ function App() {
                   checked={showNumericHP ?? true}
                   onCheckedChange={(checked) => {
                     setShowNumericHP(checked);
+                    soundManager.playButtonClick();
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Label htmlFor="minimap-toggle">Show Minimap</Label>
+                <Switch
+                  id="minimap-toggle"
+                  checked={showMinimap ?? true}
+                  onCheckedChange={(checked) => {
+                    setShowMinimap(checked);
                     soundManager.playButtonClick();
                   }}
                 />
