@@ -210,15 +210,16 @@ function App() {
 
   const startGame = (mode: 'ai' | 'player', mapId?: string) => {
     soundManager.playButtonClick();
+    if (!canvasRef.current) return;
     const finalMapId = mapId || gameStateRef.current.settings.selectedMap;
-    gameStateRef.current = createCountdownState(mode, { ...gameStateRef.current.settings, selectedMap: finalMapId }, canvasRef.current!);
+    gameStateRef.current = createCountdownState(mode, { ...gameStateRef.current.settings, selectedMap: finalMapId }, canvasRef.current);
     setRenderTrigger(prev => prev + 1);
   };
 
   const startOnlineGame = () => {
-    if (!currentLobby) return;
+    if (!currentLobby || !canvasRef.current) return;
     const isHost = multiplayerManagerRef.current?.getIsHost() || false;
-    gameStateRef.current = createOnlineCountdownState(currentLobby, isHost, canvasRef.current!);
+    gameStateRef.current = createOnlineCountdownState(currentLobby, isHost, canvasRef.current);
     setRenderTrigger(prev => prev + 1);
   };
 
