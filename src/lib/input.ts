@@ -425,7 +425,17 @@ function handleAbilityDrag(state: GameState, dragVector: { x: number; y: number 
     if (!state.selectedUnits.has(unit.id)) return;
     if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
 
-    const abilityPos = add(unit.position, clampedVector);
+    // Find the last move command in the queue to use as the starting point
+    let startPosition = unit.position;
+    for (let i = unit.commandQueue.length - 1; i >= 0; i--) {
+      const node = unit.commandQueue[i];
+      if (node.type === 'move' || node.type === 'attack-move') {
+        startPosition = node.position;
+        break;
+      }
+    }
+
+    const abilityPos = add(startPosition, clampedVector);
 
     const pathToAbility: CommandNode = { type: 'move', position: abilityPos };
     const abilityNode: CommandNode = { type: 'ability', position: abilityPos, direction: clampedVector };
