@@ -58,6 +58,9 @@ export const MOTION_TRAIL_DURATION = 0.5; // seconds for motion trail fade
 
 // Check if a position would collide with any existing unit
 function checkUnitCollision(position: Vector2, currentUnitId: string, allUnits: Unit[]): boolean {
+  // Use a slightly smaller collision radius to allow units to squeeze past each other
+  const collisionRadius = (UNIT_COLLISION_RADIUS * 2) * 0.8; // 80% of full diameter
+  
   for (const otherUnit of allUnits) {
     // Skip checking against self
     if (otherUnit.id === currentUnitId) continue;
@@ -66,7 +69,7 @@ function checkUnitCollision(position: Vector2, currentUnitId: string, allUnits: 
     const dist = distance(position, otherUnit.position);
     
     // Check if units would overlap (within combined radii)
-    if (dist < UNIT_COLLISION_RADIUS * 2) {
+    if (dist < collisionRadius) {
       return true; // Collision detected
     }
   }
@@ -668,8 +671,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
           !checkUnitCollision(newPosition, unit.id, state.units)) {
         unit.position = newPosition;
       } else {
-        // If collision detected, stop moving but don't remove the command yet
-        // This allows units to wait for space to open up
+        // Collision detected - unit will wait and retry next frame
         return;
       }
 
@@ -725,7 +727,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
           !checkUnitCollision(newPosition, unit.id, state.units)) {
         unit.position = newPosition;
       } else {
-        // If collision detected, stop moving but don't remove the command yet
+        // Collision detected - unit will wait and retry next frame
         return;
       }
 

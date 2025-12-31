@@ -38,10 +38,6 @@ const HOLD_TIME_MS = 200;
 const DOUBLE_TAP_TIME_MS = 400; // Time window for double-tap detection
 const DOUBLE_TAP_DISTANCE_PX = 50; // Max distance between taps to count as double-tap
 
-// Track last tap for double-tap detection
-let lastTapTime = 0;
-let lastTapPosition: { x: number; y: number } | null = null;
-
 function addVisualFeedback(state: GameState, type: 'tap' | 'drag', position: { x: number; y: number }, endPosition?: { x: number; y: number }): void {
   if (!state.visualFeedback) {
     state.visualFeedback = [];
@@ -339,26 +335,26 @@ function handleBaseSwipe(state: GameState, base: Base, swipe: { x: number; y: nu
 }
 
 // Check if this is a double-tap and handle it
-function isDoubleTap(screenPos: { x: number; y: number }): boolean {
+function isDoubleTap(state: GameState, screenPos: { x: number; y: number }): boolean {
   const now = Date.now();
   
-  if (lastTapPosition) {
-    const dx = screenPos.x - lastTapPosition.x;
-    const dy = screenPos.y - lastTapPosition.y;
+  if (state.lastTapPosition && state.lastTapTime) {
+    const dx = screenPos.x - state.lastTapPosition.x;
+    const dy = screenPos.y - state.lastTapPosition.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const timeSinceLastTap = now - lastTapTime;
+    const timeSinceLastTap = now - state.lastTapTime;
     
     if (timeSinceLastTap < DOUBLE_TAP_TIME_MS && dist < DOUBLE_TAP_DISTANCE_PX) {
       // Reset double-tap tracking
-      lastTapTime = 0;
-      lastTapPosition = null;
+      state.lastTapTime = 0;
+      state.lastTapPosition = undefined;
       return true;
     }
   }
   
   // Update last tap tracking
-  lastTapTime = now;
-  lastTapPosition = { x: screenPos.x, y: screenPos.y };
+  state.lastTapTime = now;
+  state.lastTapPosition = { x: screenPos.x, y: screenPos.y };
   return false;
 }
 
@@ -386,7 +382,7 @@ function handleDoubleTap(state: GameState): void {
 
 function handleTap(state: GameState, screenPos: { x: number; y: number }, canvas: HTMLCanvasElement, playerIndex: number): void {
   // Check for double-tap first
-  if (isDoubleTap(screenPos)) {
+  if (isDoubleTap(state, screenPos)) {
     handleDoubleTap(state);
     return;
   }

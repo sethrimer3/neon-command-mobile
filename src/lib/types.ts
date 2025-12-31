@@ -286,6 +286,10 @@ export interface GameState {
     endPosition?: Vector2;
   }>;
   
+  // Double-tap tracking
+  lastTapTime?: number;
+  lastTapPosition?: Vector2;
+  
   // Background stars for visual effect
   stars?: Array<{
     x: number;
