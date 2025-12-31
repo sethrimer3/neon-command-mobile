@@ -140,6 +140,114 @@ export function createHitSparks(
 }
 
 /**
+ * Create enhanced death explosion with multiple layers
+ */
+export function createEnhancedDeathExplosion(
+  state: GameState,
+  position: Vector2,
+  color: string,
+  scale: number = 1.0
+): void {
+  // Create multiple particle bursts with varying speeds for layered effect
+  createParticleBurst(state, position, color, 16 * scale, 8 * scale); // Fast burst
+  createParticleBurst(state, position, color, 12 * scale, 4 * scale); // Medium burst
+  createParticleBurst(state, position, color, 8 * scale, 2 * scale);  // Slow burst
+  
+  // Create expanding energy rings
+  createEnergyPulse(state, position, color, 0.8, 2.5 * scale);
+  
+  // Secondary delayed pulse for extra impact
+  setTimeout(() => {
+    createEnergyPulse(state, position, color, 0.6, 1.8 * scale);
+  }, 150);
+}
+
+/**
+ * Create celebration particles for victory screen
+ */
+export function createCelebrationParticles(state: GameState, canvasWidth: number, canvasHeight: number): void {
+  if (!state.celebrationParticles) {
+    state.celebrationParticles = [];
+  }
+
+  // Create bursts of celebration particles from multiple positions
+  const burstCount = 5;
+  const particlesPerBurst = 20;
+
+  for (let b = 0; b < burstCount; b++) {
+    const burstX = (Math.random() * 0.6 + 0.2) * canvasWidth;
+    const burstY = (Math.random() * 0.4 + 0.3) * canvasHeight;
+    const burstPosition = { x: burstX / 20, y: burstY / 20 }; // Convert to game meters
+
+    for (let i = 0; i < particlesPerBurst; i++) {
+      const angle = (i / particlesPerBurst) * Math.PI * 2 + Math.random() * 0.5;
+      const speed = 5 + Math.random() * 8;
+      const velocity = {
+        x: Math.cos(angle) * speed,
+        y: Math.sin(angle) * speed - 3, // Bias upward
+      };
+
+      // Randomize colors for celebration
+      const colors = [
+        'oklch(0.85 0.20 95)',  // Yellow
+        'oklch(0.75 0.18 200)', // Cyan
+        'oklch(0.70 0.20 140)', // Green
+        'oklch(0.65 0.25 280)', // Purple
+        'oklch(0.95 0.15 25)',  // Orange
+      ];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+
+      const particle = {
+        id: generateId(),
+        position: { ...burstPosition },
+        velocity,
+        color,
+        size: 0.15 + Math.random() * 0.25,
+        lifetime: 1.5 + Math.random() * 1.0,
+        createdAt: Date.now() + b * 200, // Stagger bursts
+        rotation: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 8,
+      };
+
+      state.celebrationParticles.push(particle);
+    }
+  }
+
+  // Create continuous fountain of particles from bottom
+  const fountainParticles = 30;
+  for (let i = 0; i < fountainParticles; i++) {
+    const x = (0.3 + Math.random() * 0.4) * canvasWidth;
+    const position = { x: x / 20, y: canvasHeight / 20 };
+    
+    const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI / 3;
+    const speed = 10 + Math.random() * 8;
+    const velocity = {
+      x: Math.cos(angle) * speed,
+      y: Math.sin(angle) * speed,
+    };
+
+    const colors = [
+      'oklch(0.85 0.20 95)',
+      'oklch(0.75 0.18 200)',
+      'oklch(0.70 0.20 140)',
+    ];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+
+    state.celebrationParticles.push({
+      id: generateId(),
+      position,
+      velocity,
+      color,
+      size: 0.1 + Math.random() * 0.2,
+      lifetime: 2.0 + Math.random() * 1.0,
+      createdAt: Date.now() + Math.random() * 500,
+      rotation: Math.random() * Math.PI * 2,
+      rotationSpeed: (Math.random() - 0.5) * 6,
+    });
+  }
+}
+
+/**
  * Update all visual effects
  */
 export function updateVisualEffects(state: GameState, deltaTime: number): void {
@@ -238,6 +346,32 @@ export function updateVisualEffects(state: GameState, deltaTime: number): void {
 
       // Float upward
       dmg.position.y -= 1 * deltaTime;
+
+      return true;
+    });
+  }
+  
+  // Update celebration particles
+  if (state.celebrationParticles) {
+    state.celebrationParticles = state.celebrationParticles.filter((particle) => {
+      const elapsed = (now - particle.createdAt) / 1000;
+      if (elapsed >= particle.lifetime || elapsed < 0) {
+        return false;
+      }
+
+      // Update position
+      particle.position.x += particle.velocity.x * deltaTime;
+      particle.position.y += particle.velocity.y * deltaTime;
+
+      // Apply gravity
+      particle.velocity.y += 8 * deltaTime;
+
+      // Apply damping
+      particle.velocity.x *= 0.98;
+      particle.velocity.y *= 0.98;
+
+      // Update rotation
+      particle.rotation += particle.rotationSpeed * deltaTime;
 
       return true;
     });

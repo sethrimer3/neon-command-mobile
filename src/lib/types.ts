@@ -416,4 +416,17 @@ export interface GameState {
     positions: Array<{ pos: Vector2; timestamp: number }>;
     color: string;
   }>;
+  
+  // Victory celebration particles
+  celebrationParticles?: Array<{
+    id: string;
+    position: Vector2;
+    velocity: Vector2;
+    color: string;
+    size: number;
+    lifetime: number;
+    createdAt: number;
+    rotation: number;
+    rotationSpeed: number;
+  }>;
 }

@@ -100,6 +100,11 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
     }
   }
   
+  // Draw celebration particles for victory screen
+  if (state.mode === 'victory') {
+    drawCelebrationParticles(ctx, state);
+  }
+  
   // Restore context if shake was applied
   if (state.screenShake && (Date.now() - state.screenShake.startTime) / 1000 < state.screenShake.duration) {
     ctx.restore();
@@ -1643,6 +1648,68 @@ function drawHitSparks(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
     ctx.fill();
+    
+    ctx.restore();
+  });
+}
+
+// Draw celebration particles for victory screen
+function drawCelebrationParticles(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.celebrationParticles || state.celebrationParticles.length === 0) return;
+  
+  const now = Date.now();
+  state.celebrationParticles.forEach((particle) => {
+    const age = (now - particle.createdAt) / 1000;
+    if (age < 0 || age >= particle.lifetime) return;
+    
+    const progress = age / particle.lifetime;
+    const alpha = 1 - progress;
+    
+    const screenPos = positionToPixels(particle.position);
+    const size = metersToPixels(particle.size);
+    
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(screenPos.x, screenPos.y);
+    ctx.rotate(particle.rotation);
+    
+    // Draw colorful confetti-like shapes
+    ctx.fillStyle = particle.color;
+    ctx.shadowColor = particle.color;
+    ctx.shadowBlur = size * 2;
+    
+    // Alternate between stars and rectangles
+    const isRect = Math.floor(particle.createdAt) % 2 === 0;
+    if (isRect) {
+      ctx.fillRect(-size / 2, -size / 2, size, size / 3);
+    } else {
+      // Draw simple star shape
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const angle = (i * 4 * Math.PI) / 5;
+        const radius = i % 2 === 0 ? size : size / 2;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+    
+    // Add extra glow
+    ctx.globalAlpha = alpha * 0.5;
+    ctx.shadowBlur = size * 4;
+    if (isRect) {
+      ctx.fillRect(-size / 2, -size / 2, size, size / 3);
+    } else {
+      ctx.beginPath();
+      ctx.arc(0, 0, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
     
     ctx.restore();
   });

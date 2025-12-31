@@ -17,7 +17,7 @@ import {
 import { distance, normalize, scale, add, subtract, generateId } from './gameUtils';
 import { checkObstacleCollision } from './maps';
 import { soundManager } from './sound';
-import { createSpawnEffect, createHitSparks, createAbilityEffect } from './visualEffects';
+import { createSpawnEffect, createHitSparks, createAbilityEffect, createEnhancedDeathExplosion } from './visualEffects';
 
 // Particle physics constants
 const PARTICLE_ATTRACTION_STRENGTH = 6.0; // How strongly particles are attracted to their unit
@@ -1145,7 +1145,8 @@ function updateCombat(state: GameState, deltaTime: number): void {
     deadUnits.forEach(u => {
       const color = state.players[u.owner].color;
       createImpactEffect(state, u.position, color, 1.2);
-      createExplosionParticles(state, u.position, color, 12);
+      // Enhanced death explosion with multiple layers
+      createEnhancedDeathExplosion(state, u.position, color, 1.0);
       soundManager.playUnitDeath();
     });
     
@@ -1172,10 +1173,10 @@ function checkVictory(state: GameState): void {
       soundManager.playBaseDestroyed();
       // Big screen shake for base destruction
       createScreenShake(state, SCREEN_SHAKE_BASE_DESTROY_INTENSITY, SCREEN_SHAKE_DURATION_LONG);
-      // Big impact effect for base destruction
+      // Big impact effect for base destruction with enhanced explosion
       const color = state.players[base.owner === 0 ? 1 : 0].color; // Use attacker's color
       createImpactEffect(state, base.position, color, 4.0);
-      createExplosionParticles(state, base.position, color, 24);
+      createEnhancedDeathExplosion(state, base.position, color, 2.5); // Much larger explosion for bases
       state.winner = base.owner === 0 ? 1 : 0;
       state.mode = 'victory';
     }
