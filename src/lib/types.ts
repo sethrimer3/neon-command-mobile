@@ -36,6 +36,21 @@ export interface Particle {
   color: string;
 }
 
+// Projectile for ranged attacks
+export interface Projectile {
+  id: string;
+  position: Vector2;
+  velocity: Vector2;
+  target: Vector2;
+  damage: number;
+  owner: number;
+  color: string;
+  lifetime: number; // seconds
+  createdAt: number; // timestamp
+  sourceUnit: string; // unit id that created it
+  targetUnit?: string; // optional specific target unit id
+}
+
 export type CommandNode = 
   | { type: 'move'; position: Vector2 }
   | { type: 'ability'; position: Vector2; direction: Vector2 };
@@ -60,6 +75,8 @@ export interface Unit {
   healPulseActive?: { endTime: number; radius: number };
   missileBarrageActive?: { endTime: number; missiles: Array<{ position: Vector2; target: Vector2; damage: number }> };
   particles?: Particle[]; // Particles attracted to the unit
+  meleeAttackEffect?: { endTime: number; targetPos: Vector2 }; // Visual effect for melee attacks
+  attackCooldown?: number; // Time until next attack
 }
 
 export interface Base {
@@ -71,6 +88,7 @@ export interface Base {
   movementTarget: Vector2 | null;
   isSelected: boolean;
   laserCooldown: number;
+  laserBeam?: { endTime: number; direction: Vector2 }; // Visual effect for laser
 }
 
 export type UnitType = 'marine' | 'warrior' | 'snaker' | 'tank' | 'scout' | 'artillery' | 'medic' | 'interceptor';
@@ -203,6 +221,7 @@ export interface GameState {
   units: Unit[];
   bases: Base[];
   obstacles: import('./maps').Obstacle[];
+  projectiles: Projectile[]; // Active projectiles in the game
   
   players: {
     photons: number;

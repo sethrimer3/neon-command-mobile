@@ -894,6 +894,7 @@ function createInitialState(): GameState {
     mode: 'menu',
     vsMode: null,
     units: [],
+    projectiles: [],
     bases: [],
     obstacles: [],
     players: [
@@ -933,6 +934,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     mode: 'countdown',
     vsMode: mode,
     units: [],
+    projectiles: [],
     obstacles: obstacles,
     bases: [
       {
@@ -995,6 +997,7 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
     mode: 'game',
     vsMode: mode,
     units: [],
+    projectiles: [],
     obstacles: obstacles,
     bases: [
       {
@@ -1049,6 +1052,7 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
     mode: 'game',
     vsMode: 'online',
     units: [],
+    projectiles: [],
     obstacles: obstacles,
     bases: [
       {
@@ -1113,6 +1117,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
     mode: 'countdown',
     vsMode: 'online',
     units: [],
+    projectiles: [],
     obstacles: obstacles,
     bases: [
       {

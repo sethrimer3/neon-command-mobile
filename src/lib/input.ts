@@ -263,6 +263,12 @@ function handleLaserSwipe(
 
 function fireLaser(state: GameState, base: Base, direction: { x: number; y: number }): void {
   const laserEnd = add(base.position, scale(direction, LASER_RANGE));
+  
+  // Create visual laser beam effect
+  base.laserBeam = {
+    endTime: Date.now() + 500, // 0.5 second beam duration
+    direction: { ...direction },
+  };
 
   state.units.forEach((unit) => {
     if (unit.owner === base.owner) return;
