@@ -1306,11 +1306,11 @@ function drawSelectionRect(ctx: CanvasRenderingContext2D, rect: { x1: number; y1
 
   ctx.save();
   
-  // Draw gradient fill
+  // Draw gradient fill with proper rgba format
   const gradient = ctx.createLinearGradient(minX, minY, maxX, maxY);
-  gradient.addColorStop(0, color + '15'); // Add alpha to color (hex format)
-  gradient.addColorStop(0.5, color + '08');
-  gradient.addColorStop(1, color + '15');
+  gradient.addColorStop(0, `${color.replace(')', ' / 0.08)')}`);
+  gradient.addColorStop(0.5, `${color.replace(')', ' / 0.03)')}`);
+  gradient.addColorStop(1, `${color.replace(')', ' / 0.08)')}`);
   ctx.fillStyle = gradient;
   ctx.fillRect(minX, minY, width, height);
   
@@ -1691,7 +1691,10 @@ function drawDamageNumbers(ctx: CanvasRenderingContext2D, state: GameState): voi
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
-    const x = screenPos.x + (Math.random() - 0.5) * 4 * (1 - progress); // Slight horizontal wobble
+    // Deterministic wobble based on damage number ID
+    const wobbleOffset = (parseInt(damageNum.id.slice(-2), 36) % 100) / 100; // 0-1 based on ID
+    const wobble = Math.sin(progress * Math.PI * 2 + wobbleOffset * Math.PI * 2) * 3 * (1 - progress);
+    const x = screenPos.x + wobble;
     const y = screenPos.y - floatDistance - 10;
     
     // Draw shadow/outline
@@ -1812,7 +1815,6 @@ function drawMinimap(ctx: CanvasRenderingContext2D, state: GameState, canvas: HT
     ctx.shadowBlur = 0;
     
     ctx.restore();
-    ctx.strokeRect(pos.x - size / 2, pos.y - size / 2, size, size);
   });
   
   // Draw bases with pulsing effect
