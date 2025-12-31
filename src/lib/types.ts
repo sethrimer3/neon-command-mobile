@@ -188,7 +188,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
 };
 
 export interface GameState {
-  mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection' | 'multiplayerLobby' | 'countdown' | 'statistics';
+  mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection' | 'multiplayerLobby' | 'countdown' | 'statistics' | 'levelSelection' | 'onlineMode';
   vsMode: 'ai' | 'player' | 'online' | null;
   
   units: Unit[];
@@ -239,4 +239,6 @@ export interface GameState {
 
   matchTimeLimit?: number;
   timeoutWarningShown?: boolean;
+  
+  topographyLines?: Array<{ x1: number; y1: number; x2: number; y2: number }>;
 }

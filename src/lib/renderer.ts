@@ -13,7 +13,7 @@ import { Obstacle } from './maps';
 export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canvas: HTMLCanvasElement, selectionRect?: { x1: number; y1: number; x2: number; y2: number } | null): void {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  drawBackground(ctx, canvas);
+  drawBackground(ctx, canvas, state);
 
   if (state.mode === 'game' || state.mode === 'countdown') {
     drawObstacles(ctx, state);
@@ -31,9 +31,24 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
   }
 }
 
-function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void {
+function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, state?: GameState): void {
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw topography lines if available
+  if (state?.topographyLines && state.topographyLines.length > 0) {
+    ctx.strokeStyle = 'rgba(128, 128, 128, 0.15)'; // Gray with low opacity
+    ctx.lineWidth = 1;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    state.topographyLines.forEach(line => {
+      ctx.beginPath();
+      ctx.moveTo(line.x1, line.y1);
+      ctx.lineTo(line.x2, line.y2);
+      ctx.stroke();
+    });
+  }
 
   ctx.strokeStyle = COLORS.pattern;
   ctx.lineWidth = 1;
