@@ -12,6 +12,7 @@ import {
   BASE_SIZE_METERS,
   UNIT_SIZE_METERS,
   Particle,
+  Projectile,
 } from './types';
 import { distance, normalize, scale, add, subtract, generateId } from './gameUtils';
 import { checkObstacleCollision } from './maps';
@@ -21,6 +22,12 @@ import { soundManager } from './sound';
 const PARTICLE_ATTRACTION_STRENGTH = 5.0; // How strongly particles are attracted to their unit
 const PARTICLE_DAMPING = 0.95; // Velocity damping to prevent infinite acceleration
 const PARTICLE_ORBIT_DISTANCE = 0.8; // Desired orbit distance from unit center
+
+// Projectile constants
+const PROJECTILE_SPEED = 15; // meters per second
+const PROJECTILE_LIFETIME = 2.0; // seconds before projectile disappears
+const MELEE_EFFECT_DURATION = 0.2; // seconds for melee attack visual
+const LASER_BEAM_DURATION = 0.5; // seconds for laser beam visual
 
 // Create particles for a unit
 function createParticlesForUnit(unit: Unit, count: number): Particle[] {
@@ -79,6 +86,102 @@ function updateParticles(unit: Unit, deltaTime: number): void {
   });
 }
 
+// Create a projectile for ranged attacks
+function createProjectile(state: GameState, sourceUnit: Unit, target: Vector2, targetUnit?: Unit): Projectile {
+  const direction = normalize(subtract(target, sourceUnit.position));
+  const def = UNIT_DEFINITIONS[sourceUnit.type];
+  const damage = def.attackDamage * sourceUnit.damageMultiplier;
+  const color = state.players[sourceUnit.owner].color;
+  
+  return {
+    id: generateId(),
+    position: { ...sourceUnit.position },
+    velocity: scale(direction, PROJECTILE_SPEED),
+    target,
+    damage,
+    owner: sourceUnit.owner,
+    color,
+    lifetime: PROJECTILE_LIFETIME,
+    createdAt: Date.now(),
+    sourceUnit: sourceUnit.id,
+    targetUnit: targetUnit?.id,
+  };
+}
+
+// Update projectiles - movement and collision
+function updateProjectiles(state: GameState, deltaTime: number): void {
+  const now = Date.now();
+  
+  // Update positions
+  state.projectiles.forEach((projectile) => {
+    projectile.position.x += projectile.velocity.x * deltaTime;
+    projectile.position.y += projectile.velocity.y * deltaTime;
+  });
+  
+  // Check collisions and remove hit projectiles
+  const projectilesToRemove = new Set<string>();
+  
+  state.projectiles.forEach((projectile) => {
+    // Check if projectile reached target or expired
+    const distToTarget = distance(projectile.position, projectile.target);
+    const age = (now - projectile.createdAt) / 1000;
+    
+    if (distToTarget < 0.5 || age > projectile.lifetime) {
+      // Hit target or expired
+      if (distToTarget < 0.5) {
+        // Apply damage if target still exists
+        if (projectile.targetUnit) {
+          const target = state.units.find((u) => u.id === projectile.targetUnit);
+          if (target) {
+            target.hp -= projectile.damage;
+            
+            if (state.matchStats && projectile.owner === 0) {
+              state.matchStats.damageDealtByPlayer += projectile.damage;
+            }
+          }
+        } else {
+          // Check for any unit hit in the area
+          const enemies = state.units.filter((u) => u.owner !== projectile.owner);
+          enemies.forEach((enemy) => {
+            if (distance(enemy.position, projectile.position) < UNIT_SIZE_METERS / 2) {
+              enemy.hp -= projectile.damage;
+              
+              if (state.matchStats && projectile.owner === 0) {
+                state.matchStats.damageDealtByPlayer += projectile.damage;
+              }
+            }
+          });
+          
+          // Check bases
+          const enemyBases = state.bases.filter((b) => b.owner !== projectile.owner);
+          enemyBases.forEach((base) => {
+            if (distance(base.position, projectile.position) < BASE_SIZE_METERS / 2) {
+              base.hp -= projectile.damage;
+              
+              if (state.matchStats) {
+                if (base.owner === 0) {
+                  state.matchStats.damageToPlayerBase += projectile.damage;
+                } else {
+                  state.matchStats.damageToEnemyBase += projectile.damage;
+                }
+                
+                if (projectile.owner === 0) {
+                  state.matchStats.damageDealtByPlayer += projectile.damage;
+                }
+              }
+            }
+          });
+        }
+      }
+      
+      projectilesToRemove.add(projectile.id);
+    }
+  });
+  
+  // Remove collided/expired projectiles
+  state.projectiles = state.projectiles.filter((p) => !projectilesToRemove.has(p.id));
+}
+
 export function updateGame(state: GameState, deltaTime: number): void {
   if (state.mode !== 'game') return;
 
@@ -87,6 +190,7 @@ export function updateGame(state: GameState, deltaTime: number): void {
   updateIncome(state, deltaTime);
   updateUnits(state, deltaTime);
   updateBases(state, deltaTime);
+  updateProjectiles(state, deltaTime);
   updateCombat(state, deltaTime);
   checkTimeLimit(state);
   checkVictory(state);
@@ -508,6 +612,17 @@ function updateCombat(state: GameState, deltaTime: number): void {
     const def = UNIT_DEFINITIONS[unit.type];
     if (def.attackType === 'none') return;
 
+    // Update attack cooldown
+    if (unit.attackCooldown === undefined) {
+      unit.attackCooldown = 0;
+    }
+    
+    if (unit.attackCooldown > 0) {
+      unit.attackCooldown -= deltaTime;
+      return;
+    }
+
+    // Find target
     const enemies = state.units.filter((u) => u.owner !== unit.owner && !u.cloaked);
     const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
 
@@ -534,49 +649,73 @@ function updateCombat(state: GameState, deltaTime: number): void {
     }
 
     if (target) {
-      let damage = def.attackDamage * def.attackRate * deltaTime * unit.damageMultiplier;
-
-      if ('type' in target) {
-        const targetUnit = target as Unit;
+      // Reset attack cooldown
+      unit.attackCooldown = 1.0 / def.attackRate;
+      
+      if (def.attackType === 'ranged') {
+        // Spawn projectile for ranged attacks
+        const targetPos = target.position;
+        const targetUnit = 'type' in target ? (target as Unit) : undefined;
+        const projectile = createProjectile(state, unit, targetPos, targetUnit);
+        state.projectiles.push(projectile);
         
-        if (targetUnit.shieldActive) {
-          const allies = state.units.filter((u) => 
-            u.owner === targetUnit.owner && 
-            u.shieldActive && 
-            distance(u.position, targetUnit.position) <= u.shieldActive.radius
-          );
-          if (allies.length > 0) {
-            damage *= 0.3;
-          }
-        }
-
-        targetUnit.hp -= damage;
-        
-        if (state.matchStats && unit.owner === 0) {
-          state.matchStats.damageDealtByPlayer += damage;
-        }
-        
-        if (unit.owner === 0 && Math.random() < 0.05) {
+        if (unit.owner === 0 && Math.random() < 0.3) {
           soundManager.playAttack();
         }
-      } else {
-        const targetBase = target as Base;
-        targetBase.hp -= damage;
-        
-        if (state.matchStats) {
-          if (targetBase.owner === 0) {
-            state.matchStats.damageToPlayerBase += damage;
-          } else {
-            state.matchStats.damageToEnemyBase += damage;
-          }
+      } else if (def.attackType === 'melee') {
+        // Apply instant damage for melee and create visual effect
+        let damage = def.attackDamage * unit.damageMultiplier;
+
+        if ('type' in target) {
+          const targetUnit = target as Unit;
           
-          if (unit.owner === 0) {
+          if (targetUnit.shieldActive) {
+            const allies = state.units.filter((u) => 
+              u.owner === targetUnit.owner && 
+              u.shieldActive && 
+              distance(u.position, targetUnit.position) <= u.shieldActive.radius
+            );
+            if (allies.length > 0) {
+              damage *= 0.3;
+            }
+          }
+
+          targetUnit.hp -= damage;
+          
+          if (state.matchStats && unit.owner === 0) {
             state.matchStats.damageDealtByPlayer += damage;
           }
+          
+          // Create melee attack visual effect
+          unit.meleeAttackEffect = {
+            endTime: Date.now() + MELEE_EFFECT_DURATION * 1000,
+            targetPos: { ...targetUnit.position },
+          };
+        } else {
+          const targetBase = target as Base;
+          targetBase.hp -= damage;
+          
+          if (state.matchStats) {
+            if (targetBase.owner === 0) {
+              state.matchStats.damageToPlayerBase += damage;
+            } else {
+              state.matchStats.damageToEnemyBase += damage;
+            }
+            
+            if (unit.owner === 0) {
+              state.matchStats.damageDealtByPlayer += damage;
+            }
+          }
+          
+          // Create melee attack visual effect
+          unit.meleeAttackEffect = {
+            endTime: Date.now() + MELEE_EFFECT_DURATION * 1000,
+            targetPos: { ...targetBase.position },
+          };
         }
         
-        if (unit.owner === 0 && Math.random() < 0.1) {
-          soundManager.playBaseDamage();
+        if (unit.owner === 0 && Math.random() < 0.3) {
+          soundManager.playAttack();
         }
       }
     }

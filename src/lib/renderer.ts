@@ -6,6 +6,8 @@ import {
   UNIT_SIZE_METERS,
   BASE_SIZE_METERS,
   UNIT_DEFINITIONS,
+  Projectile,
+  LASER_RANGE,
 } from './types';
 import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract } from './gameUtils';
 import { Obstacle } from './maps';
@@ -21,6 +23,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
     
     if (state.mode === 'game') {
       drawCommandQueues(ctx, state);
+      drawProjectiles(ctx, state);
       drawUnits(ctx, state);
       drawSelectionIndicators(ctx, state);
       if (selectionRect) {
@@ -280,6 +283,11 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
       
       drawBaseHealthBar(ctx, base, screenPos, size, color, state);
     }
+    
+    // Draw laser beam if active
+    if (base.laserBeam && Date.now() < base.laserBeam.endTime) {
+      drawLaserBeam(ctx, base, screenPos, color);
+    }
   });
 }
 
@@ -338,6 +346,76 @@ function drawBaseHealthBar(ctx: CanvasRenderingContext2D, base: Base, screenPos:
   }
   
   ctx.restore();
+}
+
+function drawLaserBeam(ctx: CanvasRenderingContext2D, base: Base, screenPos: { x: number; y: number }, color: string): void {
+  if (!base.laserBeam) return;
+  
+  const direction = base.laserBeam.direction;
+  const laserEnd = add(base.position, scale(direction, LASER_RANGE));
+  const endScreenPos = positionToPixels(laserEnd);
+  
+  // Calculate beam fade based on remaining time
+  const timeLeft = base.laserBeam.endTime - Date.now();
+  const alpha = Math.min(1, timeLeft / 200); // Fade in last 200ms
+  
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  
+  // Draw main beam
+  ctx.strokeStyle = COLORS.laser;
+  ctx.lineWidth = 4;
+  ctx.shadowColor = COLORS.laser;
+  ctx.shadowBlur = 20;
+  
+  ctx.beginPath();
+  ctx.moveTo(screenPos.x, screenPos.y);
+  ctx.lineTo(endScreenPos.x, endScreenPos.y);
+  ctx.stroke();
+  
+  // Draw bright core
+  ctx.lineWidth = 2;
+  ctx.shadowBlur = 30;
+  ctx.strokeStyle = 'oklch(0.95 0.25 320)';
+  
+  ctx.beginPath();
+  ctx.moveTo(screenPos.x, screenPos.y);
+  ctx.lineTo(endScreenPos.x, endScreenPos.y);
+  ctx.stroke();
+  
+  ctx.restore();
+}
+
+function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void {
+  state.projectiles.forEach((projectile) => {
+    const screenPos = positionToPixels(projectile.position);
+    
+    ctx.save();
+    ctx.fillStyle = projectile.color;
+    ctx.shadowColor = projectile.color;
+    ctx.shadowBlur = 10;
+    
+    // Draw projectile with glow
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw energy trail
+    const trailLength = 8;
+    const direction = normalize(projectile.velocity);
+    const trailStart = subtract(projectile.position, scale(direction, trailLength / 20));
+    const trailScreenPos = positionToPixels(trailStart);
+    
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = projectile.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(trailScreenPos.x, trailScreenPos.y);
+    ctx.lineTo(screenPos.x, screenPos.y);
+    ctx.stroke();
+    
+    ctx.restore();
+  });
 }
 
 function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string, showNumeric: boolean): void {
@@ -451,6 +529,10 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
 
     if (unit.bombardmentActive) {
       drawBombardment(ctx, unit, color, state);
+    }
+    
+    if (unit.meleeAttackEffect) {
+      drawMeleeAttack(ctx, unit, screenPos, color);
     }
 
     ctx.globalAlpha = 1.0;
@@ -679,6 +761,44 @@ function drawBombardment(ctx: CanvasRenderingContext2D, unit: Unit, color: strin
 
     ctx.restore();
   }
+}
+
+function drawMeleeAttack(ctx: CanvasRenderingContext2D, unit: Unit, unitScreenPos: { x: number; y: number }, color: string): void {
+  if (!unit.meleeAttackEffect) return;
+  
+  const now = Date.now();
+  if (now > unit.meleeAttackEffect.endTime) {
+    unit.meleeAttackEffect = undefined;
+    return;
+  }
+  
+  const targetScreenPos = positionToPixels(unit.meleeAttackEffect.targetPos);
+  const progress = 1 - ((unit.meleeAttackEffect.endTime - now) / 200);
+  
+  ctx.save();
+  
+  // Draw slash effect - expanding line from unit to target
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 4 - progress * 2;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 15;
+  ctx.globalAlpha = 1 - progress;
+  
+  ctx.beginPath();
+  ctx.moveTo(unitScreenPos.x, unitScreenPos.y);
+  ctx.lineTo(targetScreenPos.x, targetScreenPos.y);
+  ctx.stroke();
+  
+  // Draw impact burst at target
+  ctx.fillStyle = color;
+  const burstRadius = 5 + progress * 15;
+  ctx.globalAlpha = (1 - progress) * 0.5;
+  
+  ctx.beginPath();
+  ctx.arc(targetScreenPos.x, targetScreenPos.y, burstRadius, 0, Math.PI * 2);
+  ctx.fill();
+  
+  ctx.restore();
 }
 
 function drawSelectionIndicators(ctx: CanvasRenderingContext2D, state: GameState): void {
