@@ -2,18 +2,23 @@
 <html lang="en">
 
 <head>
+    <!-- Document metadata and base viewport configuration. -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Speed of Light RTS</title>
+    <!-- External font preconnects to speed up font loading. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <link href="/src/main.css" rel="stylesheet" />
+    <!-- Entry CSS with a relative path to support GitHub Pages base paths. -->
+    <link href="./src/main.css" rel="stylesheet" />
 </head>
 
 <body>
+    <!-- Root mount point for the React application. -->
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <!-- Vite entry module using a relative path for GitHub Pages compatibility. -->
+    <script type="module" src="./src/main.tsx"></script>
 </body>
 
 </html>
