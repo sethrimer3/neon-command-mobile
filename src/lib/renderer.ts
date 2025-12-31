@@ -104,6 +104,38 @@ function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // Draw nebula clouds for atmospheric effect
+  if (state?.nebulaClouds && state.nebulaClouds.length > 0) {
+    const time = Date.now() / 1000;
+    state.nebulaClouds.forEach(cloud => {
+      // Create slow drifting effect
+      const driftX = Math.sin(time * cloud.driftSpeed * 0.1) * 20;
+      const driftY = Math.cos(time * cloud.driftSpeed * 0.15) * 15;
+      
+      ctx.save();
+      ctx.globalAlpha = cloud.opacity;
+      
+      // Create radial gradient for cloud
+      const gradient = ctx.createRadialGradient(
+        cloud.x + driftX, cloud.y + driftY, 0,
+        cloud.x + driftX, cloud.y + driftY, cloud.size
+      );
+      gradient.addColorStop(0, cloud.color + (cloud.opacity * 0.8) + ')');
+      gradient.addColorStop(0.5, cloud.color + (cloud.opacity * 0.4) + ')');
+      gradient.addColorStop(1, cloud.color + '0)');
+      
+      ctx.fillStyle = gradient;
+      ctx.fillRect(
+        cloud.x + driftX - cloud.size,
+        cloud.y + driftY - cloud.size,
+        cloud.size * 2,
+        cloud.size * 2
+      );
+      
+      ctx.restore();
+    });
+  }
+
   // Draw animated starfield
   if (state?.stars && state.stars.length > 0) {
     const time = Date.now() / 1000;
@@ -1550,14 +1582,41 @@ function drawMinimap(ctx: CanvasRenderingContext2D, state: GameState, canvas: HT
   
   ctx.save();
   
-  // Draw minimap background
-  ctx.fillStyle = 'rgba(10, 10, 10, 0.8)';
+  // Draw minimap background with gradient
+  const gradient = ctx.createLinearGradient(minimapX, minimapY, minimapX, minimapY + minimapSize);
+  gradient.addColorStop(0, 'rgba(15, 15, 20, 0.9)');
+  gradient.addColorStop(1, 'rgba(10, 10, 15, 0.9)');
+  ctx.fillStyle = gradient;
   ctx.fillRect(minimapX, minimapY, minimapSize, minimapSize);
   
-  // Draw minimap border
-  ctx.strokeStyle = COLORS.pattern;
+  // Draw minimap border with glow effect
+  ctx.strokeStyle = 'oklch(0.55 0.20 240)';
   ctx.lineWidth = 2;
+  ctx.shadowColor = 'oklch(0.55 0.20 240)';
+  ctx.shadowBlur = 8;
   ctx.strokeRect(minimapX, minimapY, minimapSize, minimapSize);
+  ctx.shadowBlur = 0;
+  
+  // Draw grid overlay
+  ctx.strokeStyle = 'rgba(100, 150, 200, 0.1)';
+  ctx.lineWidth = 1;
+  const gridLines = 4;
+  for (let i = 1; i < gridLines; i++) {
+    const x = minimapX + (i / gridLines) * minimapSize;
+    const y = minimapY + (i / gridLines) * minimapSize;
+    
+    // Vertical lines
+    ctx.beginPath();
+    ctx.moveTo(x, minimapY);
+    ctx.lineTo(x, minimapY + minimapSize);
+    ctx.stroke();
+    
+    // Horizontal lines
+    ctx.beginPath();
+    ctx.moveTo(minimapX, y);
+    ctx.lineTo(minimapX + minimapSize, y);
+    ctx.stroke();
+  }
   
   // Helper to convert game position to minimap position
   const toMinimapPos = (pos: Vector2) => {
@@ -1567,40 +1626,72 @@ function drawMinimap(ctx: CanvasRenderingContext2D, state: GameState, canvas: HT
     };
   };
   
-  // Draw obstacles
+  // Draw obstacles with enhanced visuals
   state.obstacles.forEach(obstacle => {
     const pos = toMinimapPos(obstacle.position);
-    ctx.fillStyle = 'rgba(100, 100, 100, 0.6)';
     const size = Math.max(MINIMAP_OBSTACLE_MIN_SIZE, (obstacle.width / arenaWidth) * minimapSize);
+    
+    // Different colors based on obstacle type
+    if (obstacle.type === 'wall') {
+      ctx.fillStyle = 'rgba(100, 120, 180, 0.5)';
+    } else if (obstacle.type === 'pillar') {
+      ctx.fillStyle = 'rgba(150, 100, 180, 0.5)';
+    } else {
+      ctx.fillStyle = 'rgba(180, 100, 80, 0.5)';
+    }
+    
     ctx.fillRect(pos.x - size / 2, pos.y - size / 2, size, size);
+    
+    // Add subtle border
+    ctx.strokeStyle = 'rgba(200, 200, 200, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(pos.x - size / 2, pos.y - size / 2, size, size);
   });
   
-  // Draw bases
+  // Draw bases with pulsing effect
+  const time = Date.now() / 1000;
+  const pulse = Math.sin(time * 2) * 0.2 + 0.8;
+  
   state.bases.forEach(base => {
     const pos = toMinimapPos(base.position);
     const color = state.players[base.owner].color;
+    
+    // Draw base glow
     ctx.fillStyle = color;
     ctx.shadowColor = color;
+    ctx.shadowBlur = 8 * pulse;
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(pos.x - MINIMAP_BASE_SIZE, pos.y - MINIMAP_BASE_SIZE, MINIMAP_BASE_SIZE * 2, MINIMAP_BASE_SIZE * 2);
+    
+    // Draw base
     ctx.shadowBlur = 4;
+    ctx.globalAlpha = 1;
     ctx.fillRect(pos.x - MINIMAP_BASE_SIZE / 2, pos.y - MINIMAP_BASE_SIZE / 2, MINIMAP_BASE_SIZE, MINIMAP_BASE_SIZE);
     ctx.shadowBlur = 0;
   });
   
-  // Draw units
+  // Draw units with slight glow
   state.units.forEach(unit => {
     const pos = toMinimapPos(unit.position);
     const color = state.players[unit.owner].color;
+    
     ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 3;
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, MINIMAP_UNIT_SIZE, 0, Math.PI * 2);
     ctx.fill();
+    ctx.shadowBlur = 0;
   });
   
-  // Draw minimap title
-  ctx.fillStyle = COLORS.white;
-  ctx.font = '10px Space Grotesk, sans-serif';
+  // Draw minimap title with enhanced styling
+  ctx.fillStyle = 'oklch(0.75 0.18 240)';
+  ctx.font = 'bold 11px Orbitron, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('TACTICAL', minimapX + minimapSize / 2, minimapY - 5);
+  ctx.shadowColor = 'oklch(0.75 0.18 240)';
+  ctx.shadowBlur = 6;
+  ctx.fillText('TACTICAL', minimapX + minimapSize / 2, minimapY - 6);
+  ctx.shadowBlur = 0;
   
   ctx.restore();
 }

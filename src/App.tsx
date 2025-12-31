@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useKV } from './hooks/useKV';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS } from './lib/types';
-import { generateId, generateTopographyLines, generateStarfield, isPortraitOrientation } from './lib/gameUtils';
+import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, isPortraitOrientation } from './lib/gameUtils';
 import { updateGame } from './lib/simulation';
 import { updateAI } from './lib/ai';
 import { renderGame } from './lib/renderer';
@@ -1059,6 +1059,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     },
     matchTimeLimit: 300,
     topographyLines,
+    nebulaClouds,
     stars,
     isPortrait: isPortraitOrientation(),
   };
@@ -1194,6 +1195,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
   // Generate topography lines and starfield for this level
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
   const stars = generateStarfield(canvas.width, canvas.height);
+  const nebulaClouds = generateNebulaClouds(canvas.width, canvas.height);
 
   return {
     mode: 'countdown',
@@ -1254,6 +1256,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
     },
     matchTimeLimit: 300,
     topographyLines,
+    nebulaClouds,
     stars,
     isPortrait: isPortraitOrientation(),
   };

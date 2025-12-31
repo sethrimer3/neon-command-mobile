@@ -293,6 +293,16 @@ export interface GameState {
     twinkleOffset: number;
   }>;
   
+  // Nebula clouds for atmospheric effect
+  nebulaClouds?: Array<{
+    x: number;
+    y: number;
+    size: number;
+    color: string;
+    opacity: number;
+    driftSpeed: number;
+  }>;
+  
   // Impact effects for hits and explosions
   impactEffects?: Array<{
     id: string;
