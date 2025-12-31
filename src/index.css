@@ -87,3 +87,65 @@ canvas {
   user-select: none;
   -webkit-user-select: none;
 }
+
+/* Custom animations for enhanced UX */
+@keyframes neon-pulse {
+  0%, 100% {
+    text-shadow: 0 0 10px currentColor, 0 0 20px currentColor, 0 0 30px currentColor;
+  }
+  50% {
+    text-shadow: 0 0 20px currentColor, 0 0 30px currentColor, 0 0 40px currentColor;
+  }
+}
+
+@keyframes slide-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glow-in {
+  from {
+    box-shadow: 0 0 0px currentColor;
+  }
+  to {
+    box-shadow: 0 0 20px currentColor, 0 0 40px currentColor;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Enhanced button animations */
+button {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:active {
+  transform: scale(0.95);
+}
+
+/* Smooth page transitions */
+.page-transition-enter {
+  animation: slide-fade-in 0.4s ease-out;
+}
+
+.page-transition-exit {
+  animation: slide-fade-in 0.3s ease-in reverse;
+}
+
+/* Neon glow effect */
+.neon-glow {
+  animation: neon-pulse 2s ease-in-out infinite;
+}

@@ -222,6 +222,10 @@ function createScreenShake(state: GameState, intensity: number, duration: number
   }
 }
 
+// Particle color constants for explosion effects
+const BRIGHT_BLUE_SPARK = 'oklch(0.85 0.25 240)';
+const BRIGHT_RED_SPARK = 'oklch(0.85 0.28 25)';
+
 // Create explosion particles for unit death
 function createExplosionParticles(state: GameState, position: Vector2, color: string, count: number = 12): void {
   if (!state.explosionParticles) {
@@ -230,7 +234,7 @@ function createExplosionParticles(state: GameState, position: Vector2, color: st
   
   const now = Date.now();
   for (let i = 0; i < count; i++) {
-    const angle = (Math.PI * 2 * i) / count;
+    const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
     const speed = 8 + Math.random() * 4;
     state.explosionParticles.push({
       id: generateId(),
@@ -244,6 +248,31 @@ function createExplosionParticles(state: GameState, position: Vector2, color: st
       lifetime: 0.6 + Math.random() * 0.4,
       createdAt: now,
       alpha: 1.0,
+      rotation: Math.random() * Math.PI * 2,
+      rotationSpeed: (Math.random() - 0.5) * 8,
+    });
+  }
+  
+  // Add some colored sparks for variety
+  const sparkCount = Math.floor(count / 2);
+  const brightColor = color === 'oklch(0.65 0.25 240)' ? BRIGHT_BLUE_SPARK : BRIGHT_RED_SPARK;
+  for (let i = 0; i < sparkCount; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 12 + Math.random() * 8;
+    state.explosionParticles.push({
+      id: generateId(),
+      position: { ...position },
+      velocity: {
+        x: Math.cos(angle) * speed,
+        y: Math.sin(angle) * speed,
+      },
+      color: brightColor,
+      size: 0.15 + Math.random() * 0.15,
+      lifetime: 0.4 + Math.random() * 0.3,
+      createdAt: now,
+      alpha: 1.0,
+      rotation: 0,
+      rotationSpeed: 0,
     });
   }
   
@@ -268,6 +297,11 @@ function updateExplosionParticles(state: GameState, deltaTime: number): void {
     particle.velocity.x *= 0.96;
     particle.velocity.y *= 0.96;
     
+    // Update rotation
+    if (particle.rotation !== undefined && particle.rotationSpeed !== undefined) {
+      particle.rotation += particle.rotationSpeed * deltaTime;
+    }
+    
     // Update alpha based on lifetime
     const age = (now - particle.createdAt) / 1000;
     particle.alpha = Math.max(0, 1 - age / particle.lifetime);
@@ -277,6 +311,116 @@ function updateExplosionParticles(state: GameState, deltaTime: number): void {
   state.explosionParticles = state.explosionParticles.filter((particle) => {
     const age = (now - particle.createdAt) / 1000;
     return age < particle.lifetime;
+  });
+}
+
+// Create energy pulse effect
+function createEnergyPulse(state: GameState, position: Vector2, color: string, maxRadius: number, duration: number = 0.8): void {
+  if (!state.energyPulses) {
+    state.energyPulses = [];
+  }
+  
+  state.energyPulses.push({
+    id: generateId(),
+    position: { ...position },
+    radius: 0,
+    color,
+    startTime: Date.now(),
+    duration,
+    maxRadius,
+  });
+}
+
+// Update energy pulses
+function updateEnergyPulses(state: GameState): void {
+  if (!state.energyPulses) return;
+  
+  const now = Date.now();
+  state.energyPulses.forEach((pulse) => {
+    const age = (now - pulse.startTime) / 1000;
+    const progress = age / pulse.duration;
+    pulse.radius = pulse.maxRadius * progress;
+  });
+  
+  // Remove expired pulses
+  state.energyPulses = state.energyPulses.filter((pulse) => {
+    const age = (now - pulse.startTime) / 1000;
+    return age < pulse.duration;
+  });
+}
+
+// Create spawn effect for units
+function createSpawnEffect(state: GameState, position: Vector2, color: string): void {
+  if (!state.spawnEffects) {
+    state.spawnEffects = [];
+  }
+  
+  state.spawnEffects.push({
+    id: generateId(),
+    position: { ...position },
+    color,
+    startTime: Date.now(),
+    duration: 0.6,
+  });
+  
+  // Clean up old effects
+  const now = Date.now();
+  state.spawnEffects = state.spawnEffects.filter((effect) => {
+    const age = (now - effect.startTime) / 1000;
+    return age < effect.duration;
+  });
+}
+
+// Create hit spark effects
+function createHitSparks(state: GameState, position: Vector2, color: string, count: number = 6): void {
+  if (!state.hitSparks) {
+    state.hitSparks = [];
+  }
+  
+  const now = Date.now();
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 3 + Math.random() * 4;
+    state.hitSparks.push({
+      id: generateId(),
+      position: { ...position },
+      velocity: {
+        x: Math.cos(angle) * speed,
+        y: Math.sin(angle) * speed,
+      },
+      color,
+      size: 0.1 + Math.random() * 0.1,
+      lifetime: 0.3 + Math.random() * 0.2,
+      createdAt: now,
+    });
+  }
+  
+  // Clean up old sparks
+  state.hitSparks = state.hitSparks.filter((spark) => {
+    const age = (now - spark.createdAt) / 1000;
+    return age < spark.lifetime;
+  });
+}
+
+// Update hit sparks
+function updateHitSparks(state: GameState, deltaTime: number): void {
+  if (!state.hitSparks) return;
+  
+  const now = Date.now();
+  state.hitSparks.forEach((spark) => {
+    // Update position
+    spark.position.x += spark.velocity.x * deltaTime;
+    spark.position.y += spark.velocity.y * deltaTime;
+    
+    // Apply deceleration
+    spark.velocity.x *= 0.92;
+    spark.velocity.y *= 0.92;
+  });
+  
+  // Remove dead sparks
+  state.hitSparks = state.hitSparks.filter((spark) => {
+    const age = (now - spark.createdAt) / 1000;
+    return age < spark.lifetime;
   });
 }
 
@@ -421,6 +565,8 @@ export function updateGame(state: GameState, deltaTime: number): void {
   updateProjectiles(state, deltaTime);
   updateCombat(state, deltaTime);
   updateExplosionParticles(state, deltaTime);
+  updateEnergyPulses(state);
+  updateHitSparks(state, deltaTime);
   updateMotionTrails(state);
   checkTimeLimit(state);
   checkVictory(state);
@@ -693,6 +839,9 @@ function executeBurstFire(state: GameState, unit: Unit, direction: { x: number; 
     if (hitTarget) {
       (hitTarget as Unit).hp -= shotDamage;
       
+      // Create hit spark effect
+      createHitSparks(state, hitTarget.position, state.players[unit.owner].color, 4);
+      
       if (state.matchStats && unit.owner === 0) {
         state.matchStats.damageDealtByPlayer += shotDamage;
       }
@@ -721,6 +870,10 @@ function executeExecuteDash(state: GameState, unit: Unit, targetPos: { x: number
   const def = UNIT_DEFINITIONS.warrior;
   const damage = def.attackDamage * 5 * unit.damageMultiplier;
   nearest.hp -= damage;
+  
+  // Create impact effect and energy pulse for dash
+  createHitSparks(state, nearest.position, state.players[unit.owner].color, 8);
+  createEnergyPulse(state, nearest.position, state.players[unit.owner].color, 2.5, 0.4);
   
   if (state.matchStats && unit.owner === 0) {
     state.matchStats.damageDealtByPlayer += damage;
@@ -1103,5 +1256,11 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
   }
 
   state.units.push(unit);
+  
+  // Create spawn effect
+  const color = state.players[owner].color;
+  createSpawnEffect(state, spawnPos, color);
+  createEnergyPulse(state, spawnPos, color, 2.0, 0.5);
+  
   return true;
 }

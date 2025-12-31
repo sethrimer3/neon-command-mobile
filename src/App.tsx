@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useKV } from './hooks/useKV';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS } from './lib/types';
-import { generateId, generateTopographyLines, generateStarfield, isPortraitOrientation } from './lib/gameUtils';
+import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, isPortraitOrientation } from './lib/gameUtils';
 import { updateGame } from './lib/simulation';
 import { updateAI } from './lib/ai';
 import { renderGame } from './lib/renderer';
@@ -598,13 +598,13 @@ function App() {
     <div className="relative w-screen h-screen overflow-hidden bg-background" onClick={handleCanvasSurrenderReset}>
       <canvas 
         ref={canvasRef} 
-        className="absolute inset-0"
+        className="absolute inset-0 transition-opacity duration-300"
       />
 
       {gameState.mode === 'game' && (
         <Button
           onClick={handleSurrenderClick}
-          className={`absolute top-4 left-4 orbitron transition-all duration-300 overflow-hidden ${
+          className={`absolute top-4 left-4 orbitron transition-all duration-300 overflow-hidden animate-in fade-in slide-in-from-left-2 ${
             gameState.surrenderExpanded ? 'w-48' : 'w-12'
           }`}
           variant="destructive"
@@ -621,11 +621,11 @@ function App() {
 
       {gameState.mode === 'countdown' && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="text-center">
-            <h2 className="orbitron text-3xl font-bold mb-8 text-primary animate-in slide-in-from-top duration-500">
+          <div className="text-center animate-in slide-in-from-bottom-4 duration-500">
+            <h2 className="orbitron text-3xl font-bold mb-8 text-primary animate-in slide-in-from-top duration-500 delay-150">
               {getMapById(gameState.settings.selectedMap)?.name || 'Map Preview'}
             </h2>
-            <div className="orbitron text-8xl font-black text-foreground animate-pulse" style={{
+            <div className="orbitron text-8xl font-black text-foreground neon-glow" style={{
               textShadow: '0 0 30px currentColor, 0 0 60px currentColor'
             }}>
               {Math.ceil(3 - (Date.now() - (gameState.countdownStartTime || Date.now())) / 1000)}
@@ -636,9 +636,8 @@ function App() {
 
       {gameState.mode === 'game' && gameState.matchStartAnimation?.phase === 'go' && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="orbitron text-9xl font-black text-primary animate-bounce" style={{
-            textShadow: '0 0 40px currentColor, 0 0 80px currentColor',
-            animation: 'bounce 0.5s ease-out'
+          <div className="orbitron text-9xl font-black text-primary animate-in zoom-in-95 fade-in duration-500" style={{
+            textShadow: '0 0 40px currentColor, 0 0 80px currentColor'
           }}>
             GO!
           </div>
@@ -646,12 +645,12 @@ function App() {
       )}
 
       {gameState.mode === 'menu' && (
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="absolute inset-0 flex items-center justify-center animate-in fade-in duration-500">
           <div className="absolute top-4 left-4 orbitron text-sm text-muted-foreground opacity-70">
             Build 1
           </div>
           <div className="flex flex-col gap-4 w-80 max-w-[90vw]">
-            <h1 className="orbitron text-4xl font-bold text-center text-primary mb-4 tracking-wider uppercase animate-in fade-in zoom-in-95 duration-700" style={{
+            <h1 className="orbitron text-4xl font-bold text-center text-primary mb-4 tracking-wider uppercase animate-in fade-in zoom-in-95 duration-700 neon-glow" style={{
               textShadow: '0 0 20px currentColor'
             }}>
               Speed of Light RTS
@@ -1060,6 +1059,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     },
     matchTimeLimit: 300,
     topographyLines,
+    nebulaClouds,
     stars,
     isPortrait: isPortraitOrientation(),
   };
@@ -1195,6 +1195,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
   // Generate topography lines and starfield for this level
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
   const stars = generateStarfield(canvas.width, canvas.height);
+  const nebulaClouds = generateNebulaClouds(canvas.width, canvas.height);
 
   return {
     mode: 'countdown',
@@ -1255,6 +1256,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
     },
     matchTimeLimit: 300,
     topographyLines,
+    nebulaClouds,
     stars,
     isPortrait: isPortraitOrientation(),
   };

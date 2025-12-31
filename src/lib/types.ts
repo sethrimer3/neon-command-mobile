@@ -293,6 +293,16 @@ export interface GameState {
     twinkleOffset: number;
   }>;
   
+  // Nebula clouds for atmospheric effect
+  nebulaClouds?: Array<{
+    x: number;
+    y: number;
+    size: number;
+    color: string;
+    opacity: number;
+    driftSpeed: number;
+  }>;
+  
   // Impact effects for hits and explosions
   impactEffects?: Array<{
     id: string;
@@ -345,6 +355,39 @@ export interface GameState {
     lifetime: number;
     createdAt: number;
     alpha: number;
+    rotation?: number; // Rotation angle for debris
+    rotationSpeed?: number; // Speed of rotation
+  }>;
+  
+  // Enhanced visual effects
+  energyPulses?: Array<{
+    id: string;
+    position: Vector2;
+    radius: number;
+    color: string;
+    startTime: number;
+    duration: number;
+    maxRadius: number;
+  }>;
+  
+  // Spawn effects for units
+  spawnEffects?: Array<{
+    id: string;
+    position: Vector2;
+    color: string;
+    startTime: number;
+    duration: number;
+  }>;
+  
+  // Hit spark effects
+  hitSparks?: Array<{
+    id: string;
+    position: Vector2;
+    velocity: Vector2;
+    color: string;
+    size: number;
+    lifetime: number;
+    createdAt: number;
   }>;
   
   // Motion trails for fast units

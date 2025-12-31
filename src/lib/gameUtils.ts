@@ -138,3 +138,77 @@ export function generateStarfield(canvasWidth: number, canvasHeight: number): Ar
   return stars;
 }
 
+// Object pool for particle reuse to improve performance
+class ParticlePool {
+  private pool: any[] = [];
+  private maxSize: number = 500; // Limit pool size
+  
+  get(): any {
+    return this.pool.pop() || null;
+  }
+  
+  release(particle: any): void {
+    if (this.pool.length < this.maxSize) {
+      // Reset particle properties for reuse
+      particle.id = '';
+      particle.position = { x: 0, y: 0 };
+      particle.velocity = { x: 0, y: 0 };
+      particle.alpha = 1;
+      particle.lifetime = 0;
+      particle.createdAt = 0;
+      this.pool.push(particle);
+    }
+  }
+  
+  clear(): void {
+    this.pool = [];
+  }
+}
+
+export const particlePool = new ParticlePool();
+
+// Cloud generation constants
+const MIN_NEBULA_CLOUDS = 5;
+const MAX_ADDITIONAL_CLOUDS = 5;
+
+// Generate nebula clouds for atmospheric background effect
+export function generateNebulaClouds(canvasWidth: number, canvasHeight: number): Array<{
+  x: number;
+  y: number;
+  size: number;
+  color: string;
+  opacity: number;
+  driftSpeed: number;
+}> {
+  const clouds: Array<{
+    x: number;
+    y: number;
+    size: number;
+    color: string;
+    opacity: number;
+    driftSpeed: number;
+  }> = [];
+  
+  const numClouds = MIN_NEBULA_CLOUDS + Math.floor(Math.random() * MAX_ADDITIONAL_CLOUDS);
+  const colors = [
+    'rgba(65, 105, 225, ', // Royal blue
+    'rgba(138, 43, 226, ', // Blue violet
+    'rgba(75, 0, 130, ', // Indigo
+    'rgba(123, 104, 238, ', // Medium slate blue
+    'rgba(72, 61, 139, ', // Dark slate blue
+  ];
+  
+  for (let i = 0; i < numClouds; i++) {
+    clouds.push({
+      x: Math.random() * canvasWidth,
+      y: Math.random() * canvasHeight,
+      size: 100 + Math.random() * 200,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      opacity: 0.05 + Math.random() * 0.1,
+      driftSpeed: 0.5 + Math.random() * 1.5,
+    });
+  }
+  
+  return clouds;
+}
+

@@ -79,6 +79,9 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
       drawProjectiles(ctx, state);
       drawUnits(ctx, state);
       drawExplosionParticles(ctx, state);
+      drawHitSparks(ctx, state);
+      drawEnergyPulses(ctx, state);
+      drawSpawnEffects(ctx, state);
       drawImpactEffects(ctx, state);
       drawDamageNumbers(ctx, state);
       drawSelectionIndicators(ctx, state);
@@ -100,6 +103,38 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
 function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, state?: GameState): void {
   ctx.fillStyle = COLORS.background;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw nebula clouds for atmospheric effect
+  if (state?.nebulaClouds && state.nebulaClouds.length > 0) {
+    const time = Date.now() / 1000;
+    state.nebulaClouds.forEach(cloud => {
+      // Create slow drifting effect
+      const driftX = Math.sin(time * cloud.driftSpeed * 0.1) * 20;
+      const driftY = Math.cos(time * cloud.driftSpeed * 0.15) * 15;
+      
+      ctx.save();
+      ctx.globalAlpha = cloud.opacity;
+      
+      // Create radial gradient for cloud
+      const gradient = ctx.createRadialGradient(
+        cloud.x + driftX, cloud.y + driftY, 0,
+        cloud.x + driftX, cloud.y + driftY, cloud.size
+      );
+      gradient.addColorStop(0, cloud.color + (cloud.opacity * 0.8) + ')');
+      gradient.addColorStop(0.5, cloud.color + (cloud.opacity * 0.4) + ')');
+      gradient.addColorStop(1, cloud.color + '0)');
+      
+      ctx.fillStyle = gradient;
+      ctx.fillRect(
+        cloud.x + driftX - cloud.size,
+        cloud.y + driftY - cloud.size,
+        cloud.size * 2,
+        cloud.size * 2
+      );
+      
+      ctx.restore();
+    });
+  }
 
   // Draw animated starfield
   if (state?.stars && state.stars.length > 0) {
@@ -228,13 +263,15 @@ function drawObstacles(ctx: CanvasRenderingContext2D, state: GameState): void {
 }
 
 function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): void {
+  const time = Date.now() / 1000; // Calculate once for efficiency
+  
   state.units.forEach((unit) => {
     const color = state.players[unit.owner].color;
     
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.6;
+    ctx.globalAlpha = 0.7;
 
     let lastPos = unit.position;
 
@@ -243,14 +280,26 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
 
       if (node.type === 'move') {
         const lastScreenPos = positionToPixels(lastPos);
+        
+        // Draw path with glow
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 8;
         ctx.beginPath();
         ctx.moveTo(lastScreenPos.x, lastScreenPos.y);
         ctx.lineTo(screenPos.x, screenPos.y);
         ctx.stroke();
+        ctx.shadowBlur = 0;
 
+        // Draw waypoint with pulsing animation
+        const pulse = Math.sin(time * 2 + index) * 0.3 + 0.7;
+        ctx.globalAlpha = 0.8 * pulse;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 12;
         ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y, 4, 0, Math.PI * 2);
+        ctx.arc(screenPos.x, screenPos.y, 4 + pulse * 2, 0, Math.PI * 2);
         ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 0.7;
 
         lastPos = node.position;
       } else if (node.type === 'ability') {
@@ -264,6 +313,10 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
         const angle = Math.atan2(dir.y, dir.x);
         ctx.rotate(angle);
 
+        // Draw arrow with enhanced glow
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 15;
+        ctx.globalAlpha = 0.9;
         ctx.beginPath();
         ctx.moveTo(arrowLen, 0);
         ctx.lineTo(0, -6);
@@ -994,11 +1047,22 @@ function drawSelectionIndicators(ctx: CanvasRenderingContext2D, state: GameState
 
     ctx.save();
     
-    // Draw outer glow ring
+    // Draw outer rotating ring
     ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.3;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 12;
+    ctx.setLineDash([8, 8]);
+    ctx.lineDashOffset = time * 20; // Rotate clockwise
+    
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, radius + 6, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Draw outer glow ring
     ctx.lineWidth = 3;
     ctx.globalAlpha = pulse * 0.4;
-    ctx.shadowColor = color;
     ctx.shadowBlur = 15;
     ctx.setLineDash([]);
     
@@ -1011,7 +1075,7 @@ function drawSelectionIndicators(ctx: CanvasRenderingContext2D, state: GameState
     ctx.lineWidth = 2;
     ctx.shadowBlur = 10;
     ctx.setLineDash([4, 4]);
-    ctx.lineDashOffset = -time * 10; // Animate dash
+    ctx.lineDashOffset = -time * 10; // Animate dash counter-clockwise
     
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
@@ -1024,13 +1088,14 @@ function drawSelectionIndicators(ctx: CanvasRenderingContext2D, state: GameState
     const markerSize = 6;
     const markerDist = radius + 2;
     
-    // Draw 4 corner brackets
+    // Draw 4 corner brackets that rotate slightly
     for (let i = 0; i < 4; i++) {
-      const angle = (i * Math.PI / 2) + Math.PI / 4;
+      const angle = (i * Math.PI / 2) + Math.PI / 4 + Math.sin(time * 2) * 0.05;
       const x = screenPos.x + Math.cos(angle) * markerDist;
       const y = screenPos.y + Math.sin(angle) * markerDist;
       
-      // Draw bracket
+      // Draw bracket with enhanced glow
+      ctx.globalAlpha = 0.8 + pulse * 0.2;
       ctx.beginPath();
       ctx.moveTo(x - markerSize * Math.cos(angle - Math.PI / 4), y - markerSize * Math.sin(angle - Math.PI / 4));
       ctx.lineTo(x, y);
@@ -1281,19 +1346,143 @@ function drawExplosionParticles(ctx: CanvasRenderingContext2D, state: GameState)
     ctx.save();
     ctx.globalAlpha = particle.alpha;
     
-    // Draw particle with glow
-    ctx.fillStyle = particle.color;
-    ctx.shadowColor = particle.color;
+    // Apply rotation if available
+    if (particle.rotation !== undefined) {
+      ctx.translate(screenPos.x, screenPos.y);
+      ctx.rotate(particle.rotation);
+      
+      // Draw rotated square for debris
+      ctx.fillStyle = particle.color;
+      ctx.shadowColor = particle.color;
+      ctx.shadowBlur = size * 2;
+      ctx.fillRect(-size / 2, -size / 2, size, size);
+      
+      // Add extra glow layer
+      ctx.globalAlpha = particle.alpha * 0.4;
+      ctx.shadowBlur = size * 4;
+      ctx.fillRect(-size / 2, -size / 2, size, size);
+    } else {
+      // Draw particle with glow (for sparks)
+      ctx.fillStyle = particle.color;
+      ctx.shadowColor = particle.color;
+      ctx.shadowBlur = size * 3;
+      
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Add extra glow layer
+      ctx.globalAlpha = particle.alpha * 0.4;
+      ctx.shadowBlur = size * 6;
+      ctx.fill();
+    }
+    
+    ctx.restore();
+  });
+}
+
+// Draw hit spark effects
+function drawHitSparks(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.hitSparks) return;
+  
+  const now = Date.now();
+  state.hitSparks.forEach((spark) => {
+    const age = (now - spark.createdAt) / 1000;
+    const progress = age / spark.lifetime;
+    const alpha = 1 - progress;
+    
+    const screenPos = positionToPixels(spark.position);
+    const size = metersToPixels(spark.size);
+    
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = spark.color;
+    ctx.shadowColor = spark.color;
     ctx.shadowBlur = size * 3;
     
     ctx.beginPath();
-    ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+    ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
     ctx.fill();
     
-    // Add extra glow layer
-    ctx.globalAlpha = particle.alpha * 0.4;
-    ctx.shadowBlur = size * 6;
+    ctx.restore();
+  });
+}
+
+// Draw energy pulse effects
+function drawEnergyPulses(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.energyPulses) return;
+  
+  const now = Date.now();
+  state.energyPulses.forEach((pulse) => {
+    const age = (now - pulse.startTime) / 1000;
+    const progress = age / pulse.duration;
+    const alpha = 1 - progress;
+    
+    const screenPos = positionToPixels(pulse.position);
+    const radius = metersToPixels(pulse.radius);
+    
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.6;
+    ctx.strokeStyle = pulse.color;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = pulse.color;
+    ctx.shadowBlur = 15;
+    
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Draw inner pulse
+    ctx.globalAlpha = alpha * 0.4;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, radius * 0.7, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    ctx.restore();
+  });
+}
+
+// Draw spawn effects
+function drawSpawnEffects(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.spawnEffects) return;
+  
+  const now = Date.now();
+  state.spawnEffects.forEach((effect) => {
+    const age = (now - effect.startTime) / 1000;
+    const progress = age / effect.duration;
+    const alpha = 1 - progress;
+    const scale = 0.5 + progress * 0.5;
+    
+    const screenPos = positionToPixels(effect.position);
+    
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.fillStyle = effect.color;
+    ctx.shadowColor = effect.color;
+    ctx.shadowBlur = 20;
+    
+    // Draw expanding circle
+    const radius = metersToPixels(1.5 * scale);
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
     ctx.fill();
+    
+    // Draw cross pattern
+    ctx.strokeStyle = effect.color;
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = alpha;
+    const lineLen = metersToPixels(2 * scale);
+    
+    ctx.beginPath();
+    ctx.moveTo(screenPos.x - lineLen, screenPos.y);
+    ctx.lineTo(screenPos.x + lineLen, screenPos.y);
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(screenPos.x, screenPos.y - lineLen);
+    ctx.lineTo(screenPos.x, screenPos.y + lineLen);
+    ctx.stroke();
     
     ctx.restore();
   });
@@ -1395,14 +1584,41 @@ function drawMinimap(ctx: CanvasRenderingContext2D, state: GameState, canvas: HT
   
   ctx.save();
   
-  // Draw minimap background
-  ctx.fillStyle = 'rgba(10, 10, 10, 0.8)';
+  // Draw minimap background with gradient
+  const gradient = ctx.createLinearGradient(minimapX, minimapY, minimapX, minimapY + minimapSize);
+  gradient.addColorStop(0, 'rgba(15, 15, 20, 0.9)');
+  gradient.addColorStop(1, 'rgba(10, 10, 15, 0.9)');
+  ctx.fillStyle = gradient;
   ctx.fillRect(minimapX, minimapY, minimapSize, minimapSize);
   
-  // Draw minimap border
-  ctx.strokeStyle = COLORS.pattern;
+  // Draw minimap border with glow effect
+  ctx.strokeStyle = 'oklch(0.55 0.20 240)';
   ctx.lineWidth = 2;
+  ctx.shadowColor = 'oklch(0.55 0.20 240)';
+  ctx.shadowBlur = 8;
   ctx.strokeRect(minimapX, minimapY, minimapSize, minimapSize);
+  ctx.shadowBlur = 0;
+  
+  // Draw grid overlay
+  ctx.strokeStyle = 'rgba(100, 150, 200, 0.1)';
+  ctx.lineWidth = 1;
+  const gridLines = 4;
+  for (let i = 1; i < gridLines; i++) {
+    const x = minimapX + (i / gridLines) * minimapSize;
+    const y = minimapY + (i / gridLines) * minimapSize;
+    
+    // Vertical lines
+    ctx.beginPath();
+    ctx.moveTo(x, minimapY);
+    ctx.lineTo(x, minimapY + minimapSize);
+    ctx.stroke();
+    
+    // Horizontal lines
+    ctx.beginPath();
+    ctx.moveTo(minimapX, y);
+    ctx.lineTo(minimapX + minimapSize, y);
+    ctx.stroke();
+  }
   
   // Helper to convert game position to minimap position
   const toMinimapPos = (pos: Vector2) => {
@@ -1412,40 +1628,72 @@ function drawMinimap(ctx: CanvasRenderingContext2D, state: GameState, canvas: HT
     };
   };
   
-  // Draw obstacles
+  // Draw obstacles with enhanced visuals
   state.obstacles.forEach(obstacle => {
     const pos = toMinimapPos(obstacle.position);
-    ctx.fillStyle = 'rgba(100, 100, 100, 0.6)';
     const size = Math.max(MINIMAP_OBSTACLE_MIN_SIZE, (obstacle.width / arenaWidth) * minimapSize);
+    
+    // Different colors based on obstacle type
+    if (obstacle.type === 'wall') {
+      ctx.fillStyle = 'rgba(100, 120, 180, 0.5)';
+    } else if (obstacle.type === 'pillar') {
+      ctx.fillStyle = 'rgba(150, 100, 180, 0.5)';
+    } else {
+      ctx.fillStyle = 'rgba(180, 100, 80, 0.5)';
+    }
+    
     ctx.fillRect(pos.x - size / 2, pos.y - size / 2, size, size);
+    
+    // Add subtle border
+    ctx.strokeStyle = 'rgba(200, 200, 200, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(pos.x - size / 2, pos.y - size / 2, size, size);
   });
   
-  // Draw bases
+  // Draw bases with pulsing effect
+  const time = Date.now() / 1000;
+  const pulse = Math.sin(time * 2) * 0.2 + 0.8;
+  
   state.bases.forEach(base => {
     const pos = toMinimapPos(base.position);
     const color = state.players[base.owner].color;
+    
+    // Draw base glow
     ctx.fillStyle = color;
     ctx.shadowColor = color;
+    ctx.shadowBlur = 8 * pulse;
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(pos.x - MINIMAP_BASE_SIZE, pos.y - MINIMAP_BASE_SIZE, MINIMAP_BASE_SIZE * 2, MINIMAP_BASE_SIZE * 2);
+    
+    // Draw base
     ctx.shadowBlur = 4;
+    ctx.globalAlpha = 1;
     ctx.fillRect(pos.x - MINIMAP_BASE_SIZE / 2, pos.y - MINIMAP_BASE_SIZE / 2, MINIMAP_BASE_SIZE, MINIMAP_BASE_SIZE);
     ctx.shadowBlur = 0;
   });
   
-  // Draw units
+  // Draw units with slight glow
   state.units.forEach(unit => {
     const pos = toMinimapPos(unit.position);
     const color = state.players[unit.owner].color;
+    
     ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 3;
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, MINIMAP_UNIT_SIZE, 0, Math.PI * 2);
     ctx.fill();
+    ctx.shadowBlur = 0;
   });
   
-  // Draw minimap title
-  ctx.fillStyle = COLORS.white;
-  ctx.font = '10px Space Grotesk, sans-serif';
+  // Draw minimap title with enhanced styling
+  ctx.fillStyle = 'oklch(0.75 0.18 240)';
+  ctx.font = 'bold 11px Orbitron, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('TACTICAL', minimapX + minimapSize / 2, minimapY - 5);
+  ctx.shadowColor = 'oklch(0.75 0.18 240)';
+  ctx.shadowBlur = 6;
+  ctx.fillText('TACTICAL', minimapX + minimapSize / 2, minimapY - 6);
+  ctx.shadowBlur = 0;
   
   ctx.restore();
 }
