@@ -41,6 +41,11 @@ export interface LobbyData {
 const GAME_UPDATE_INTERVAL = 100;
 const LOBBY_TIMEOUT = 300000;
 
+// Helper function to check if spark KV is available
+function isSparkAvailable(): boolean {
+  return typeof window !== 'undefined' && window.spark?.kv !== undefined;
+}
+
 export class MultiplayerManager {
   private gameId: string | null = null;
   private playerId: string;
@@ -54,7 +59,11 @@ export class MultiplayerManager {
   }
 
   async createGame(hostName: string, hostColor: string, mapId: string, enabledUnits: string[]): Promise<string> {
-    const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    if (!isSparkAvailable()) {
+      throw new Error('Multiplayer features require the Spark runtime environment');
+    }
+    
+    const gameId = `game_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
     
     const lobby: LobbyData = {
       gameId,
@@ -80,6 +89,10 @@ export class MultiplayerManager {
   }
 
   async joinGame(gameId: string, guestName: string, guestColor: string): Promise<boolean> {
+    if (!isSparkAvailable()) {
+      return false;
+    }
+    
     const lobby = await window.spark.kv.get<LobbyData>(`lobby:${gameId}`);
     
     if (!lobby || lobby.guestId !== null || lobby.status !== 'waiting') {
@@ -100,7 +113,7 @@ export class MultiplayerManager {
   }
 
   async startGame(): Promise<void> {
-    if (!this.gameId || !this.isHost) return;
+    if (!isSparkAvailable() || !this.gameId || !this.isHost) return;
 
     const lobby = await window.spark.kv.get<LobbyData>(`lobby:${this.gameId}`);
     if (!lobby || !lobby.guestId) return;
@@ -123,10 +136,13 @@ export class MultiplayerManager {
   }
 
   async getLobby(gameId: string): Promise<LobbyData | null> {
+    if (!isSparkAvailable()) return null;
     return await window.spark.kv.get<LobbyData>(`lobby:${gameId}`) || null;
   }
 
   async getAvailableLobbies(): Promise<LobbyData[]> {
+    if (!isSparkAvailable()) return [];
+    
     const lobbyListKey = 'multiplayer:lobbies';
     const lobbyIds = await window.spark.kv.get<string[]>(lobbyListKey) || [];
     
@@ -149,7 +165,7 @@ export class MultiplayerManager {
   }
 
   async sendCommand(command: Omit<GameCommand, 'playerId' | 'timestamp'>): Promise<void> {
-    if (!this.gameId) return;
+    if (!isSparkAvailable() || !this.gameId) return;
 
     const fullCommand: GameCommand = {
       ...command,
@@ -162,7 +178,7 @@ export class MultiplayerManager {
   }
 
   async getCommands(since: number): Promise<GameCommand[]> {
-    if (!this.gameId) return [];
+    if (!isSparkAvailable() || !this.gameId) return [];
 
     const allKeys = await window.spark.kv.keys();
     const commandKeys = allKeys.filter(key => 
@@ -180,7 +196,7 @@ export class MultiplayerManager {
   }
 
   async syncGameState(gameState: Partial<GameState>): Promise<void> {
-    if (!this.gameId || !this.isHost) return;
+    if (!isSparkAvailable() || !this.gameId || !this.isHost) return;
 
     const now = Date.now();
     if (now - this.lastSyncTime < GAME_UPDATE_INTERVAL) return;
@@ -199,12 +215,12 @@ export class MultiplayerManager {
   }
 
   async getGameState(): Promise<any | null> {
-    if (!this.gameId) return null;
+    if (!isSparkAvailable() || !this.gameId) return null;
     return await window.spark.kv.get(`game:${this.gameId}:sync`) || null;
   }
 
   async leaveGame(): Promise<void> {
-    if (!this.gameId) return;
+    if (!isSparkAvailable() || !this.gameId) return;
 
     const lobby = await window.spark.kv.get<LobbyData>(`lobby:${this.gameId}`);
     if (lobby) {
@@ -224,7 +240,7 @@ export class MultiplayerManager {
   }
 
   async endGame(): Promise<void> {
-    if (!this.gameId) return;
+    if (!isSparkAvailable() || !this.gameId) return;
 
     const lobby = await window.spark.kv.get<LobbyData>(`lobby:${this.gameId}`);
     if (lobby) {
@@ -239,6 +255,8 @@ export class MultiplayerManager {
   }
 
   private async addToLobbyList(gameId: string): Promise<void> {
+    if (!isSparkAvailable()) return;
+    
     const lobbyListKey = 'multiplayer:lobbies';
     const lobbies = await window.spark.kv.get<string[]>(lobbyListKey) || [];
     if (!lobbies.includes(gameId)) {
@@ -248,6 +266,8 @@ export class MultiplayerManager {
   }
 
   private async removeFromLobbyList(gameId: string): Promise<void> {
+    if (!isSparkAvailable()) return;
+    
     const lobbyListKey = 'multiplayer:lobbies';
     const lobbies = await window.spark.kv.get<string[]>(lobbyListKey) || [];
     const filtered = lobbies.filter(id => id !== gameId);

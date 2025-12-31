@@ -50,8 +50,15 @@ function App() {
 
   useEffect(() => {
     const initUser = async () => {
-      const user = await window.spark.user();
-      const uid = user?.id?.toString() || `player_${Date.now()}`;
+      let uid = `player_${Date.now()}`;
+      if (typeof window !== 'undefined' && window.spark?.user) {
+        try {
+          const user = await window.spark.user();
+          uid = user?.id?.toString() || uid;
+        } catch (error) {
+          console.warn('Failed to fetch spark user, using fallback ID:', error);
+        }
+      }
       setUserId(uid);
       multiplayerManagerRef.current = new MultiplayerManager(uid);
     };
