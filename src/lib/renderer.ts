@@ -388,6 +388,11 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
   state.units.forEach((unit) => {
     const screenPos = positionToPixels(unit.position);
     const color = state.players[unit.owner].color;
+    
+    // Draw particles first (behind the unit)
+    if (unit.particles && unit.particles.length > 0) {
+      drawParticles(ctx, unit);
+    }
 
     if (unit.cloaked) {
       ctx.globalAlpha = 0.3;
@@ -456,6 +461,27 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.font = '10px Space Mono, monospace';
     ctx.textAlign = 'center';
     ctx.fillText(`${unit.damageMultiplier.toFixed(1)}x`, screenPos.x, screenPos.y + 20);
+  });
+}
+
+function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
+  if (!unit.particles || unit.particles.length === 0) return;
+  
+  unit.particles.forEach((particle) => {
+    const screenPos = positionToPixels(particle.position);
+    
+    // Draw particle with glow effect
+    ctx.save();
+    ctx.fillStyle = particle.color;
+    ctx.shadowColor = particle.color;
+    ctx.shadowBlur = 8;
+    
+    // Draw small circle for particle
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
   });
 }
 

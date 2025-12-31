@@ -595,6 +595,9 @@ function App() {
 
       {gameState.mode === 'menu' && (
         <div className="absolute inset-0 flex items-center justify-center">
+          <div className="absolute top-4 left-4 orbitron text-sm text-muted-foreground opacity-70">
+            Build 1
+          </div>
           <div className="flex flex-col gap-4 w-80 max-w-[90vw]">
             <h1 className="orbitron text-4xl font-bold text-center text-primary mb-4 tracking-wider uppercase">
               Speed of Light RTS

@@ -11,10 +11,73 @@ import {
   QUEUE_BONUS_PER_NODE,
   BASE_SIZE_METERS,
   UNIT_SIZE_METERS,
+  Particle,
 } from './types';
 import { distance, normalize, scale, add, subtract, generateId } from './gameUtils';
 import { checkObstacleCollision } from './maps';
 import { soundManager } from './sound';
+
+// Particle physics constants
+const PARTICLE_ATTRACTION_STRENGTH = 5.0; // How strongly particles are attracted to their unit
+const PARTICLE_DAMPING = 0.95; // Velocity damping to prevent infinite acceleration
+const PARTICLE_ORBIT_DISTANCE = 0.8; // Desired orbit distance from unit center
+
+// Create particles for a unit
+function createParticlesForUnit(unit: Unit, count: number): Particle[] {
+  const particles: Particle[] = [];
+  const unitColor = unit.owner === 0 ? 'oklch(0.65 0.25 240)' : 'oklch(0.62 0.28 25)';
+  
+  for (let i = 0; i < count; i++) {
+    // Position particles in a circle around the unit
+    const angle = (i / count) * Math.PI * 2;
+    const distance = PARTICLE_ORBIT_DISTANCE;
+    
+    particles.push({
+      id: generateId(),
+      position: {
+        x: unit.position.x + Math.cos(angle) * distance,
+        y: unit.position.y + Math.sin(angle) * distance,
+      },
+      velocity: { x: 0, y: 0 },
+      color: unitColor,
+    });
+  }
+  
+  return particles;
+}
+
+// Update particle physics
+function updateParticles(unit: Unit, deltaTime: number): void {
+  if (!unit.particles || unit.particles.length === 0) return;
+  
+  unit.particles.forEach((particle) => {
+    // Calculate attraction force towards unit
+    const toUnit = subtract(unit.position, particle.position);
+    const dist = distance(particle.position, unit.position);
+    
+    // Apply force that's stronger when farther from desired orbit distance
+    const desiredDist = PARTICLE_ORBIT_DISTANCE;
+    const distError = dist - desiredDist;
+    
+    // Normalize direction and apply force proportional to distance error
+    if (dist > 0.01) {
+      const direction = normalize(toUnit);
+      const force = scale(direction, distError * PARTICLE_ATTRACTION_STRENGTH);
+      
+      // Update velocity with force
+      particle.velocity.x += force.x * deltaTime;
+      particle.velocity.y += force.y * deltaTime;
+    }
+    
+    // Apply damping to prevent excessive velocity
+    particle.velocity.x *= PARTICLE_DAMPING;
+    particle.velocity.y *= PARTICLE_DAMPING;
+    
+    // Update position based on velocity
+    particle.position.x += particle.velocity.x * deltaTime;
+    particle.position.y += particle.velocity.y * deltaTime;
+  });
+}
 
 export function updateGame(state: GameState, deltaTime: number): void {
   if (state.mode !== 'game') return;
@@ -56,6 +119,11 @@ function updateUnits(state: GameState, deltaTime: number): void {
     }
 
     updateAbilityEffects(unit, state, deltaTime);
+    
+    // Update particle physics for marines
+    if (unit.type === 'marine') {
+      updateParticles(unit, deltaTime);
+    }
 
     if (unit.lineJumpTelegraph) {
       const elapsed = Date.now() - unit.lineJumpTelegraph.startTime;
@@ -628,6 +696,11 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
     distanceCredit: 0,
     abilityCooldown: 0,
   };
+  
+  // Initialize particles for marines
+  if (type === 'marine') {
+    unit.particles = createParticlesForUnit(unit, 10);
+  }
 
   state.units.push(unit);
   return true;
