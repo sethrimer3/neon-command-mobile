@@ -33,7 +33,8 @@ export function useKV<T>(
       console.warn('Failed to parse stored value, resetting to default.', error);
       setValue(initialValue);
     }
-  }, [key, initialValue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
 
   // Persist changes to localStorage whenever the value updates.
   useEffect(() => {
