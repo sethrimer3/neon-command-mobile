@@ -1006,6 +1006,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
   // Generate topography lines and starfield for this level
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
   const stars = generateStarfield(canvas.width, canvas.height);
+  const nebulaClouds = generateNebulaClouds(canvas.width, canvas.height);
 
   return {
     mode: 'countdown',

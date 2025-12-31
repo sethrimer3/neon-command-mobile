@@ -1816,7 +1816,6 @@ function drawMinimap(ctx: CanvasRenderingContext2D, state: GameState, canvas: HT
   });
   
   // Draw bases with pulsing effect
-  const time = Date.now() / 1000;
   const pulse = Math.sin(time * 2) * 0.2 + 0.8;
   
   state.bases.forEach(base => {
