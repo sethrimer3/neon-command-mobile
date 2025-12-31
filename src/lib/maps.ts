@@ -195,25 +195,49 @@ export function checkObstacleCollision(
 export function getValidBasePositions(
   arenaWidth: number,
   arenaHeight: number,
-  obstacles: Obstacle[]
+  obstacles: Obstacle[],
+  isPortrait: boolean = false
 ): { player: Vector2; enemy: Vector2 } {
   const baseRadius = BASE_SIZE_METERS * 1.5;
   
-  const playerPos = { x: BASE_SIZE_METERS * 2, y: arenaHeight / 2 };
-  const enemyPos = { x: arenaWidth - BASE_SIZE_METERS * 2, y: arenaHeight / 2 };
+  // In portrait mode, bases should be at bottom (player) and top (enemy)
+  // In landscape mode, bases should be at left (player) and right (enemy)
+  let playerPos: Vector2;
+  let enemyPos: Vector2;
+  
+  if (isPortrait) {
+    playerPos = { x: arenaWidth / 2, y: arenaHeight - BASE_SIZE_METERS * 2 };
+    enemyPos = { x: arenaWidth / 2, y: BASE_SIZE_METERS * 2 };
+  } else {
+    playerPos = { x: BASE_SIZE_METERS * 2, y: arenaHeight / 2 };
+    enemyPos = { x: arenaWidth - BASE_SIZE_METERS * 2, y: arenaHeight / 2 };
+  }
 
   if (!checkObstacleCollision(playerPos, baseRadius, obstacles) &&
       !checkObstacleCollision(enemyPos, baseRadius, obstacles)) {
     return { player: playerPos, enemy: enemyPos };
   }
 
-  for (let offsetY = -5; offsetY <= 5; offsetY += 1) {
-    const testPlayerPos = { x: playerPos.x, y: arenaHeight / 2 + offsetY };
-    const testEnemyPos = { x: enemyPos.x, y: arenaHeight / 2 + offsetY };
-    
-    if (!checkObstacleCollision(testPlayerPos, baseRadius, obstacles) &&
-        !checkObstacleCollision(testEnemyPos, baseRadius, obstacles)) {
-      return { player: testPlayerPos, enemy: testEnemyPos };
+  // Try to find alternative positions with offsets
+  if (isPortrait) {
+    for (let offsetX = -5; offsetX <= 5; offsetX += 1) {
+      const testPlayerPos = { x: arenaWidth / 2 + offsetX, y: arenaHeight - BASE_SIZE_METERS * 2 };
+      const testEnemyPos = { x: arenaWidth / 2 + offsetX, y: BASE_SIZE_METERS * 2 };
+      
+      if (!checkObstacleCollision(testPlayerPos, baseRadius, obstacles) &&
+          !checkObstacleCollision(testEnemyPos, baseRadius, obstacles)) {
+        return { player: testPlayerPos, enemy: testEnemyPos };
+      }
+    }
+  } else {
+    for (let offsetY = -5; offsetY <= 5; offsetY += 1) {
+      const testPlayerPos = { x: BASE_SIZE_METERS * 2, y: arenaHeight / 2 + offsetY };
+      const testEnemyPos = { x: arenaWidth - BASE_SIZE_METERS * 2, y: arenaHeight / 2 + offsetY };
+      
+      if (!checkObstacleCollision(testPlayerPos, baseRadius, obstacles) &&
+          !checkObstacleCollision(testEnemyPos, baseRadius, obstacles)) {
+        return { player: testPlayerPos, enemy: testEnemyPos };
+      }
     }
   }
 

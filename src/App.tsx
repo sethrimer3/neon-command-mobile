@@ -925,7 +925,8 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
 
   const selectedMapDef = getMapById(settings.selectedMap) || getMapById('open')!;
   const obstacles = selectedMapDef.obstacles;
-  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles);
+  const isPortrait = window.innerHeight > window.innerWidth;
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortrait);
   
   // Generate topography lines for this level
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
@@ -991,7 +992,8 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
 
   const selectedMapDef = getMapById(settings.selectedMap) || getMapById('open')!;
   const obstacles = selectedMapDef.obstacles;
-  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles);
+  const isPortrait = window.innerHeight > window.innerWidth;
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortrait);
 
   return {
     mode: 'game',
@@ -1046,7 +1048,8 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
 
   const selectedMapDef = getMapById(lobby.mapId) || getMapById('open')!;
   const obstacles = selectedMapDef.obstacles;
-  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles);
+  const isPortrait = window.innerHeight > window.innerWidth;
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortrait);
 
   return {
     mode: 'game',
@@ -1108,7 +1111,8 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
 
   const selectedMapDef = getMapById(lobby.mapId) || getMapById('open')!;
   const obstacles = selectedMapDef.obstacles;
-  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles);
+  const isPortrait = window.innerHeight > window.innerWidth;
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortrait);
   
   // Generate topography lines for this level
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);

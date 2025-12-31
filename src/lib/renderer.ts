@@ -215,14 +215,31 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
       const progress = Math.min(elapsed / 1500, 1);
       const easeProgress = 1 - Math.pow(1 - progress, 3);
       
-      if (base.owner === 0) {
-        const startY = -size;
-        const endY = screenPos.y;
-        screenPos = { x: screenPos.x, y: startY + (endY - startY) * easeProgress };
+      // Check if we're in portrait mode
+      const isPortrait = state.isPortrait || false;
+      
+      if (isPortrait) {
+        // In portrait mode: player base comes from bottom, enemy from top
+        if (base.owner === 0) {
+          const startY = ctx.canvas.height + size;
+          const endY = screenPos.y;
+          screenPos = { x: screenPos.x, y: startY + (endY - startY) * easeProgress };
+        } else {
+          const startY = -size;
+          const endY = screenPos.y;
+          screenPos = { x: screenPos.x, y: startY + (endY - startY) * easeProgress };
+        }
       } else {
-        const startY = ctx.canvas.height + size;
-        const endY = screenPos.y;
-        screenPos = { x: screenPos.x, y: startY + (endY - startY) * easeProgress };
+        // In landscape mode: player base comes from left, enemy from right
+        if (base.owner === 0) {
+          const startX = -size;
+          const endX = screenPos.x;
+          screenPos = { x: startX + (endX - startX) * easeProgress, y: screenPos.y };
+        } else {
+          const startX = ctx.canvas.width + size;
+          const endX = screenPos.x;
+          screenPos = { x: startX + (endX - startX) * easeProgress, y: screenPos.y };
+        }
       }
     }
 
