@@ -11,13 +11,15 @@ export interface KeyboardActions {
   onPause?: () => void; // P
 }
 
+const GAME_CONTROL_KEYS = ['Escape', ' ', 'Enter', 'a', 'A', 'd', 'D', 's', 'S', 'p', 'P'];
+
 export function useKeyboardControls(actions: KeyboardActions, enabled: boolean = true) {
   useEffect(() => {
     if (!enabled) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Prevent default for game controls
-      const isGameKey = ['Escape', ' ', 'Enter', 'a', 'A', 'd', 'D', 's', 'S', 'p', 'P'].includes(e.key);
+      const isGameKey = GAME_CONTROL_KEYS.includes(e.key);
       if (isGameKey) {
         e.preventDefault();
       }

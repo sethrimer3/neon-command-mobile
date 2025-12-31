@@ -26,6 +26,10 @@ const MINIMAP_BASE_SIZE = 8;
 const MINIMAP_UNIT_SIZE = 2;
 const MINIMAP_OBSTACLE_MIN_SIZE = 2;
 
+// Culling constants
+const OFFSCREEN_CULLING_MARGIN = 50; // pixels margin for culling off-screen objects
+const TRAIL_FADE_DURATION = 0.5; // seconds for motion trail fade
+
 // Helper function to get bright highlight color for team
 function getTeamHighlightColor(owner: number): string {
   return owner === 0 
@@ -497,7 +501,7 @@ function drawLaserBeam(ctx: CanvasRenderingContext2D, base: Base, screenPos: { x
 function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void {
   state.projectiles.forEach((projectile) => {
     // Skip projectiles that are off-screen for performance
-    if (!isOnScreen(projectile.position, ctx.canvas, 50)) {
+    if (!isOnScreen(projectile.position, ctx.canvas, OFFSCREEN_CULLING_MARGIN)) {
       return;
     }
     
@@ -592,7 +596,7 @@ function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos:
 function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
   state.units.forEach((unit) => {
     // Skip units that are off-screen for performance
-    if (!isOnScreen(unit.position, ctx.canvas, 50)) {
+    if (!isOnScreen(unit.position, ctx.canvas, OFFSCREEN_CULLING_MARGIN)) {
       return;
     }
     
@@ -1311,7 +1315,7 @@ function drawMotionTrails(ctx: CanvasRenderingContext2D, state: GameState): void
     // Draw trail from oldest to newest
     for (let i = 0; i < trail.positions.length - 1; i++) {
       const age = (now - trail.positions[i].timestamp) / 1000;
-      const alpha = Math.max(0, 1 - age / 0.5); // 0.5s fade
+      const alpha = Math.max(0, 1 - age / TRAIL_FADE_DURATION);
       const width = 2 * alpha;
       
       if (alpha <= 0) continue;

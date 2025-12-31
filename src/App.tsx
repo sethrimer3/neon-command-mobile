@@ -620,12 +620,14 @@ function App() {
       )}
 
       {gameState.mode === 'countdown' && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="text-center">
-            <h2 className="orbitron text-3xl font-bold mb-8 text-primary">
+            <h2 className="orbitron text-3xl font-bold mb-8 text-primary animate-in slide-in-from-top duration-500">
               {getMapById(gameState.settings.selectedMap)?.name || 'Map Preview'}
             </h2>
-            <div className="orbitron text-8xl font-black text-foreground animate-pulse">
+            <div className="orbitron text-8xl font-black text-foreground animate-pulse" style={{
+              textShadow: '0 0 30px currentColor, 0 0 60px currentColor'
+            }}>
               {Math.ceil(3 - (Date.now() - (gameState.countdownStartTime || Date.now())) / 1000)}
             </div>
           </div>
@@ -634,7 +636,10 @@ function App() {
 
       {gameState.mode === 'game' && gameState.matchStartAnimation?.phase === 'go' && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="orbitron text-9xl font-black text-primary animate-bounce">
+          <div className="orbitron text-9xl font-black text-primary animate-bounce" style={{
+            textShadow: '0 0 40px currentColor, 0 0 80px currentColor',
+            animation: 'bounce 0.5s ease-out'
+          }}>
             GO!
           </div>
         </div>
@@ -646,22 +651,35 @@ function App() {
             Build 1
           </div>
           <div className="flex flex-col gap-4 w-80 max-w-[90vw]">
-            <h1 className="orbitron text-4xl font-bold text-center text-primary mb-4 tracking-wider uppercase">
+            <h1 className="orbitron text-4xl font-bold text-center text-primary mb-4 tracking-wider uppercase animate-in fade-in zoom-in-95 duration-700" style={{
+              textShadow: '0 0 20px currentColor'
+            }}>
               Speed of Light RTS
             </h1>
 
             <Button
               onClick={goToLevelSelection}
-              className="h-14 text-lg orbitron uppercase tracking-wider"
+              className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/50"
               variant="default"
             >
               <Robot className="mr-2" size={24} />
               Vs. AI
             </Button>
+            
+            <Button
+              onClick={() => {
+                soundManager.playButtonClick();
+                startGame('ai', selectedMap || 'open');
+              }}
+              className="h-12 text-base orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/50"
+              variant="secondary"
+            >
+              Quick Match
+            </Button>
 
             <Button
               onClick={goToOnlineMode}
-              className="h-14 text-lg orbitron uppercase tracking-wider"
+              className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/50"
               variant="default"
             >
               <WifiHigh className="mr-2" size={24} />
@@ -670,7 +688,7 @@ function App() {
 
             <Button
               onClick={goToMapSelection}
-              className="h-14 text-lg orbitron uppercase tracking-wider"
+              className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
               variant="outline"
             >
               <MapPin className="mr-2" size={24} />
@@ -679,7 +697,7 @@ function App() {
 
             <Button
               onClick={goToUnitSelection}
-              className="h-14 text-lg orbitron uppercase tracking-wider"
+              className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
               variant="outline"
             >
               <ListChecks className="mr-2" size={24} />
@@ -688,7 +706,7 @@ function App() {
 
             <Button
               onClick={goToSettings}
-              className="h-14 text-lg orbitron uppercase tracking-wider"
+              className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
               variant="outline"
             >
               <GearSix className="mr-2" size={24} />
@@ -697,7 +715,7 @@ function App() {
 
             <Button
               onClick={goToStatistics}
-              className="h-14 text-lg orbitron uppercase tracking-wider"
+              className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
               variant="outline"
             >
               <ChartBar className="mr-2" size={24} />

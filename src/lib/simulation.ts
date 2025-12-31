@@ -49,6 +49,9 @@ const SCREEN_SHAKE_BASE_DESTROY_INTENSITY = 15; // shake intensity for base dest
 const SCREEN_SHAKE_MULTI_KILL_MULTIPLIER = 0.8; // multiplier per unit killed
 const SCREEN_SHAKE_MULTI_KILL_THRESHOLD = 3; // minimum units for multi-kill shake
 
+// Motion trail constants
+const MOTION_TRAIL_DURATION = 0.5; // seconds for motion trail fade
+
 // Create particles for a unit
 function createParticlesForUnit(unit: Unit, count: number): Particle[] {
   const particles: Particle[] = [];
@@ -284,7 +287,6 @@ function updateMotionTrails(state: GameState): void {
   }
   
   const now = Date.now();
-  const trailDuration = 0.5; // seconds
   
   // Update trails for each unit
   state.units.forEach((unit) => {
@@ -314,7 +316,7 @@ function updateMotionTrails(state: GameState): void {
     });
     
     // Remove old positions
-    trail.positions = trail.positions.filter(p => (now - p.timestamp) / 1000 < trailDuration);
+    trail.positions = trail.positions.filter(p => (now - p.timestamp) / 1000 < MOTION_TRAIL_DURATION);
   });
   
   // Clean up trails for dead units
