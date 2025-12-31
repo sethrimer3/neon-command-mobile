@@ -767,11 +767,6 @@ function drawMeleeAttack(ctx: CanvasRenderingContext2D, unit: Unit, unitScreenPo
   if (!unit.meleeAttackEffect) return;
   
   const now = Date.now();
-  if (now > unit.meleeAttackEffect.endTime) {
-    unit.meleeAttackEffect = undefined;
-    return;
-  }
-  
   const targetScreenPos = positionToPixels(unit.meleeAttackEffect.targetPos);
   const progress = 1 - ((unit.meleeAttackEffect.endTime - now) / 200);
   

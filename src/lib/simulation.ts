@@ -132,7 +132,7 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
         // Apply damage if target still exists
         if (projectile.targetUnit) {
           const target = state.units.find((u) => u.id === projectile.targetUnit);
-          if (target) {
+          if (target && target.hp > 0) {
             target.hp -= projectile.damage;
             
             if (state.matchStats && projectile.owner === 0) {
@@ -140,37 +140,44 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
             }
           }
         } else {
-          // Check for any unit hit in the area
-          const enemies = state.units.filter((u) => u.owner !== projectile.owner);
-          enemies.forEach((enemy) => {
+          // Check for any unit hit in the area - only hit the first one found
+          const enemies = state.units.filter((u) => u.owner !== projectile.owner && u.hp > 0);
+          let hitEnemy = false;
+          
+          for (const enemy of enemies) {
             if (distance(enemy.position, projectile.position) < UNIT_SIZE_METERS / 2) {
               enemy.hp -= projectile.damage;
               
               if (state.matchStats && projectile.owner === 0) {
                 state.matchStats.damageDealtByPlayer += projectile.damage;
               }
+              hitEnemy = true;
+              break; // Only hit one unit
             }
-          });
+          }
           
-          // Check bases
-          const enemyBases = state.bases.filter((b) => b.owner !== projectile.owner);
-          enemyBases.forEach((base) => {
-            if (distance(base.position, projectile.position) < BASE_SIZE_METERS / 2) {
-              base.hp -= projectile.damage;
-              
-              if (state.matchStats) {
-                if (base.owner === 0) {
-                  state.matchStats.damageToPlayerBase += projectile.damage;
-                } else {
-                  state.matchStats.damageToEnemyBase += projectile.damage;
-                }
+          // Only check bases if no unit was hit
+          if (!hitEnemy) {
+            const enemyBases = state.bases.filter((b) => b.owner !== projectile.owner);
+            for (const base of enemyBases) {
+              if (distance(base.position, projectile.position) < BASE_SIZE_METERS / 2) {
+                base.hp -= projectile.damage;
                 
-                if (projectile.owner === 0) {
-                  state.matchStats.damageDealtByPlayer += projectile.damage;
+                if (state.matchStats) {
+                  if (base.owner === 0) {
+                    state.matchStats.damageToPlayerBase += projectile.damage;
+                  } else {
+                    state.matchStats.damageToEnemyBase += projectile.damage;
+                  }
+                  
+                  if (projectile.owner === 0) {
+                    state.matchStats.damageDealtByPlayer += projectile.damage;
+                  }
                 }
+                break; // Only hit one base
               }
             }
-          });
+          }
         }
       }
       
@@ -227,6 +234,11 @@ function updateUnits(state: GameState, deltaTime: number): void {
     // Update particle physics for marines
     if (unit.type === 'marine') {
       updateParticles(unit, deltaTime);
+    }
+    
+    // Clean up expired melee attack effects
+    if (unit.meleeAttackEffect && Date.now() > unit.meleeAttackEffect.endTime) {
+      unit.meleeAttackEffect = undefined;
     }
 
     if (unit.lineJumpTelegraph) {
@@ -834,6 +846,7 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
     distanceTraveled: 0,
     distanceCredit: 0,
     abilityCooldown: 0,
+    attackCooldown: 0, // Initialize attack cooldown
   };
   
   // Initialize particles for marines
