@@ -198,6 +198,8 @@ export interface GameState {
   players: {
     photons: number;
     incomeRate: number;
+    incomePerKill: number;
+    workerCount: number;
     color: string;
   }[];
   

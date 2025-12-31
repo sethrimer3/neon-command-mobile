@@ -526,6 +526,9 @@ function updateCombat(state: GameState, deltaTime: number): void {
   oldUnits.forEach(u => {
     if (u.hp <= 0) {
       soundManager.playUnitDeath();
+      // Add income per kill to the player who killed this unit
+      const killerOwner = u.owner === 0 ? 1 : 0;
+      state.players[killerOwner].photons += state.players[killerOwner].incomePerKill;
     }
   });
   
@@ -630,5 +633,26 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
   };
 
   state.units.push(unit);
+  return true;
+}
+
+export function trainWorker(state: GameState, owner: number): boolean {
+  const player = state.players[owner];
+  const workerCost = 2 * (player.workerCount + 1);
+  
+  if (player.photons < workerCost) return false;
+  
+  player.photons -= workerCost;
+  player.workerCount += 1;
+  player.incomePerKill += 1;
+  
+  if (state.matchStats && owner === 0) {
+    state.matchStats.photonsSpentByPlayer += workerCost;
+  }
+  
+  if (owner === 0) {
+    soundManager.playUnitTrain();
+  }
+  
   return true;
 }
