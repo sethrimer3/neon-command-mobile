@@ -19,12 +19,15 @@ import { checkObstacleCollision } from './maps';
 import { soundManager } from './sound';
 
 // Particle physics constants
-const PARTICLE_ATTRACTION_STRENGTH = 5.0; // How strongly particles are attracted to their unit
-const PARTICLE_DAMPING = 0.95; // Velocity damping to prevent infinite acceleration
+const PARTICLE_ATTRACTION_STRENGTH = 6.0; // How strongly particles are attracted to their unit
+const PARTICLE_DAMPING = 0.92; // Velocity damping to prevent infinite acceleration
 const PARTICLE_ORBIT_DISTANCE = 0.8; // Desired orbit distance from unit center
-const PARTICLE_MIN_VELOCITY = 2.0; // Minimum velocity to keep particles moving
-const PARTICLE_ORBITAL_SPEED = 1.5; // Speed of orbital rotation around unit
-const PARTICLE_TRAIL_LENGTH = 5; // Number of trail positions to keep
+const PARTICLE_MIN_VELOCITY = 2.5; // Minimum velocity to keep particles moving
+const PARTICLE_ORBITAL_SPEED = 2.0; // Speed of orbital rotation around unit
+const PARTICLE_ORBITAL_FORCE = 1.2; // Force applied for orbital motion
+const PARTICLE_ORBITAL_VELOCITY_SCALE = 0.5; // Scale factor for orbital velocity contribution
+const PARTICLE_TRAIL_LENGTH = 6; // Number of trail positions to keep
+const PARTICLE_MIN_SPEED_THRESHOLD = 0.01; // Threshold for detecting nearly stationary particles
 
 // Projectile constants
 const PROJECTILE_SPEED = 15; // meters per second
@@ -78,7 +81,7 @@ function updateParticles(unit: Unit, deltaTime: number): void {
     const distError = dist - desiredDist;
     
     // Normalize direction and apply force proportional to distance error
-    if (dist > 0.01) {
+    if (dist > PARTICLE_MIN_SPEED_THRESHOLD) {
       const direction = normalize(toUnit);
       const force = scale(direction, distError * PARTICLE_ATTRACTION_STRENGTH);
       
@@ -95,9 +98,9 @@ function updateParticles(unit: Unit, deltaTime: number): void {
     const tangentX = -Math.sin(particle.angle);
     const tangentY = Math.cos(particle.angle);
     
-    // Add orbital velocity component
-    particle.velocity.x += tangentX * PARTICLE_MIN_VELOCITY * deltaTime * 0.5;
-    particle.velocity.y += tangentY * PARTICLE_MIN_VELOCITY * deltaTime * 0.5;
+    // Add orbital velocity component using dedicated orbital force
+    particle.velocity.x += tangentX * PARTICLE_ORBITAL_FORCE * deltaTime;
+    particle.velocity.y += tangentY * PARTICLE_ORBITAL_FORCE * deltaTime;
     
     // Apply damping to prevent excessive velocity
     particle.velocity.x *= PARTICLE_DAMPING;
@@ -105,11 +108,11 @@ function updateParticles(unit: Unit, deltaTime: number): void {
     
     // Ensure minimum velocity magnitude for constant motion
     const currentSpeed = Math.sqrt(particle.velocity.x ** 2 + particle.velocity.y ** 2);
-    if (currentSpeed < PARTICLE_MIN_VELOCITY && currentSpeed > 0.01) {
+    if (currentSpeed < PARTICLE_MIN_VELOCITY && currentSpeed > PARTICLE_MIN_SPEED_THRESHOLD) {
       const scale = PARTICLE_MIN_VELOCITY / currentSpeed;
       particle.velocity.x *= scale;
       particle.velocity.y *= scale;
-    } else if (currentSpeed < 0.01) {
+    } else if (currentSpeed < PARTICLE_MIN_SPEED_THRESHOLD) {
       // If particle is nearly stationary, give it a random velocity
       const randomAngle = Math.random() * Math.PI * 2;
       particle.velocity.x = Math.cos(randomAngle) * PARTICLE_MIN_VELOCITY;

@@ -12,6 +12,13 @@ import {
 import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract } from './gameUtils';
 import { Obstacle } from './maps';
 
+// Helper function to get bright highlight color for team
+function getTeamHighlightColor(owner: number): string {
+  return owner === 0 
+    ? 'oklch(0.95 0.15 240)' // Player color highlight
+    : 'oklch(0.95 0.15 25)'; // Enemy color highlight
+}
+
 export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canvas: HTMLCanvasElement, selectionRect?: { x1: number; y1: number; x2: number; y2: number } | null): void {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -421,8 +428,8 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     ctx.arc(screenPos.x, screenPos.y, 4, 0, Math.PI * 2);
     ctx.fill();
     
-    // Draw bright center
-    ctx.fillStyle = 'oklch(0.95 0.15 ' + (projectile.owner === 0 ? '240' : '25') + ')';
+    // Draw bright center with appropriate team color
+    ctx.fillStyle = getTeamHighlightColor(projectile.owner);
     ctx.shadowBlur = 20;
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, 2, 0, Math.PI * 2);
@@ -510,11 +517,21 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
       const radius = metersToPixels(UNIT_SIZE_METERS / 2);
 
       ctx.shadowColor = color;
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 12;
 
       ctx.beginPath();
       ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
       ctx.fill();
+      
+      // Add extra glow for marines
+      if (unit.type === 'marine') {
+        ctx.shadowBlur = 18;
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y, radius * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+      }
 
       if (unit.type === 'warrior') {
         ctx.lineWidth = 2;
