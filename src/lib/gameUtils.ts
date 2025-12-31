@@ -59,6 +59,10 @@ export function generateId(): string {
   return Math.random().toString(36).substring(2, 15);
 }
 
+export function isPortraitOrientation(): boolean {
+  return window.innerHeight > window.innerWidth;
+}
+
 export function generateTopographyLines(canvasWidth: number, canvasHeight: number): Array<{ x1: number; y1: number; x2: number; y2: number }> {
   const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
   const numLines = 15 + Math.floor(Math.random() * 10); // 15-25 lines
