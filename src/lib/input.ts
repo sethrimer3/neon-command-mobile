@@ -15,7 +15,7 @@ import {
   UNIT_SIZE_METERS,
 } from './types';
 import { distance, normalize, scale, add, subtract, pixelsToPosition, positionToPixels } from './gameUtils';
-import { spawnUnit, trainWorker } from './simulation';
+import { spawnUnit } from './simulation';
 import { soundManager } from './sound';
 
 interface TouchState {
@@ -258,7 +258,6 @@ function handleBaseSwipe(state: GameState, base: Base, swipe: { x: number; y: nu
 
   let spawnType: UnitType | null = null;
   let rallyOffset = { x: 0, y: 0 };
-  let isLeftDoor = false;
 
   if (angleDeg >= -45 && angleDeg < 45) {
     spawnType = state.settings.unitSlots.right;
@@ -270,24 +269,15 @@ function handleBaseSwipe(state: GameState, base: Base, swipe: { x: number; y: nu
     spawnType = state.settings.unitSlots.down;
     rallyOffset = { x: 0, y: 8 };
   } else {
-    // Left door - train worker instead
-    isLeftDoor = true;
     spawnType = state.settings.unitSlots.left;
     rallyOffset = { x: -8, y: 0 };
   }
 
-  if (isLeftDoor) {
-    const success = trainWorker(state, playerIndex);
+  const rallyPos = add(base.position, rallyOffset);
+  if (spawnType) {
+    const success = spawnUnit(state, playerIndex, spawnType, base.position, rallyPos);
     if (!success) {
       soundManager.playError();
-    }
-  } else {
-    const rallyPos = add(base.position, rallyOffset);
-    if (spawnType) {
-      const success = spawnUnit(state, playerIndex, spawnType, base.position, rallyPos);
-      if (!success) {
-        soundManager.playError();
-      }
     }
   }
 }

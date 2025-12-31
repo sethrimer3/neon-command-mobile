@@ -546,7 +546,7 @@ function App() {
 
             <Button
               onClick={goToLevelSelection}
-              className="h-7 text-lg orbitron uppercase tracking-wider"
+              className="h-14 text-lg orbitron uppercase tracking-wider"
               variant="default"
             >
               <Robot className="mr-2" size={24} />
@@ -555,7 +555,7 @@ function App() {
 
             <Button
               onClick={goToOnlineMode}
-              className="h-7 text-lg orbitron uppercase tracking-wider"
+              className="h-14 text-lg orbitron uppercase tracking-wider"
               variant="default"
             >
               <WifiHigh className="mr-2" size={24} />
@@ -564,7 +564,7 @@ function App() {
 
             <Button
               onClick={goToMapSelection}
-              className="h-7 text-lg orbitron uppercase tracking-wider"
+              className="h-14 text-lg orbitron uppercase tracking-wider"
               variant="outline"
             >
               <MapPin className="mr-2" size={24} />
@@ -573,7 +573,7 @@ function App() {
 
             <Button
               onClick={goToUnitSelection}
-              className="h-7 text-lg orbitron uppercase tracking-wider"
+              className="h-14 text-lg orbitron uppercase tracking-wider"
               variant="outline"
             >
               <ListChecks className="mr-2" size={24} />
@@ -582,7 +582,7 @@ function App() {
 
             <Button
               onClick={goToSettings}
-              className="h-7 text-lg orbitron uppercase tracking-wider"
+              className="h-14 text-lg orbitron uppercase tracking-wider"
               variant="outline"
             >
               <GearSix className="mr-2" size={24} />
@@ -591,7 +591,7 @@ function App() {
 
             <Button
               onClick={goToStatistics}
-              className="h-7 text-lg orbitron uppercase tracking-wider"
+              className="h-14 text-lg orbitron uppercase tracking-wider"
               variant="outline"
             >
               <ChartBar className="mr-2" size={24} />
@@ -838,8 +838,8 @@ function createInitialState(): GameState {
     bases: [],
     obstacles: [],
     players: [
-      { photons: 0, incomeRate: 1, incomePerKill: 1, workerCount: 0, color: COLORS.playerDefault },
-      { photons: 0, incomeRate: 1, incomePerKill: 1, workerCount: 0, color: COLORS.enemyDefault },
+      { photons: 0, incomeRate: 1, color: COLORS.playerDefault },
+      { photons: 0, incomeRate: 1, color: COLORS.enemyDefault },
     ],
     selectedUnits: new Set(),
     elapsedTime: 0,
@@ -898,8 +898,8 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
       },
     ],
     players: [
-      { photons: 10, incomeRate: 1, incomePerKill: 1, workerCount: 0, color: settings.playerColor },
-      { photons: 10, incomeRate: 1, incomePerKill: 1, workerCount: 0, color: settings.enemyColor },
+      { photons: 50, incomeRate: 1, color: settings.playerColor },
+      { photons: 50, incomeRate: 1, color: settings.enemyColor },
     ],
     selectedUnits: new Set(),
     elapsedTime: 0,
@@ -960,8 +960,8 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
       },
     ],
     players: [
-      { photons: 10, incomeRate: 1, incomePerKill: 1, workerCount: 0, color: settings.playerColor },
-      { photons: 10, incomeRate: 1, incomePerKill: 1, workerCount: 0, color: settings.enemyColor },
+      { photons: 50, incomeRate: 1, color: settings.playerColor },
+      { photons: 50, incomeRate: 1, color: settings.enemyColor },
     ],
     selectedUnits: new Set(),
     elapsedTime: 0,
@@ -1014,8 +1014,8 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
       },
     ],
     players: [
-      { photons: 10, incomeRate: 1, incomePerKill: 1, workerCount: 0, color: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault },
-      { photons: 10, incomeRate: 1, incomePerKill: 1, workerCount: 0, color: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor },
+      { photons: 50, incomeRate: 1, color: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault },
+      { photons: 50, incomeRate: 1, color: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor },
     ],
     selectedUnits: new Set(),
     elapsedTime: 0,
@@ -1078,8 +1078,8 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
       },
     ],
     players: [
-      { photons: 10, incomeRate: 1, incomePerKill: 1, workerCount: 0, color: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault },
-      { photons: 10, incomeRate: 1, incomePerKill: 1, workerCount: 0, color: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor },
+      { photons: 50, incomeRate: 1, color: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault },
+      { photons: 50, incomeRate: 1, color: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor },
     ],
     selectedUnits: new Set(),
     elapsedTime: 0,
