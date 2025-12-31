@@ -33,6 +33,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
       drawProjectiles(ctx, state);
       drawUnits(ctx, state);
       drawImpactEffects(ctx, state);
+      drawDamageNumbers(ctx, state);
       drawSelectionIndicators(ctx, state);
       if (selectionRect) {
         drawSelectionRect(ctx, selectionRect, state);
@@ -904,22 +905,66 @@ function drawMeleeAttack(ctx: CanvasRenderingContext2D, unit: Unit, unitScreenPo
 }
 
 function drawSelectionIndicators(ctx: CanvasRenderingContext2D, state: GameState): void {
+  const time = Date.now() / 1000;
+  
   state.units.forEach((unit) => {
     if (!state.selectedUnits.has(unit.id)) return;
 
     const screenPos = positionToPixels(unit.position);
-    const radius = metersToPixels(UNIT_SIZE_METERS / 2) + 4;
+    const baseRadius = metersToPixels(UNIT_SIZE_METERS / 2) + 4;
     const color = state.players[unit.owner].color;
 
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
+    // Animated pulsing effect
+    const pulse = Math.sin(time * 3) * 0.2 + 0.8; // Pulse between 0.6 and 1.0
+    const radius = baseRadius * (1 + pulse * 0.15); // Pulse size slightly
 
+    ctx.save();
+    
+    // Draw outer glow ring
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = pulse * 0.4;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 15;
+    ctx.setLineDash([]);
+    
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, radius + 3, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Draw main selection ring
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 10;
+    ctx.setLineDash([4, 4]);
+    ctx.lineDashOffset = -time * 10; // Animate dash
+    
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
     ctx.stroke();
-
+    
+    // Draw corner markers for a more tactical look
     ctx.setLineDash([]);
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 8;
+    const markerSize = 6;
+    const markerDist = radius + 2;
+    
+    // Draw 4 corner brackets
+    for (let i = 0; i < 4; i++) {
+      const angle = (i * Math.PI / 2) + Math.PI / 4;
+      const x = screenPos.x + Math.cos(angle) * markerDist;
+      const y = screenPos.y + Math.sin(angle) * markerDist;
+      
+      // Draw bracket
+      ctx.beginPath();
+      ctx.moveTo(x - markerSize * Math.cos(angle - Math.PI / 4), y - markerSize * Math.sin(angle - Math.PI / 4));
+      ctx.lineTo(x, y);
+      ctx.lineTo(x - markerSize * Math.cos(angle + Math.PI / 4), y - markerSize * Math.sin(angle + Math.PI / 4));
+      ctx.stroke();
+    }
+
+    ctx.restore();
   });
 }
 
@@ -954,6 +999,15 @@ function drawHUD(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.fillText(timeStr, ctx.canvas.width / 2, 30);
     ctx.textAlign = 'left';
     ctx.font = '14px Space Grotesk, sans-serif';
+  }
+  
+  // Draw FPS counter in top right
+  if (state.fps !== undefined) {
+    ctx.textAlign = 'right';
+    const fpsColor = state.fps >= 55 ? 'oklch(0.70 0.20 140)' : state.fps >= 30 ? 'oklch(0.85 0.20 95)' : 'oklch(0.62 0.28 25)';
+    ctx.fillStyle = fpsColor;
+    ctx.fillText(`${state.fps} FPS`, ctx.canvas.width - 10, 20);
+    ctx.textAlign = 'left';
   }
 }
 
@@ -1082,6 +1136,49 @@ function drawImpactEffects(ctx: CanvasRenderingContext2D, state: GameState): voi
       ctx.arc(screenPos.x, screenPos.y, currentRadius * 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
+    
+    ctx.restore();
+  });
+}
+
+function drawDamageNumbers(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.damageNumbers || state.damageNumbers.length === 0) return;
+  
+  const now = Date.now();
+  
+  state.damageNumbers.forEach((damageNum) => {
+    const elapsed = (now - damageNum.startTime) / 1000;
+    const progress = Math.min(elapsed / damageNum.duration, 1);
+    
+    if (progress >= 1) return; // Skip completed numbers
+    
+    // Float upward
+    const floatDistance = 20 * progress;
+    const screenPos = positionToPixels(damageNum.position);
+    const alpha = 1 - progress;
+    
+    ctx.save();
+    
+    // Draw damage number with outline
+    const fontSize = 16 + (1 - progress) * 6; // Start bigger, shrink
+    ctx.font = `bold ${fontSize}px Space Mono, monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    const x = screenPos.x;
+    const y = screenPos.y - floatDistance - 10;
+    
+    // Draw outline
+    ctx.strokeStyle = 'rgba(0, 0, 0, ' + (alpha * 0.8) + ')';
+    ctx.lineWidth = 3;
+    ctx.strokeText(damageNum.damage.toString(), x, y);
+    
+    // Draw fill
+    ctx.fillStyle = damageNum.color;
+    ctx.globalAlpha = alpha;
+    ctx.shadowColor = damageNum.color;
+    ctx.shadowBlur = 10;
+    ctx.fillText(damageNum.damage.toString(), x, y);
     
     ctx.restore();
   });

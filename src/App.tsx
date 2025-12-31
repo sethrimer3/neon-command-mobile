@@ -143,6 +143,19 @@ function App() {
       const deltaTime = Math.min((now - lastTimeRef.current) / 1000, 0.1);
       lastTimeRef.current = now;
 
+      // Update FPS counter
+      if (!gameStateRef.current.lastFpsUpdate) {
+        gameStateRef.current.lastFpsUpdate = now;
+        gameStateRef.current.frameCount = 0;
+        gameStateRef.current.fps = 60;
+      }
+      gameStateRef.current.frameCount = (gameStateRef.current.frameCount || 0) + 1;
+      if (now - gameStateRef.current.lastFpsUpdate >= 1000) {
+        gameStateRef.current.fps = gameStateRef.current.frameCount;
+        gameStateRef.current.frameCount = 0;
+        gameStateRef.current.lastFpsUpdate = now;
+      }
+
       if (gameStateRef.current.mode === 'countdown') {
         const elapsed = now - (gameStateRef.current.countdownStartTime || now);
         const secondsRemaining = Math.ceil(3 - elapsed / 1000);

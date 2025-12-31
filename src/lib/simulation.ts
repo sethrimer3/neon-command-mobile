@@ -170,6 +170,29 @@ function createImpactEffect(state: GameState, position: Vector2, color: string, 
   });
 }
 
+// Create a floating damage number
+function createDamageNumber(state: GameState, position: Vector2, damage: number, color: string): void {
+  if (!state.damageNumbers) {
+    state.damageNumbers = [];
+  }
+  
+  state.damageNumbers.push({
+    id: generateId(),
+    position: { ...position },
+    damage: Math.round(damage),
+    color,
+    startTime: Date.now(),
+    duration: 0.8, // 0.8 seconds
+  });
+  
+  // Clean up old damage numbers (older than 1 second)
+  const now = Date.now();
+  state.damageNumbers = state.damageNumbers.filter((num) => {
+    const age = (now - num.startTime) / 1000;
+    return age < 1;
+  });
+}
+
 // Update projectiles - movement and collision
 function updateProjectiles(state: GameState, deltaTime: number): void {
   const now = Date.now();
@@ -199,6 +222,7 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
           const target = state.units.find((u) => u.id === projectile.targetUnit);
           if (target && target.hp > 0) {
             target.hp -= projectile.damage;
+            createDamageNumber(state, projectile.position, projectile.damage, projectile.color);
             
             if (state.matchStats && projectile.owner === 0) {
               state.matchStats.damageDealtByPlayer += projectile.damage;
@@ -212,6 +236,7 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
           for (const enemy of enemies) {
             if (distance(enemy.position, projectile.position) < UNIT_SIZE_METERS / 2) {
               enemy.hp -= projectile.damage;
+              createDamageNumber(state, projectile.position, projectile.damage, projectile.color);
               
               if (state.matchStats && projectile.owner === 0) {
                 state.matchStats.damageDealtByPlayer += projectile.damage;

@@ -302,4 +302,19 @@ export interface GameState {
     duration: number;
     size: number;
   }>;
+  
+  // Floating damage numbers
+  damageNumbers?: Array<{
+    id: string;
+    position: Vector2;
+    damage: number;
+    color: string;
+    startTime: number;
+    duration: number;
+  }>;
+  
+  // Performance metrics
+  fps?: number;
+  lastFpsUpdate?: number;
+  frameCount?: number;
 }
