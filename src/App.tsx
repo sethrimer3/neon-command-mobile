@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useKV } from './hooks/useKV';
 import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS } from './lib/types';
 import { generateId, generateTopographyLines } from './lib/gameUtils';
@@ -31,6 +31,7 @@ function App() {
   const animationFrameRef = useRef<number | undefined>(undefined);
   const lastTimeRef = useRef<number>(Date.now());
   const multiplayerManagerRef = useRef<MultiplayerManager | null>(null);
+  const lobbyCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [multiplayerLobbies, setMultiplayerLobbies] = useState<LobbyData[]>([]);
   const [currentLobby, setCurrentLobby] = useState<LobbyData | null>(null);
   const [userId, setUserId] = useState<string>('');
@@ -100,6 +101,16 @@ function App() {
       color: i === 0 ? (playerColor || COLORS.playerDefault) : (enemyColor || COLORS.enemyDefault),
     }));
   }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP]);
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (lobbyCheckIntervalRef.current) {
+        clearInterval(lobbyCheckIntervalRef.current);
+        lobbyCheckIntervalRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -293,6 +304,12 @@ function App() {
       });
     }
     
+    // Clear the lobby check interval
+    if (lobbyCheckIntervalRef.current) {
+      clearInterval(lobbyCheckIntervalRef.current);
+      lobbyCheckIntervalRef.current = null;
+    }
+    
     if (multiplayerManagerRef.current?.getGameId()) {
       multiplayerManagerRef.current.endGame();
     }
@@ -414,15 +431,21 @@ function App() {
     }));
   };
 
-  const refreshLobbies = async () => {
+  const refreshLobbies = useCallback(async () => {
     if (!multiplayerManagerRef.current) return;
     const lobbies = await multiplayerManagerRef.current.getAvailableLobbies();
     setMultiplayerLobbies(lobbies);
-  };
+  }, []);
 
   const handleCreateGame = async (playerName: string) => {
     if (!multiplayerManagerRef.current) return;
     try {
+      // Clear any existing interval
+      if (lobbyCheckIntervalRef.current) {
+        clearInterval(lobbyCheckIntervalRef.current);
+        lobbyCheckIntervalRef.current = null;
+      }
+      
       const gameId = await multiplayerManagerRef.current.createGame(
         playerName,
         playerColor || COLORS.playerDefault,
@@ -433,12 +456,15 @@ function App() {
       setCurrentLobby(lobby);
       toast.success('Game created! Share the Game ID with your opponent.');
       
-      const checkInterval = setInterval(async () => {
+      lobbyCheckIntervalRef.current = setInterval(async () => {
         const updatedLobby = await multiplayerManagerRef.current?.getLobby(gameId);
         if (updatedLobby) {
           setCurrentLobby(updatedLobby);
           if (updatedLobby.status === 'playing') {
-            clearInterval(checkInterval);
+            if (lobbyCheckIntervalRef.current) {
+              clearInterval(lobbyCheckIntervalRef.current);
+              lobbyCheckIntervalRef.current = null;
+            }
           }
         }
       }, 1000);
@@ -450,6 +476,12 @@ function App() {
   const handleJoinGame = async (gameId: string, playerName: string) => {
     if (!multiplayerManagerRef.current) return;
     try {
+      // Clear any existing interval
+      if (lobbyCheckIntervalRef.current) {
+        clearInterval(lobbyCheckIntervalRef.current);
+        lobbyCheckIntervalRef.current = null;
+      }
+      
       const success = await multiplayerManagerRef.current.joinGame(
         gameId,
         playerName,
@@ -460,12 +492,15 @@ function App() {
         setCurrentLobby(lobby);
         toast.success('Joined game! Waiting for host to start...');
         
-        const checkInterval = setInterval(async () => {
+        lobbyCheckIntervalRef.current = setInterval(async () => {
           const updatedLobby = await multiplayerManagerRef.current?.getLobby(gameId);
           if (updatedLobby) {
             setCurrentLobby(updatedLobby);
             if (updatedLobby.status === 'playing') {
-              clearInterval(checkInterval);
+              if (lobbyCheckIntervalRef.current) {
+                clearInterval(lobbyCheckIntervalRef.current);
+                lobbyCheckIntervalRef.current = null;
+              }
             }
           }
         }, 1000);
@@ -489,6 +524,11 @@ function App() {
 
   const handleLeaveGame = async () => {
     if (!multiplayerManagerRef.current) return;
+    // Clear the lobby check interval
+    if (lobbyCheckIntervalRef.current) {
+      clearInterval(lobbyCheckIntervalRef.current);
+      lobbyCheckIntervalRef.current = null;
+    }
     await multiplayerManagerRef.current.leaveGame();
     setCurrentLobby(null);
     toast.info('Left the lobby');
