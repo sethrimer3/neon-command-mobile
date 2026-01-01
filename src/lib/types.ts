@@ -541,4 +541,7 @@ export interface GameState {
     dragVector: Vector2; // Direction and distance of the drag in world space
     screenStartPos: Vector2; // Screen position where drag started (for display purposes)
   };
+  
+  // Multiplayer manager for online games
+  multiplayerManager?: any; // MultiplayerManager - using any to avoid circular dependency
 }

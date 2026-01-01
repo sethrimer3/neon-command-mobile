@@ -21,6 +21,7 @@ import { spawnUnit } from './simulation';
 import { soundManager } from './sound';
 import { applyFormation } from './formations';
 import { createLaserParticles, createEnergyPulse } from './visualEffects';
+import { sendMoveCommand, sendAbilityCommand, sendBaseMoveCommand, sendBaseLaserCommand, sendSpawnCommand } from './multiplayerGame';
 
 interface TouchState {
   startPos: { x: number; y: number };
@@ -309,6 +310,13 @@ function handleLaserSwipe(
   soundManager.playLaserFire();
   fireLaser(state, base, swipeDir);
   base.laserCooldown = LASER_COOLDOWN;
+  
+  // Send laser command to multiplayer backend for online games
+  if (state.vsMode === 'online' && state.multiplayerManager) {
+    sendBaseLaserCommand(state.multiplayerManager, base.id, swipeDir).catch(err => 
+      console.warn('Failed to send laser command:', err)
+    );
+  }
 }
 
 function fireLaser(state: GameState, base: Base, direction: { x: number; y: number }): void {
@@ -379,6 +387,11 @@ function handleBaseSwipe(state: GameState, base: Base, swipe: { x: number; y: nu
     const success = spawnUnit(state, playerIndex, spawnType, base.position, rallyPos);
     if (!success) {
       soundManager.playError();
+    } else if (state.vsMode === 'online' && state.multiplayerManager) {
+      // Send spawn command to multiplayer backend
+      sendSpawnCommand(state.multiplayerManager, playerIndex, spawnType, base.id, rallyPos).catch(err => 
+        console.warn('Failed to send spawn command:', err)
+      );
     }
   }
 }
@@ -455,6 +468,13 @@ function handleTap(state: GameState, screenPos: { x: number; y: number }, canvas
   if (selectedBase) {
     selectedBase.movementTarget = worldPos;
     soundManager.playUnitMove();
+    
+    // Send base move command to multiplayer backend for online games
+    if (state.vsMode === 'online' && state.multiplayerManager) {
+      sendBaseMoveCommand(state.multiplayerManager, selectedBase.id, worldPos).catch(err => 
+        console.warn('Failed to send base move command:', err)
+      );
+    }
     return;
   }
 
@@ -547,6 +567,8 @@ function updateAbilityCastPreview(state: GameState, screenDx: number, screenDy: 
 // Helper function to execute ability drag from vector-based input
 function handleVectorBasedAbilityDrag(state: GameState, dragVector: { x: number; y: number }): void {
   const clampedVector = clampVectorToRange(dragVector, ABILITY_MAX_RANGE);
+  
+  const selectedUnitsArray = state.units.filter(unit => state.selectedUnits.has(unit.id));
 
   state.units.forEach((unit) => {
     if (!state.selectedUnits.has(unit.id)) return;
@@ -565,6 +587,17 @@ function handleVectorBasedAbilityDrag(state: GameState, dragVector: { x: number;
 
     unit.commandQueue.push(abilityNode);
   });
+  
+  // Send command to multiplayer backend for online games
+  if (state.vsMode === 'online' && state.multiplayerManager && selectedUnitsArray.length > 0) {
+    const unitIds = selectedUnitsArray.map(u => u.id);
+    const firstUnit = selectedUnitsArray[0];
+    const startPosition = getCommandOrigin(firstUnit);
+    const abilityPos = add(startPosition, clampedVector);
+    sendAbilityCommand(state.multiplayerManager, unitIds, abilityPos, clampedVector).catch(err => 
+      console.warn('Failed to send ability command:', err)
+    );
+  }
   
   // Clear the ability cast preview after executing the command
   delete state.abilityCastPreview;
@@ -619,6 +652,14 @@ function addMovementCommand(state: GameState, worldPos: { x: number; y: number }
         unit.commandQueue.push({ type: 'move', position: worldPos });
       }
     });
+  }
+  
+  // Send command to multiplayer backend for online games
+  if (state.vsMode === 'online' && state.multiplayerManager) {
+    const unitIds = selectedUnitsArray.map(u => u.id);
+    sendMoveCommand(state.multiplayerManager, unitIds, worldPos, false).catch(err => 
+      console.warn('Failed to send move command:', err)
+    );
   }
 }
 

@@ -1,0 +1,272 @@
+/**
+ * Multiplayer game integration - handles command synchronization between players
+ */
+
+import { GameState, CommandNode, Unit } from './types';
+import { MultiplayerManager, GameCommand } from './multiplayer';
+import { spawnUnit } from './simulation';
+
+export interface MultiplayerSync {
+  lastCommandCheck: number;
+  commandBuffer: GameCommand[];
+}
+
+/**
+ * Initialize multiplayer synchronization state for a game
+ */
+export function initializeMultiplayerSync(): MultiplayerSync {
+  return {
+    lastCommandCheck: Date.now(),
+    commandBuffer: [],
+  };
+}
+
+/**
+ * Send a spawn command to the multiplayer backend
+ */
+export async function sendSpawnCommand(
+  manager: MultiplayerManager,
+  playerIndex: number,
+  unitType: string,
+  baseId: string,
+  rallyPosition: { x: number; y: number }
+): Promise<void> {
+  await manager.sendCommand({
+    commands: [{
+      type: 'spawn',
+      baseId,
+      spawnType: unitType,
+      position: rallyPosition,
+    }],
+  });
+}
+
+/**
+ * Send movement commands for selected units
+ */
+export async function sendMoveCommand(
+  manager: MultiplayerManager,
+  unitIds: string[],
+  position: { x: number; y: number },
+  isAttackMove: boolean = false
+): Promise<void> {
+  await manager.sendCommand({
+    commands: [{
+      type: isAttackMove ? 'ability' : 'move',
+      unitIds,
+      position,
+    }],
+  });
+}
+
+/**
+ * Send ability command for selected units
+ */
+export async function sendAbilityCommand(
+  manager: MultiplayerManager,
+  unitIds: string[],
+  position: { x: number; y: number },
+  direction: { x: number; y: number }
+): Promise<void> {
+  await manager.sendCommand({
+    commands: [{
+      type: 'ability',
+      unitIds,
+      position,
+      direction,
+    }],
+  });
+}
+
+/**
+ * Send base movement command
+ */
+export async function sendBaseMoveCommand(
+  manager: MultiplayerManager,
+  baseId: string,
+  position: { x: number; y: number }
+): Promise<void> {
+  await manager.sendCommand({
+    commands: [{
+      type: 'baseMove',
+      baseId,
+      position,
+    }],
+  });
+}
+
+/**
+ * Send base laser command
+ */
+export async function sendBaseLaserCommand(
+  manager: MultiplayerManager,
+  baseId: string,
+  direction: { x: number; y: number }
+): Promise<void> {
+  await manager.sendCommand({
+    commands: [{
+      type: 'baseLaser',
+      baseId,
+      direction,
+    }],
+  });
+}
+
+/**
+ * Send unit selection command (for synchronization)
+ */
+export async function sendSelectCommand(
+  manager: MultiplayerManager,
+  unitIds: string[]
+): Promise<void> {
+  await manager.sendCommand({
+    commands: [{
+      type: 'select',
+      unitIds,
+    }],
+  });
+}
+
+/**
+ * Process received commands from opponent and apply them to game state
+ */
+export function applyOpponentCommands(
+  state: GameState,
+  commands: GameCommand[],
+  opponentIndex: number
+): void {
+  for (const cmd of commands) {
+    for (const command of cmd.commands) {
+      try {
+        switch (command.type) {
+          case 'spawn':
+            if (command.baseId && command.spawnType && command.position) {
+              const base = state.bases.find(b => b.id === command.baseId && b.owner === opponentIndex);
+              if (base) {
+                spawnUnit(state, opponentIndex, command.spawnType as any, base.position, command.position);
+              }
+            }
+            break;
+
+          case 'move':
+            if (command.unitIds && command.position) {
+              command.unitIds.forEach(unitId => {
+                const unit = state.units.find(u => u.id === unitId && u.owner === opponentIndex);
+                if (unit) {
+                  unit.commandQueue = [{ type: 'move', position: command.position! }];
+                }
+              });
+            }
+            break;
+
+          case 'ability':
+            if (command.unitIds && command.position && command.direction) {
+              command.unitIds.forEach(unitId => {
+                const unit = state.units.find(u => u.id === unitId && u.owner === opponentIndex);
+                if (unit) {
+                  const abilityNode: CommandNode = {
+                    type: 'ability',
+                    position: command.position!,
+                    direction: command.direction!,
+                  };
+                  unit.commandQueue = [abilityNode];
+                }
+              });
+            }
+            break;
+
+          case 'baseMove':
+            if (command.baseId && command.position) {
+              const base = state.bases.find(b => b.id === command.baseId && b.owner === opponentIndex);
+              if (base) {
+                base.movementTarget = command.position;
+              }
+            }
+            break;
+
+          case 'baseLaser':
+            if (command.baseId && command.direction) {
+              const base = state.bases.find(b => b.id === command.baseId && b.owner === opponentIndex);
+              if (base && base.laserCooldown === 0) {
+                // Import fireLaser function from input.ts or implement laser logic here
+                // For now, we'll set up the laser beam visual
+                base.laserBeam = {
+                  endTime: Date.now() + 500,
+                  direction: command.direction,
+                };
+                base.laserCooldown = 10; // LASER_COOLDOWN
+              }
+            }
+            break;
+
+          case 'select':
+            // Selection commands are informational and don't need to be applied
+            // They can be used for UI feedback if needed in the future
+            break;
+        }
+      } catch (error) {
+        console.warn('Error applying opponent command:', error, command);
+      }
+    }
+  }
+}
+
+/**
+ * Update multiplayer synchronization - fetch and apply opponent commands
+ * This should be called in the game loop for online games
+ */
+export async function updateMultiplayerSync(
+  state: GameState,
+  manager: MultiplayerManager,
+  sync: MultiplayerSync,
+  localPlayerIndex: number
+): Promise<void> {
+  const now = Date.now();
+  
+  // Check for new commands every 100ms
+  if (now - sync.lastCommandCheck < 100) {
+    return;
+  }
+  
+  try {
+    const newCommands = await manager.getCommands(sync.lastCommandCheck);
+    
+    if (newCommands.length > 0) {
+      // Filter out our own commands (we already applied them locally)
+      const opponentCommands = newCommands.filter(cmd => cmd.playerId !== manager.getPlayerId());
+      
+      if (opponentCommands.length > 0) {
+        const opponentIndex = localPlayerIndex === 0 ? 1 : 0;
+        applyOpponentCommands(state, opponentCommands, opponentIndex);
+      }
+    }
+    
+    sync.lastCommandCheck = now;
+  } catch (error) {
+    console.warn('Error fetching opponent commands:', error);
+  }
+}
+
+/**
+ * Synchronize full game state (host only)
+ * This ensures both players stay in sync even with packet loss
+ */
+export async function syncGameState(
+  state: GameState,
+  manager: MultiplayerManager,
+  isHost: boolean
+): Promise<void> {
+  if (!isHost) return;
+  
+  try {
+    await manager.syncGameState({
+      units: state.units,
+      bases: state.bases,
+      players: state.players,
+      elapsedTime: state.elapsedTime,
+      winner: state.winner,
+    });
+  } catch (error) {
+    console.warn('Error syncing game state:', error);
+  }
+}

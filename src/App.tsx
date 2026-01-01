@@ -28,6 +28,7 @@ import { MultiplayerManager, LobbyData } from './lib/multiplayer';
 import { createRealtimeStore } from './lib/realtimeStore';
 import { PlayerStatistics, MatchStats, createEmptyStatistics, updateStatistics, calculateMMRChange } from './lib/statistics';
 import { soundManager } from './lib/sound';
+import { MultiplayerSync, initializeMultiplayerSync, updateMultiplayerSync } from './lib/multiplayerGame';
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -36,6 +37,7 @@ function App() {
   const animationFrameRef = useRef<number | undefined>(undefined);
   const lastTimeRef = useRef<number>(Date.now());
   const multiplayerManagerRef = useRef<MultiplayerManager | null>(null);
+  const multiplayerSyncRef = useRef<MultiplayerSync | null>(null);
   const lobbyCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [multiplayerLobbies, setMultiplayerLobbies] = useState<LobbyData[]>([]);
   const [currentLobby, setCurrentLobby] = useState<LobbyData | null>(null);
@@ -212,6 +214,18 @@ function App() {
 
         if (!gameStateRef.current.matchStartAnimation || (gameStateRef.current.matchStartAnimation.phase === 'go')) {
           updateGame(gameStateRef.current, deltaTime);
+          
+          // Update multiplayer synchronization for online games
+          if (gameStateRef.current.vsMode === 'online' && multiplayerManagerRef.current && multiplayerSyncRef.current) {
+            const localPlayerIndex = multiplayerManagerRef.current.getIsHost() ? 0 : 1;
+            updateMultiplayerSync(
+              gameStateRef.current,
+              multiplayerManagerRef.current,
+              multiplayerSyncRef.current,
+              localPlayerIndex
+            ).catch(err => console.warn('Multiplayer sync error:', err));
+          }
+          
           updateAI(gameStateRef.current, deltaTime);
           
           // Update camera and visual effects
@@ -423,6 +437,13 @@ function App() {
     if (!currentLobby || !canvasRef.current) return;
     const isHost = multiplayerManagerRef.current?.getIsHost() || false;
     gameStateRef.current = createOnlineCountdownState(currentLobby, isHost, canvasRef.current);
+    
+    // Set multiplayer manager in game state for input handlers to use
+    gameStateRef.current.multiplayerManager = multiplayerManagerRef.current;
+    
+    // Initialize multiplayer synchronization
+    multiplayerSyncRef.current = initializeMultiplayerSync();
+    
     setRenderTrigger(prev => prev + 1);
   };
 
