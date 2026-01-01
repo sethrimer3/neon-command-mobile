@@ -13,6 +13,7 @@ import {
   UNIT_SIZE_METERS,
   Particle,
   Projectile,
+  FACTION_DEFINITIONS,
 } from './types';
 import { distance, normalize, scale, add, subtract, generateId } from './gameUtils';
 import { checkObstacleCollision } from './maps';
@@ -618,19 +619,25 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
             const enemyBases = state.bases.filter((b) => b.owner !== projectile.owner);
             for (const base of enemyBases) {
               if (distance(base.position, projectile.position) < BASE_SIZE_METERS / 2) {
-                base.hp -= projectile.damage;
-                createHitSparks(state, projectile.position, projectile.color, 8);
-                
-                if (state.matchStats) {
-                  if (base.owner === 0) {
-                    state.matchStats.damageToPlayerBase += projectile.damage;
-                  } else {
-                    state.matchStats.damageToEnemyBase += projectile.damage;
-                  }
+                // Check if base has active shield (mobile faction)
+                if (!base.shieldActive || Date.now() >= base.shieldActive.endTime) {
+                  base.hp -= projectile.damage;
+                  createHitSparks(state, projectile.position, projectile.color, 8);
                   
-                  if (projectile.owner === 0) {
-                    state.matchStats.damageDealtByPlayer += projectile.damage;
+                  if (state.matchStats) {
+                    if (base.owner === 0) {
+                      state.matchStats.damageToPlayerBase += projectile.damage;
+                    } else {
+                      state.matchStats.damageToEnemyBase += projectile.damage;
+                    }
+                    
+                    if (projectile.owner === 0) {
+                      state.matchStats.damageDealtByPlayer += projectile.damage;
+                    }
                   }
+                } else {
+                  // Shield blocked the damage - create visual feedback
+                  createHitSparks(state, projectile.position, state.players[base.owner].color, 12);
                 }
                 break; // Only hit one base
               }
@@ -946,11 +953,14 @@ function updateAbilityEffects(unit: Unit, state: GameState, deltaTime: number): 
       const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
       enemyBases.forEach((base) => {
         if (distance(base.position, unit.bombardmentActive!.targetPos) <= 3) {
-          const damage = 80 * unit.damageMultiplier * deltaTime;
-          base.hp -= damage;
-          
-          if (state.matchStats && unit.owner === 0) {
-            state.matchStats.damageDealtByPlayer += damage;
+          // Check if base has active shield (mobile faction)
+          if (!base.shieldActive || Date.now() >= base.shieldActive.endTime) {
+            const damage = 80 * unit.damageMultiplier * deltaTime;
+            base.hp -= damage;
+            
+            if (state.matchStats && unit.owner === 0) {
+              state.matchStats.damageDealtByPlayer += damage;
+            }
           }
         }
       });
@@ -991,17 +1001,38 @@ function updateBases(state: GameState, deltaTime: number): void {
       base.laserCooldown = Math.max(0, base.laserCooldown - deltaTime);
     }
 
-    if (!base.movementTarget) return;
+    if (!base.movementTarget) {
+      // Deactivate shield when not moving (for mobile faction)
+      if (base.shieldActive) {
+        base.shieldActive = undefined;
+      }
+      return;
+    }
 
     const dist = distance(base.position, base.movementTarget);
     if (dist < 0.1) {
       base.movementTarget = null;
+      // Deactivate shield when movement completes
+      if (base.shieldActive) {
+        base.shieldActive = undefined;
+      }
       return;
     }
 
+    // Activate shield for mobile faction when moving
+    const factionDef = FACTION_DEFINITIONS[base.faction];
+    if (factionDef.ability === 'shield' && !base.shieldActive) {
+      base.shieldActive = { endTime: Date.now() + 10000 }; // Shield lasts while moving
+    }
+
     const direction = normalize(subtract(base.movementTarget, base.position));
-    const movement = scale(direction, 1.0 * deltaTime);
+    const movement = scale(direction, factionDef.baseMoveSpeed * deltaTime);
     base.position = add(base.position, movement);
+    
+    // Update shield endTime to keep it active while moving
+    if (base.shieldActive) {
+      base.shieldActive.endTime = Date.now() + 100; // Keep extending while moving
+    }
   });
 }
 
@@ -1334,27 +1365,33 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
       };
     } else {
       const targetBase = target as Base;
-      const prevHp = targetBase.hp;
-      targetBase.hp -= damage;
-      
-      // Create impact effect and screen shake for base damage
-      if (prevHp > 0 && targetBase.hp < prevHp) {
-        const color = state.players[unit.owner].color;
-        createImpactEffect(state, targetBase.position, color, 2.5);
-        // Stronger shake for base damage (scales with damage)
-        createScreenShake(state, Math.min(damage / SCREEN_SHAKE_BASE_DAMAGE, SCREEN_SHAKE_MAX_INTENSITY), SCREEN_SHAKE_DURATION_MEDIUM);
-      }
-      
-      if (state.matchStats) {
-        if (targetBase.owner === 0) {
-          state.matchStats.damageToPlayerBase += damage;
-        } else {
-          state.matchStats.damageToEnemyBase += damage;
+      // Check if base has active shield (mobile faction)
+      if (!targetBase.shieldActive || Date.now() >= targetBase.shieldActive.endTime) {
+        const prevHp = targetBase.hp;
+        targetBase.hp -= damage;
+        
+        // Create impact effect and screen shake for base damage
+        if (prevHp > 0 && targetBase.hp < prevHp) {
+          const color = state.players[unit.owner].color;
+          createImpactEffect(state, targetBase.position, color, 2.5);
+          // Stronger shake for base damage (scales with damage)
+          createScreenShake(state, Math.min(damage / SCREEN_SHAKE_BASE_DAMAGE, SCREEN_SHAKE_MAX_INTENSITY), SCREEN_SHAKE_DURATION_MEDIUM);
         }
         
-        if (unit.owner === 0) {
-          state.matchStats.damageDealtByPlayer += damage;
+        if (state.matchStats) {
+          if (targetBase.owner === 0) {
+            state.matchStats.damageToPlayerBase += damage;
+          } else {
+            state.matchStats.damageToEnemyBase += damage;
+          }
+          
+          if (unit.owner === 0) {
+            state.matchStats.damageDealtByPlayer += damage;
+          }
         }
+      } else {
+        // Shield blocked the damage - create visual feedback
+        createHitSparks(state, targetBase.position, state.players[targetBase.owner].color, 12);
       }
       
       // Create melee attack visual effect

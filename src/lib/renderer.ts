@@ -9,6 +9,7 @@ import {
   Projectile,
   LASER_RANGE,
   ABILITY_MAX_RANGE,
+  FACTION_DEFINITIONS,
 } from './types';
 import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract } from './gameUtils';
 import { Obstacle } from './maps';
@@ -529,26 +530,69 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
     // Add pulsing glow effect
     const time = Date.now() / 1000;
     const pulseIntensity = Math.sin(time * 1.5) * 0.3 + 0.7; // Pulse between 0.4 and 1.0
+    
+    // Draw shield effect for mobile faction when shield is active
+    if (base.shieldActive && Date.now() < base.shieldActive.endTime) {
+      const shieldRadius = size * 0.8;
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.6;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, shieldRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 0.2;
+      ctx.fill();
+      ctx.restore();
+    }
 
+    const factionDef = FACTION_DEFINITIONS[base.faction];
+    
     if (base.isSelected) {
       ctx.save();
       ctx.shadowColor = color;
       ctx.shadowBlur = 20 * pulseIntensity;
-      ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+      if (factionDef.baseShape === 'circle') {
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+      }
       ctx.restore();
     } else {
       // Add subtle pulsing glow even when not selected
       ctx.save();
       ctx.shadowColor = color;
       ctx.shadowBlur = 10 * pulseIntensity;
-      ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+      if (factionDef.baseShape === 'circle') {
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+      }
       ctx.restore();
     }
 
     ctx.globalAlpha = 0.3;
-    ctx.fillRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+    if (factionDef.baseShape === 'circle') {
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+    }
     ctx.globalAlpha = 1.0;
-    ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+    if (factionDef.baseShape === 'circle') {
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+    }
 
     if (state.mode === 'game' && (!state.matchStartAnimation || state.matchStartAnimation.phase === 'go')) {
       const doorSize = size / 3;

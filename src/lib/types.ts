@@ -87,6 +87,33 @@ export interface Unit {
   targetRotation?: number; // Target rotation angle for smooth interpolation
 }
 
+export type FactionType = 'standard' | 'mobile';
+
+export interface FactionDefinition {
+  name: string;
+  baseMoveSpeed: number;
+  baseShape: 'square' | 'circle';
+  ability: 'laser' | 'shield';
+  availableUnits: UnitType[];
+}
+
+export const FACTION_DEFINITIONS: Record<FactionType, FactionDefinition> = {
+  standard: {
+    name: 'Standard Force',
+    baseMoveSpeed: 1.5,
+    baseShape: 'square',
+    ability: 'laser',
+    availableUnits: ['marine', 'warrior', 'tank', 'scout', 'artillery', 'medic', 'interceptor'],
+  },
+  mobile: {
+    name: 'Mobile Force',
+    baseMoveSpeed: 3.0,
+    baseShape: 'circle',
+    ability: 'shield',
+    availableUnits: ['snaker'],
+  },
+};
+
 export interface Base {
   id: string;
   owner: number;
@@ -97,6 +124,8 @@ export interface Base {
   isSelected: boolean;
   laserCooldown: number;
   laserBeam?: { endTime: number; direction: Vector2 }; // Visual effect for laser
+  faction: FactionType;
+  shieldActive?: { endTime: number }; // Shield ability for mobile faction
 }
 
 export type UnitType = 'marine' | 'warrior' | 'snaker' | 'tank' | 'scout' | 'artillery' | 'medic' | 'interceptor';
@@ -254,6 +283,8 @@ export interface GameState {
     unitSlots: Record<'left' | 'up' | 'down' | 'right', UnitType>;
     selectedMap: string;
     showNumericHP: boolean;
+    playerFaction: FactionType;
+    enemyFaction: FactionType;
   };
 
   surrenderClicks: number;
