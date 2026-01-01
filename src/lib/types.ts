@@ -87,6 +87,9 @@ export interface Unit {
   targetRotation?: number; // Target rotation angle for smooth interpolation
   velocity?: Vector2; // Current velocity for smooth acceleration/deceleration
   currentSpeed?: number; // Current movement speed for acceleration/deceleration
+  stuckTimer?: number; // Time in seconds that unit has been stuck (unable to move with commands queued)
+  lastPosition?: Vector2; // Last recorded position for stuck detection
+  queueFadeStartTime?: number; // Timestamp when queue fade animation started (for cancelled commands)
 }
 
 export type FactionType = 'radiant' | 'aurum' | 'solari';
