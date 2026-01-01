@@ -23,7 +23,7 @@ import { LevelSelectionScreen } from './components/LevelSelectionScreen';
 import { OnlineModeScreen } from './components/OnlineModeScreen';
 import { MultiplayerLobbyScreen } from './components/MultiplayerLobbyScreen';
 import { StatisticsScreen } from './components/StatisticsScreen';
-import { getMapById, getValidBasePositions } from './lib/maps';
+import { getMapById, getValidBasePositions, createBoundaryObstacles } from './lib/maps';
 import { MultiplayerManager, LobbyData } from './lib/multiplayer';
 import { PlayerStatistics, MatchStats, createEmptyStatistics, updateStatistics, calculateMMRChange } from './lib/statistics';
 import { soundManager } from './lib/sound';
@@ -1235,7 +1235,12 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
   const arenaHeight = window.innerHeight / 20;
 
   const selectedMapDef = getMapById(settings.selectedMap) || getMapById('open')!;
-  const obstacles = selectedMapDef.obstacles;
+  const mapObstacles = selectedMapDef.obstacles;
+  
+  // Add boundary obstacles to prevent units from getting stuck at screen edges
+  const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
+  const obstacles = [...mapObstacles, ...boundaryObstacles];
+  
   const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
   
   // Generate topography lines and starfield for this level
@@ -1309,7 +1314,12 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
   const arenaHeight = window.innerHeight / 20;
 
   const selectedMapDef = getMapById(settings.selectedMap) || getMapById('open')!;
-  const obstacles = selectedMapDef.obstacles;
+  const mapObstacles = selectedMapDef.obstacles;
+  
+  // Add boundary obstacles to prevent units from getting stuck at screen edges
+  const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
+  const obstacles = [...mapObstacles, ...boundaryObstacles];
+  
   const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
 
   return {
@@ -1368,7 +1378,12 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
   const arenaHeight = window.innerHeight / 20;
 
   const selectedMapDef = getMapById(lobby.mapId) || getMapById('open')!;
-  const obstacles = selectedMapDef.obstacles;
+  const mapObstacles = selectedMapDef.obstacles;
+  
+  // Add boundary obstacles to prevent units from getting stuck at screen edges
+  const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
+  const obstacles = [...mapObstacles, ...boundaryObstacles];
+  
   const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
 
   return {
@@ -1434,7 +1449,12 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
   const arenaHeight = window.innerHeight / 20;
 
   const selectedMapDef = getMapById(lobby.mapId) || getMapById('open')!;
-  const obstacles = selectedMapDef.obstacles;
+  const mapObstacles = selectedMapDef.obstacles;
+  
+  // Add boundary obstacles to prevent units from getting stuck at screen edges
+  const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
+  const obstacles = [...mapObstacles, ...boundaryObstacles];
+  
   const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
   
   // Generate topography lines and starfield for this level
