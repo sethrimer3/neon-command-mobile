@@ -139,14 +139,12 @@ function checkUnitCollisionWithSliding(
   // Check unit collisions
   let hasEnemyCollision = false;
   let hasFriendlyCollision = false;
-  const collidingUnits: Unit[] = [];
   
   for (const otherUnit of allUnits) {
     if (otherUnit.id === unit.id) continue;
     
     const dist = distance(desiredPosition, otherUnit.position);
     if (dist < collisionRadius) {
-      collidingUnits.push(otherUnit);
       if (otherUnit.owner === unit.owner) {
         hasFriendlyCollision = true;
       } else {
@@ -169,9 +167,6 @@ function checkUnitCollisionWithSliding(
     const perpendicular2 = { x: movementDirection.y, y: -movementDirection.x };
     const slideDistance = 0.3; // Small offset to slide around friendly unit
     
-    // Calculate movement magnitude
-    const moveMagnitude = distance(unit.position, desiredPosition);
-    
     // Try sliding to the right
     const slidePos1 = add(desiredPosition, scale(perpendicular1, slideDistance));
     if (!checkObstacleCollision(slidePos1, UNIT_SIZE_METERS / 2, obstacles) &&
@@ -192,6 +187,14 @@ function checkUnitCollisionWithSliding(
   
   // No collision
   return { blocked: false };
+}
+
+// Helper function to mark unit's queue for cancellation due to being stuck
+function markQueueForCancellation(unit: Unit): void {
+  // Start fade animation for cancelled commands
+  if (!unit.queueFadeStartTime) {
+    unit.queueFadeStartTime = Date.now();
+  }
 }
 
 // Create particles for a unit
@@ -820,6 +823,19 @@ function updateIncome(state: GameState, deltaTime: number): void {
 
 function updateUnits(state: GameState, deltaTime: number): void {
   state.units.forEach((unit) => {
+    // Clean up faded command queues that have been marked for cancellation
+    if (unit.queueFadeStartTime) {
+      const fadeElapsed = (Date.now() - unit.queueFadeStartTime) / 1000;
+      if (fadeElapsed >= QUEUE_FADE_DURATION) {
+        // Fade complete - clear the queue and reset stuck state
+        unit.commandQueue = [];
+        unit.stuckTimer = 0;
+        unit.lastPosition = undefined;
+        unit.currentSpeed = 0;
+        unit.queueFadeStartTime = undefined;
+      }
+    }
+    
     if (unit.abilityCooldown > 0) {
       unit.abilityCooldown = Math.max(0, unit.abilityCooldown - deltaTime);
     }
@@ -918,16 +934,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
             
             // If stuck for too long, cancel command queue
             if (unit.stuckTimer >= STUCK_TIMEOUT) {
-              // Start fade animation for cancelled commands
-              unit.queueFadeStartTime = Date.now();
-              
-              // Clear command queue after a short delay (let fade start first)
-              setTimeout(() => {
-                unit.commandQueue = [];
-                unit.stuckTimer = 0;
-                unit.lastPosition = undefined;
-                unit.currentSpeed = 0;
-              }, 100); // Small delay to ensure fade animation starts
+              markQueueForCancellation(unit);
             }
           } else {
             // Unit moved enough - reset stuck timer
@@ -1016,13 +1023,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
             unit.stuckTimer = (unit.stuckTimer || 0) + deltaTime;
             
             if (unit.stuckTimer >= STUCK_TIMEOUT) {
-              unit.queueFadeStartTime = Date.now();
-              setTimeout(() => {
-                unit.commandQueue = [];
-                unit.stuckTimer = 0;
-                unit.lastPosition = undefined;
-                unit.currentSpeed = 0;
-              }, 100);
+              markQueueForCancellation(unit);
             }
           } else {
             unit.stuckTimer = 0;
@@ -1116,13 +1117,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
             unit.stuckTimer = (unit.stuckTimer || 0) + deltaTime;
             
             if (unit.stuckTimer >= STUCK_TIMEOUT) {
-              unit.queueFadeStartTime = Date.now();
-              setTimeout(() => {
-                unit.commandQueue = [];
-                unit.stuckTimer = 0;
-                unit.lastPosition = undefined;
-                unit.currentSpeed = 0;
-              }, 100);
+              markQueueForCancellation(unit);
             }
           } else {
             unit.stuckTimer = 0;
