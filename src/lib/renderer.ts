@@ -8,6 +8,7 @@ import {
   UNIT_DEFINITIONS,
   Projectile,
   LASER_RANGE,
+  ABILITY_MAX_RANGE,
 } from './types';
 import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract } from './gameUtils';
 import { Obstacle } from './maps';
@@ -42,6 +43,21 @@ function getTeamHighlightColor(owner: number): string {
   return owner === 0 
     ? 'oklch(0.95 0.15 240)' // Player color highlight
     : 'oklch(0.95 0.15 25)'; // Enemy color highlight
+}
+
+// Helper function to add alpha to color
+function addAlphaToColor(color: string, alpha: number): string {
+  // Handle OKLCH colors with optional alpha
+  if (color.includes(' / ')) {
+    // Replace existing alpha
+    return color.replace(/ \/ [0-9.]+\)/, ` / ${alpha})`);
+  } else if (color.endsWith(')')) {
+    // Add alpha before closing parenthesis for OKLCH/RGB colors
+    return color.slice(0, -1) + ` / ${alpha})`;
+  }
+  // For other color formats, return as-is and let canvas handle it with globalAlpha
+  console.warn('Unexpected color format for alpha manipulation:', color);
+  return color;
 }
 
 // Helper function to check if an object is visible on screen
@@ -92,6 +108,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
       drawImpactEffects(ctx, state);
       drawDamageNumbers(ctx, state);
       drawSelectionIndicators(ctx, state);
+      drawAbilityRangeIndicators(ctx, state);
       if (selectionRect) {
         drawSelectionRect(ctx, selectionRect, state);
       }
@@ -109,6 +126,24 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
   // Restore context if shake was applied
   if (state.screenShake && (Date.now() - state.screenShake.startTime) / 1000 < state.screenShake.duration) {
     ctx.restore();
+  }
+  
+  // Draw screen flash effect on top of everything
+  if (state.screenFlash) {
+    const elapsed = (Date.now() - state.screenFlash.startTime) / 1000;
+    if (elapsed < state.screenFlash.duration) {
+      const progress = elapsed / state.screenFlash.duration;
+      const alpha = state.screenFlash.intensity * (1 - progress); // Fade out
+      
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = state.screenFlash.color;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    } else {
+      // Flash expired
+      delete state.screenFlash;
+    }
   }
 }
 
@@ -388,6 +423,55 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
         ctx.globalAlpha = 0.7;
 
         lastPos = node.position;
+      } else if (node.type === 'patrol') {
+        // Draw patrol path with bidirectional arrow
+        const screenPos = positionToPixels(node.position);
+        const returnScreenPos = positionToPixels(node.returnPosition);
+        
+        // Draw bidirectional dashed path
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.5;
+        ctx.setLineDash([8, 4]);
+        ctx.lineDashOffset = time * 20; // Animated dashes
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 10;
+        
+        ctx.beginPath();
+        ctx.moveTo(screenPos.x, screenPos.y);
+        ctx.lineTo(returnScreenPos.x, returnScreenPos.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.shadowBlur = 0;
+        
+        // Draw patrol markers at both ends with pulsing
+        const pulse = Math.sin(time * 2.5) * 0.3 + 0.7;
+        ctx.globalAlpha = 0.7 * pulse;
+        ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 12;
+        
+        // Draw diamond shapes for patrol points
+        const drawPatrolMarker = (x: number, y: number) => {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.beginPath();
+          ctx.moveTo(0, -6);
+          ctx.lineTo(6, 0);
+          ctx.lineTo(0, 6);
+          ctx.lineTo(-6, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        };
+        
+        drawPatrolMarker(screenPos.x, screenPos.y);
+        drawPatrolMarker(returnScreenPos.x, returnScreenPos.y);
+        
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 0.7;
+        
+        lastPos = node.position;
       }
     });
 
@@ -623,22 +707,42 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     
     ctx.save();
     
-    // Draw energy trail with gradient and glow
-    const trailLength = 12;
+    // Calculate age for pulsing effect
+    const age = (Date.now() - projectile.createdAt) / 1000;
+    const pulseIntensity = 0.8 + Math.sin(age * 30) * 0.2; // Fast pulse
+    
+    // Draw outer glow layer
+    const trailLength = 18;
     const direction = normalize(projectile.velocity);
     const trailStart = subtract(projectile.position, scale(direction, trailLength / 20));
     const trailScreenPos = positionToPixels(trailStart);
     
-    // Create gradient for trail
+    // Create multi-layer gradient for trail
+    const outerGradient = ctx.createLinearGradient(trailScreenPos.x, trailScreenPos.y, screenPos.x, screenPos.y);
+    outerGradient.addColorStop(0, 'transparent');
+    outerGradient.addColorStop(0.5, addAlphaToColor(projectile.color, 0.3));
+    outerGradient.addColorStop(1, addAlphaToColor(projectile.color, 0.6));
+    
+    ctx.strokeStyle = outerGradient;
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = projectile.color;
+    ctx.shadowBlur = 25 * pulseIntensity;
+    
+    ctx.beginPath();
+    ctx.moveTo(trailScreenPos.x, trailScreenPos.y);
+    ctx.lineTo(screenPos.x, screenPos.y);
+    ctx.stroke();
+    
+    // Draw energy trail with gradient and glow (inner layer)
     const gradient = ctx.createLinearGradient(trailScreenPos.x, trailScreenPos.y, screenPos.x, screenPos.y);
     gradient.addColorStop(0, 'transparent');
+    gradient.addColorStop(0.3, addAlphaToColor(projectile.color, 0.5));
     gradient.addColorStop(1, projectile.color);
     
     ctx.strokeStyle = gradient;
     ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.shadowColor = projectile.color;
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = 18 * pulseIntensity;
     
     ctx.beginPath();
     ctx.moveTo(trailScreenPos.x, trailScreenPos.y);
@@ -647,16 +751,16 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     
     // Draw projectile core with enhanced glow
     ctx.fillStyle = projectile.color;
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = 20 * pulseIntensity;
     ctx.beginPath();
-    ctx.arc(screenPos.x, screenPos.y, 4, 0, Math.PI * 2);
+    ctx.arc(screenPos.x, screenPos.y, 5, 0, Math.PI * 2);
     ctx.fill();
     
     // Draw bright center with appropriate team color
     ctx.fillStyle = getTeamHighlightColor(projectile.owner);
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 25 * pulseIntensity;
     ctx.beginPath();
-    ctx.arc(screenPos.x, screenPos.y, 2, 0, Math.PI * 2);
+    ctx.arc(screenPos.x, screenPos.y, 2.5, 0, Math.PI * 2);
     ctx.fill();
     
     ctx.restore();
@@ -668,7 +772,10 @@ function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos:
   const barHeight = 4;
   const barX = screenPos.x - barWidth / 2;
   const barY = screenPos.y - 18;
-  const hpPercent = unit.hp / unit.maxHp;
+  
+  // Use display HP for smooth interpolation
+  const displayHp = unit.displayHp !== undefined ? unit.displayHp : unit.hp;
+  const hpPercent = displayHp / unit.maxHp;
   
   ctx.save();
   
@@ -708,14 +815,25 @@ function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos:
 }
 
 function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
+  const time = Date.now() / 1000;
+  
   state.units.forEach((unit) => {
     // Skip units that are off-screen for performance
     if (!isOnScreen(unit.position, ctx.canvas, OFFSCREEN_CULLING_MARGIN)) {
       return;
     }
     
-    const screenPos = positionToPixels(unit.position);
+    let screenPos = positionToPixels(unit.position);
     const color = state.players[unit.owner].color;
+    
+    // Add subtle idle animation for selected units with no commands
+    const isSelected = state.selectedUnits.has(unit.id);
+    const isIdle = unit.commandQueue.length === 0;
+    if (isSelected && isIdle) {
+      // Gentle bobbing motion - 2 pixels up and down
+      const bobOffset = Math.sin(time * 2 + unit.position.x + unit.position.y) * 2;
+      screenPos = { x: screenPos.x, y: screenPos.y + bobOffset };
+    }
     
     // Calculate distance from camera center for LOD
     const cameraCenter = { x: ctx.canvas.width / 2, y: ctx.canvas.height / 2 };
@@ -1333,14 +1451,81 @@ function drawSelectionIndicators(ctx: CanvasRenderingContext2D, state: GameState
   });
 }
 
+function drawAbilityRangeIndicators(ctx: CanvasRenderingContext2D, state: GameState): void {
+  // Only draw for selected player units
+  const selectedPlayerUnits = Array.from(state.selectedUnits)
+    .map(id => state.units.find(u => u.id === id))
+    .filter(u => u && u.owner === 0);
+
+  if (selectedPlayerUnits.length === 0) return;
+
+  const time = Date.now() / 1000;
+
+  selectedPlayerUnits.forEach(unit => {
+    if (!unit) return;
+
+    const def = UNIT_DEFINITIONS[unit.type];
+    const screenPos = positionToPixels(unit.position);
+    
+    // Draw attack range
+    if (def.attackRange > 0) {
+      const attackRangePixels = metersToPixels(def.attackRange);
+      
+      ctx.save();
+      ctx.strokeStyle = state.players[unit.owner].color;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.2 + Math.sin(time * 2) * 0.1;
+      ctx.setLineDash([4, 4]);
+      ctx.lineDashOffset = time * 10;
+      
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, attackRangePixels, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Draw ability range (max ability range)
+    const abilityRangePixels = metersToPixels(ABILITY_MAX_RANGE);
+    
+    ctx.save();
+    ctx.strokeStyle = COLORS.telegraph;
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.15 + Math.sin(time * 3) * 0.05;
+    ctx.setLineDash([6, 6]);
+    ctx.lineDashOffset = -time * 15;
+    
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, abilityRangePixels, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
 function drawHUD(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.fillStyle = COLORS.white;
   ctx.font = '14px Space Grotesk, sans-serif';
   ctx.textAlign = 'left';
 
   const p1 = state.players[0];
-  ctx.fillStyle = p1.color;
-  ctx.fillText(`Photons: ${Math.floor(p1.photons)} (+${p1.incomeRate}/s)`, 10, 20);
+  
+  // Enhanced photon display with glow and pulse
+  const time = Date.now() / 1000;
+  const pulse = Math.sin(time * 3) * 0.3 + 0.7; // Pulsing between 0.4 and 1.0
+  
+  ctx.save();
+  ctx.shadowColor = COLORS.photon;
+  ctx.shadowBlur = 10 + pulse * 5;
+  ctx.fillStyle = COLORS.photon;
+  ctx.fillText(`Photons: ${Math.floor(p1.photons)}`, 10, 20);
+  ctx.restore();
+  
+  // Income rate with subtle glow
+  ctx.save();
+  ctx.fillStyle = 'oklch(0.75 0.15 95)';
+  ctx.shadowColor = COLORS.photon;
+  ctx.shadowBlur = 5;
+  ctx.fillText(`+${p1.incomeRate}/s`, 100, 20);
+  ctx.restore();
 
   ctx.fillStyle = COLORS.white;
   ctx.fillText(`Time: ${Math.floor(state.elapsedTime)}s`, 10, 40);

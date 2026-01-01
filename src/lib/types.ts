@@ -66,6 +66,7 @@ export interface Unit {
   position: Vector2;
   hp: number;
   maxHp: number;
+  displayHp?: number; // Smoothly interpolated health for display
   commandQueue: CommandNode[];
   damageMultiplier: number;
   distanceTraveled: number;
@@ -346,6 +347,17 @@ export interface GameState {
     duration: number;
     startTime: number;
   };
+  
+  // Screen flash effect for critical events
+  screenFlash?: {
+    color: string;
+    intensity: number; // 0 to 1
+    duration: number; // seconds
+    startTime: number;
+  };
+  
+  // Hovered unit for showing range indicators
+  hoveredUnit?: Unit | null;
   
   // Tooltip system
   tooltip?: {

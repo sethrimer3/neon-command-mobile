@@ -17,7 +17,36 @@ import {
 import { distance, normalize, scale, add, subtract, generateId } from './gameUtils';
 import { checkObstacleCollision } from './maps';
 import { soundManager } from './sound';
-import { createSpawnEffect, createHitSparks, createAbilityEffect, createEnhancedDeathExplosion } from './visualEffects';
+import { createSpawnEffect, createHitSparks, createAbilityEffect, createEnhancedDeathExplosion, createScreenFlash } from './visualEffects';
+import { ObjectPool } from './objectPool';
+
+// Object pool for projectiles - reuse projectiles instead of creating/destroying
+const projectilePool = new ObjectPool<Projectile>(
+  () => ({
+    id: generateId(),
+    position: { x: 0, y: 0 },
+    velocity: { x: 0, y: 0 },
+    target: { x: 0, y: 0 },
+    damage: 0,
+    owner: 0,
+    color: '',
+    lifetime: PROJECTILE_LIFETIME,
+    createdAt: Date.now(),
+    sourceUnit: '',
+  }),
+  (projectile) => {
+    // Reset projectile state when returned to pool
+    projectile.position.x = 0;
+    projectile.position.y = 0;
+    projectile.velocity.x = 0;
+    projectile.velocity.y = 0;
+    projectile.damage = 0;
+    projectile.createdAt = Date.now();
+    delete projectile.targetUnit;
+  },
+  100, // Initial pool size
+  500  // Max pool size
+);
 
 // Unit collision constants
 const UNIT_COLLISION_RADIUS = UNIT_SIZE_METERS / 2; // Minimum distance between unit centers
@@ -207,19 +236,22 @@ function createProjectile(state: GameState, sourceUnit: Unit, target: Vector2, t
   const damage = def.attackDamage * sourceUnit.damageMultiplier;
   const color = state.players[sourceUnit.owner].color;
   
-  return {
-    id: generateId(),
-    position: { ...sourceUnit.position },
-    velocity: scale(direction, PROJECTILE_SPEED),
-    target,
-    damage,
-    owner: sourceUnit.owner,
-    color,
-    lifetime: PROJECTILE_LIFETIME,
-    createdAt: Date.now(),
-    sourceUnit: sourceUnit.id,
-    targetUnit: targetUnit?.id,
-  };
+  // Acquire projectile from pool and initialize it
+  const projectile = projectilePool.acquire();
+  projectile.id = generateId();
+  projectile.position.x = sourceUnit.position.x;
+  projectile.position.y = sourceUnit.position.y;
+  projectile.velocity = scale(direction, PROJECTILE_SPEED);
+  projectile.target = target;
+  projectile.damage = damage;
+  projectile.owner = sourceUnit.owner;
+  projectile.color = color;
+  projectile.lifetime = PROJECTILE_LIFETIME;
+  projectile.createdAt = Date.now();
+  projectile.sourceUnit = sourceUnit.id;
+  projectile.targetUnit = targetUnit?.id;
+  
+  return projectile;
 }
 
 // Create an impact effect
@@ -611,8 +643,21 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
     }
   });
   
-  // Remove collided/expired projectiles
-  state.projectiles = state.projectiles.filter((p) => !projectilesToRemove.has(p.id));
+  // Remove collided/expired projectiles and return them to pool
+  const remainingProjectiles: Projectile[] = [];
+  const removedProjectiles: Projectile[] = [];
+  
+  state.projectiles.forEach((p) => {
+    if (projectilesToRemove.has(p.id)) {
+      removedProjectiles.push(p);
+    } else {
+      remainingProjectiles.push(p);
+    }
+  });
+  
+  // Return removed projectiles to pool
+  projectilePool.releaseAll(removedProjectiles);
+  state.projectiles = remainingProjectiles;
 }
 
 export function updateGame(state: GameState, deltaTime: number): void {
@@ -658,6 +703,19 @@ function updateUnits(state: GameState, deltaTime: number): void {
   state.units.forEach((unit) => {
     if (unit.abilityCooldown > 0) {
       unit.abilityCooldown = Math.max(0, unit.abilityCooldown - deltaTime);
+    }
+
+    // Smoothly interpolate display health towards actual health
+    if (unit.displayHp === undefined) {
+      unit.displayHp = unit.hp;
+    } else {
+      const healthDiff = unit.hp - unit.displayHp;
+      // Fast interpolation for smooth health bar updates (20% per frame)
+      unit.displayHp += healthDiff * 0.2;
+      // Snap to actual health if very close
+      if (Math.abs(healthDiff) < 0.5) {
+        unit.displayHp = unit.hp;
+      }
     }
 
     updateAbilityEffects(unit, state, deltaTime);
@@ -1358,6 +1416,9 @@ function checkVictory(state: GameState): void {
       soundManager.playBaseDestroyed();
       // Big screen shake for base destruction
       createScreenShake(state, SCREEN_SHAKE_BASE_DESTROY_INTENSITY, SCREEN_SHAKE_DURATION_LONG);
+      // Screen flash effect for dramatic impact
+      const flashColor = base.owner === 0 ? 'oklch(0.62 0.28 25 / 0.7)' : 'oklch(0.65 0.25 240 / 0.7)';
+      createScreenFlash(state, flashColor, 0.7, 0.6);
       // Big impact effect for base destruction with enhanced explosion
       const color = state.players[base.owner === 0 ? 1 : 0].color; // Use attacker's color
       createImpactEffect(state, base.position, color, 4.0);
