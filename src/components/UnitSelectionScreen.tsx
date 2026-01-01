@@ -118,10 +118,10 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
       return (
         <svg width={size} height={size} viewBox="0 0 20 20">
           <circle cx="10" cy="10" r="8" fill={color} opacity="0.8" />
-          <polygon points="10,5 12,10 10,10 8,10" fill="white" opacity="0.9" />
-          <polygon points="10,15 8,10 10,10 12,10" fill="white" opacity="0.9" />
-          <polygon points="5,10 10,12 10,10 10,8" fill="white" opacity="0.9" />
-          <polygon points="15,10 10,8 10,10 10,12" fill="white" opacity="0.9" />
+          <polygon points="10,4 11,9 9,9" fill="white" opacity="0.9" />
+          <polygon points="10,16 9,11 11,11" fill="white" opacity="0.9" />
+          <polygon points="4,10 9,11 9,9" fill="white" opacity="0.9" />
+          <polygon points="16,10 11,9 11,11" fill="white" opacity="0.9" />
         </svg>
       );
     }
