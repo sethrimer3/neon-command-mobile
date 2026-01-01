@@ -576,10 +576,109 @@ function App() {
     setRenderTrigger(prev => prev + 1);
   };
 
-  const goToMatchmaking = () => {
+  const goToMatchmaking = async () => {
     soundManager.playButtonClick();
-    toast.info('Matchmaking coming soon!');
-    // TODO: Implement matchmaking logic
+    
+    if (!multiplayerManagerRef.current) {
+      toast.error('Multiplayer not available');
+      return;
+    }
+    
+    toast.info('Searching for opponent...');
+    
+    try {
+      // Get available lobbies
+      const lobbies = await multiplayerManagerRef.current.getAvailableLobbies();
+      
+      if (lobbies.length > 0) {
+        // Join the first available lobby
+        const lobby = lobbies[0];
+        const playerName = `Player_${userId.slice(-4)}`;
+        
+        const success = await multiplayerManagerRef.current.joinGame(
+          lobby.gameId,
+          playerName,
+          enemyColor || COLORS.enemyDefault
+        );
+        
+        if (success) {
+          const updatedLobby = await multiplayerManagerRef.current.getLobby(lobby.gameId);
+          setCurrentLobby(updatedLobby);
+          gameStateRef.current.mode = 'multiplayerLobby';
+          toast.success('Opponent found! Waiting for host to start...');
+          
+          // Start checking for game start
+          lobbyCheckIntervalRef.current = setInterval(async () => {
+            const updatedLobby = await multiplayerManagerRef.current?.getLobby(lobby.gameId);
+            if (updatedLobby) {
+              setCurrentLobby(updatedLobby);
+              if (updatedLobby.status === 'playing') {
+                if (lobbyCheckIntervalRef.current) {
+                  clearInterval(lobbyCheckIntervalRef.current);
+                  lobbyCheckIntervalRef.current = null;
+                }
+              }
+            }
+          }, 1000);
+        } else {
+          toast.error('Failed to join game. Trying again...');
+          // Try creating a new game instead
+          await createMatchmakingLobby();
+        }
+      } else {
+        // No lobbies available, create a new one
+        await createMatchmakingLobby();
+      }
+      
+      setRenderTrigger(prev => prev + 1);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Matchmaking failed';
+      toast.error(message);
+    }
+  };
+  
+  const createMatchmakingLobby = async () => {
+    if (!multiplayerManagerRef.current) return;
+    
+    const playerName = `Player_${userId.slice(-4)}`;
+    
+    try {
+      const gameId = await multiplayerManagerRef.current.createGame(
+        playerName,
+        playerColor || COLORS.playerDefault,
+        selectedMap || 'open',
+        enabledUnits || ['marine', 'warrior', 'snaker']
+      );
+      
+      const lobby = await multiplayerManagerRef.current.getLobby(gameId);
+      setCurrentLobby(lobby);
+      gameStateRef.current.mode = 'multiplayerLobby';
+      toast.success('Waiting for opponent...');
+      
+      // Start checking for opponent joining
+      lobbyCheckIntervalRef.current = setInterval(async () => {
+        const updatedLobby = await multiplayerManagerRef.current?.getLobby(gameId);
+        if (updatedLobby) {
+          setCurrentLobby(updatedLobby);
+          if (updatedLobby.guestId) {
+            toast.success('Opponent found! Starting game...');
+            // Auto-start the game after a short delay
+            setTimeout(async () => {
+              await multiplayerManagerRef.current?.startGame();
+            }, 2000);
+          }
+          if (updatedLobby.status === 'playing') {
+            if (lobbyCheckIntervalRef.current) {
+              clearInterval(lobbyCheckIntervalRef.current);
+              lobbyCheckIntervalRef.current = null;
+            }
+          }
+        }
+      }, 1000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create matchmaking lobby';
+      toast.error(message);
+    }
   };
 
   const backToMenu = () => {
