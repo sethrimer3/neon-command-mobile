@@ -662,10 +662,8 @@ function updateUnits(state: GameState, deltaTime: number): void {
 
     updateAbilityEffects(unit, state, deltaTime);
     
-    // Update particle physics for marines
-    if (unit.type === 'marine') {
-      updateParticles(unit, deltaTime);
-    }
+    // Update particle physics for all units
+    updateParticles(unit, deltaTime);
     
     // Clean up expired melee attack effects
     if (unit.meleeAttackEffect && Date.now() > unit.meleeAttackEffect.endTime) {
@@ -1450,10 +1448,18 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
     attackCooldown: 0, // Initialize attack cooldown
   };
   
-  // Initialize particles for marines
-  if (type === 'marine') {
-    unit.particles = createParticlesForUnit(unit, 12); // Increased from 10 to 12 for more visible effect
-  }
+  // Initialize particles for all units with different particle counts based on unit type
+  const particleCounts: Record<UnitType, number> = {
+    marine: 12,      // Ranged attacker - moderate particle count
+    warrior: 16,     // Melee bruiser - more particles for intimidation
+    snaker: 10,      // Fast harassment - fewer particles for speed aesthetic
+    tank: 20,        // Heavy tank - most particles for imposing presence
+    scout: 8,        // Fast scout - minimal particles for stealth aesthetic
+    artillery: 14,   // Long-range - moderate-high particles for power
+    medic: 12,       // Support unit - moderate particles with healing theme
+    interceptor: 14, // Fast attacker - moderate-high particles for aggressive look
+  };
+  unit.particles = createParticlesForUnit(unit, particleCounts[type]);
 
   state.units.push(unit);
   
