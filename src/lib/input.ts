@@ -18,6 +18,7 @@ import {
 import { distance, normalize, scale, add, subtract, pixelsToPosition, positionToPixels } from './gameUtils';
 import { spawnUnit } from './simulation';
 import { soundManager } from './sound';
+import { applyFormation } from './formations';
 
 interface TouchState {
   startPos: { x: number; y: number };
@@ -410,8 +411,12 @@ function handleTap(state: GameState, screenPos: { x: number; y: number }, canvas
   }
 
   if (state.selectedUnits.size > 0) {
-    addMovementCommand(state, worldPos);
+    addMovementCommand(state, worldPos, state.patrolMode);
     soundManager.playUnitMove();
+    // Show toast if patrol mode is active
+    if (state.patrolMode) {
+      // Toast will be handled by the sound feedback
+    }
   }
 }
 
@@ -448,13 +453,56 @@ function handleAbilityDrag(state: GameState, dragVector: { x: number; y: number 
   });
 }
 
-function addMovementCommand(state: GameState, worldPos: { x: number; y: number }): void {
-  state.units.forEach((unit) => {
-    if (!state.selectedUnits.has(unit.id)) return;
-    if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
+// Helper function to get return position for patrol commands
+function getPatrolReturnPosition(unit: Unit): Vector2 {
+  // Use current position or last queued position as return point
+  if (unit.commandQueue.length > 0) {
+    const lastNode = unit.commandQueue[unit.commandQueue.length - 1];
+    if (lastNode.type === 'move' || lastNode.type === 'attack-move' || lastNode.type === 'patrol') {
+      return lastNode.position;
+    }
+  }
+  return unit.position;
+}
 
-    unit.commandQueue.push({ type: 'move', position: worldPos });
-  });
+function addMovementCommand(state: GameState, worldPos: { x: number; y: number }, isPatrol: boolean = false): void {
+  const selectedUnitsArray = state.units.filter(unit => state.selectedUnits.has(unit.id));
+  
+  if (selectedUnitsArray.length === 0) return;
+  
+  // Apply formation if enabled
+  if (state.currentFormation !== 'none' && selectedUnitsArray.length > 1) {
+    const formationPositions = applyFormation(
+      selectedUnitsArray,
+      worldPos,
+      state.currentFormation,
+      2.0 // spacing in meters
+    );
+    
+    // Assign formation positions to units
+    selectedUnitsArray.forEach((unit, index) => {
+      if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
+      
+      if (isPatrol) {
+        const returnPos = getPatrolReturnPosition(unit);
+        unit.commandQueue.push({ type: 'patrol', position: formationPositions[index], returnPosition: returnPos });
+      } else {
+        unit.commandQueue.push({ type: 'move', position: formationPositions[index] });
+      }
+    });
+  } else {
+    // No formation or single unit - all move to same point
+    selectedUnitsArray.forEach((unit) => {
+      if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
+      
+      if (isPatrol) {
+        const returnPos = getPatrolReturnPosition(unit);
+        unit.commandQueue.push({ type: 'patrol', position: worldPos, returnPosition: returnPos });
+      } else {
+        unit.commandQueue.push({ type: 'move', position: worldPos });
+      }
+    });
+  }
 }
 
 export function handleMouseDown(e: MouseEvent, state: GameState, canvas: HTMLCanvasElement): void {

@@ -40,6 +40,9 @@ const PROJECTILE_LIFETIME = 2.0; // seconds before projectile disappears
 const MELEE_EFFECT_DURATION = 0.2; // seconds for melee attack visual
 const LASER_BEAM_DURATION = 0.5; // seconds for laser beam visual
 
+// Rotation constants
+const ROTATION_SPEED = 8.0; // radians per second - how fast units rotate to face direction
+
 // Visual effect constants
 const IMPACT_EFFECT_DURATION = 0.5; // seconds for impact ring animation
 const IMPACT_EFFECT_CLEANUP_TIME = 1.0; // seconds before old effects are removed
@@ -101,6 +104,36 @@ function createParticlesForUnit(unit: Unit, count: number): Particle[] {
   }
   
   return particles;
+}
+
+// Update unit rotation to smoothly face movement direction
+function updateUnitRotation(unit: Unit, direction: Vector2, deltaTime: number): void {
+  // Initialize rotation if not set
+  if (unit.rotation === undefined) {
+    unit.rotation = 0;
+  }
+  
+  // Calculate target rotation from direction vector
+  // atan2 gives angle in radians, 0 = right, PI/2 = down, PI = left, -PI/2 = up
+  const targetRotation = Math.atan2(direction.y, direction.x);
+  
+  // Calculate shortest rotation difference (handles wrap-around)
+  let rotationDiff = targetRotation - unit.rotation;
+  
+  // Normalize to [-PI, PI] range
+  while (rotationDiff > Math.PI) rotationDiff -= Math.PI * 2;
+  while (rotationDiff < -Math.PI) rotationDiff += Math.PI * 2;
+  
+  // Apply rotation with speed limit
+  const maxRotation = ROTATION_SPEED * deltaTime;
+  if (Math.abs(rotationDiff) < maxRotation) {
+    unit.rotation = targetRotation;
+  } else {
+    unit.rotation += Math.sign(rotationDiff) * maxRotation;
+  }
+  
+  // Normalize rotation to [0, 2*PI] range for consistency
+  unit.rotation = ((unit.rotation % (Math.PI * 2)) + (Math.PI * 2)) % (Math.PI * 2);
 }
 
 // Update particle physics
@@ -664,6 +697,9 @@ function updateUnits(state: GameState, deltaTime: number): void {
       const direction = normalize(subtract(currentNode.position, unit.position));
       const movement = scale(direction, def.moveSpeed * deltaTime);
 
+      // Update unit rotation to face movement direction
+      updateUnitRotation(unit, direction, deltaTime);
+
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
       
@@ -721,6 +757,9 @@ function updateUnits(state: GameState, deltaTime: number): void {
       const direction = normalize(subtract(currentNode.position, unit.position));
       const movement = scale(direction, def.moveSpeed * deltaTime);
 
+      // Update unit rotation to face movement direction
+      updateUnitRotation(unit, direction, deltaTime);
+
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
       
@@ -750,6 +789,10 @@ function updateUnits(state: GameState, deltaTime: number): void {
         const def = UNIT_DEFINITIONS[unit.type];
         const direction = normalize(subtract(currentNode.position, unit.position));
         const movement = scale(direction, def.moveSpeed * deltaTime);
+        
+        // Update unit rotation to face movement direction
+        updateUnitRotation(unit, direction, deltaTime);
+        
         unit.position = add(unit.position, movement);
 
         const queueMovementNodes = unit.commandQueue.filter((n) => n.type === 'move').length;
@@ -767,6 +810,54 @@ function updateUnits(state: GameState, deltaTime: number): void {
         executeAbility(state, unit, currentNode);
         unit.commandQueue.shift();
       }
+    } else if (currentNode.type === 'patrol') {
+      // Patrol: move to patrol point, then add return command to create loop
+      const dist = distance(unit.position, currentNode.position);
+      if (dist < 0.1) {
+        // Reached patrol point - add return command and remove current
+        unit.commandQueue.shift();
+        // Add return patrol command if queue isn't full
+        if (unit.commandQueue.length < QUEUE_MAX_LENGTH) {
+          unit.commandQueue.push({ 
+            type: 'patrol', 
+            position: currentNode.returnPosition,
+            returnPosition: currentNode.position 
+          });
+        }
+        return;
+      }
+
+      const def = UNIT_DEFINITIONS[unit.type];
+      const direction = normalize(subtract(currentNode.position, unit.position));
+      const movement = scale(direction, def.moveSpeed * deltaTime);
+      
+      // Update unit rotation to face movement direction
+      updateUnitRotation(unit, direction, deltaTime);
+      
+      const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
+      const newPosition = add(unit.position, scale(direction, moveDist));
+      
+      // Check for collisions
+      if (!checkObstacleCollision(newPosition, UNIT_SIZE_METERS / 2, state.obstacles) &&
+          !checkUnitCollision(newPosition, unit.id, state.units)) {
+        unit.position = newPosition;
+      } else {
+        return;
+      }
+
+      // Track distance traveled
+      const queueMovementNodes = unit.commandQueue.filter((n) => 
+        n.type === 'move' || n.type === 'attack-move' || n.type === 'patrol'
+      ).length;
+      const creditMultiplier = 1.0 + QUEUE_BONUS_PER_NODE * queueMovementNodes;
+      unit.distanceCredit += moveDist * creditMultiplier;
+
+      while (unit.distanceCredit >= PROMOTION_DISTANCE_THRESHOLD) {
+        unit.distanceCredit -= PROMOTION_DISTANCE_THRESHOLD;
+        unit.damageMultiplier *= PROMOTION_MULTIPLIER;
+      }
+
+      unit.distanceTraveled += moveDist;
     }
   });
 }

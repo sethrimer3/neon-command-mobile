@@ -12,6 +12,7 @@ import {
 import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract } from './gameUtils';
 import { Obstacle } from './maps';
 import { MOTION_TRAIL_DURATION } from './simulation';
+import { getFormationName } from './formations';
 
 // FPS Counter constants
 const FPS_GOOD_THRESHOLD = 55;
@@ -776,28 +777,53 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.shadowColor = glowColor;
       ctx.shadowBlur = glowIntensity;
 
+      // Apply rotation if available
+      const rotation = unit.rotation || 0;
+      ctx.save();
+      ctx.translate(screenPos.x, screenPos.y);
+      ctx.rotate(rotation);
+      
+      // Draw unit as circle with directional indicator
       ctx.beginPath();
-      ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
       ctx.fill();
+      
+      // Draw directional indicator (small line pointing forward)
+      ctx.strokeStyle = glowColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(radius * 0.7, 0);
+      ctx.stroke();
+      
+      ctx.restore();
       
       // Add extra glow for marines
       if (unit.type === 'marine') {
+        ctx.save();
+        ctx.shadowColor = glowColor;
         ctx.shadowBlur = glowIntensity * 1.5;
         ctx.globalAlpha = 0.6;
         ctx.beginPath();
         ctx.arc(screenPos.x, screenPos.y, radius * 1.2, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1.0;
+        ctx.restore();
       }
 
       if (unit.type === 'warrior') {
+        ctx.save();
+        ctx.translate(screenPos.x, screenPos.y);
+        ctx.rotate(rotation);
         ctx.lineWidth = 2;
+        ctx.strokeStyle = color;
         ctx.beginPath();
-        ctx.moveTo(screenPos.x - radius, screenPos.y - radius);
-        ctx.lineTo(screenPos.x + radius, screenPos.y + radius);
-        ctx.moveTo(screenPos.x + radius, screenPos.y - radius);
-        ctx.lineTo(screenPos.x - radius, screenPos.y + radius);
+        ctx.moveTo(-radius, -radius);
+        ctx.lineTo(radius, radius);
+        ctx.moveTo(radius, -radius);
+        ctx.lineTo(-radius, radius);
         ctx.stroke();
+        ctx.restore();
       }
     }
 
@@ -1288,6 +1314,31 @@ function drawHUD(ctx: CanvasRenderingContext2D, state: GameState): void {
 
   ctx.fillStyle = COLORS.white;
   ctx.fillText(`Time: ${Math.floor(state.elapsedTime)}s`, 10, 40);
+  
+  // Draw current formation indicator
+  if (state.currentFormation && state.currentFormation !== 'none') {
+    const formationName = getFormationName(state.currentFormation);
+    ctx.fillStyle = COLORS.telegraph;
+    ctx.fillText(`Formation: ${formationName}`, 10, 60);
+  } else if (state.elapsedTime < 15) {
+    // Show hint for first 15 seconds
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.font = '12px Space Grotesk, sans-serif';
+    ctx.fillText('Press F to cycle formations', 10, 60);
+    ctx.font = '14px Space Grotesk, sans-serif';
+  }
+  
+  // Draw patrol mode indicator
+  if (state.patrolMode) {
+    ctx.fillStyle = COLORS.photon;
+    ctx.fillText('PATROL MODE', 10, 80);
+  } else if (state.elapsedTime < 15) {
+    // Show hint for first 15 seconds
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.font = '12px Space Grotesk, sans-serif';
+    ctx.fillText('Hold P for patrol', 10, 80);
+    ctx.font = '14px Space Grotesk, sans-serif';
+  }
   
   if (state.matchTimeLimit) {
     const timeRemaining = Math.max(0, state.matchTimeLimit - state.elapsedTime);

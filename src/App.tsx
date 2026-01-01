@@ -9,6 +9,7 @@ import { renderGame } from './lib/renderer';
 import { handleTouchStart, handleTouchMove, handleTouchEnd, handleMouseDown, handleMouseMove, handleMouseUp, getActiveSelectionRect } from './lib/input';
 import { initializeCamera, updateCamera, zoomCamera, panCamera, resetCamera } from './lib/camera';
 import { updateVisualEffects, createCelebrationParticles } from './lib/visualEffects';
+import { FormationType, getFormationName } from './lib/formations';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Label } from './components/ui/label';
@@ -308,15 +309,38 @@ function App() {
         e.preventDefault();
       }
       
+      // P key to enable patrol mode
+      if (e.key === 'p' || e.key === 'P') {
+        gameStateRef.current.patrolMode = true;
+        e.preventDefault();
+      }
+      
       // R key to reset camera
       if (e.key === 'r' || e.key === 'R') {
         resetCamera(gameStateRef.current);
+        e.preventDefault();
+      }
+      
+      // F key to cycle formations
+      if (e.key === 'f' || e.key === 'F') {
+        const formations: FormationType[] = ['none', 'line', 'spread', 'cluster', 'wedge', 'circle'];
+        const currentIndex = formations.indexOf(gameStateRef.current.currentFormation);
+        const nextIndex = (currentIndex + 1) % formations.length;
+        gameStateRef.current.currentFormation = formations[nextIndex];
+        toast.info(`Formation: ${getFormationName(gameStateRef.current.currentFormation)}`, {
+          duration: 2000,
+        });
         e.preventDefault();
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       pressedKeys.delete(e.key.toLowerCase());
+      
+      // P key released - disable patrol mode
+      if (e.key === 'p' || e.key === 'P') {
+        gameStateRef.current.patrolMode = false;
+      }
     };
 
     // Update camera position based on pressed keys
@@ -1187,7 +1211,8 @@ function createInitialState(): GameState {
     ],
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
-    controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
+    currentFormation: 'none',
+    patrolMode: false,
     elapsedTime: 0,
     lastIncomeTime: 0,
     winner: null,
@@ -1252,6 +1277,8 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     ],
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
+    currentFormation: 'none',
+    patrolMode: false,
     elapsedTime: 0,
     lastIncomeTime: 0,
     winner: null,
@@ -1319,6 +1346,8 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
     ],
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
+    currentFormation: 'none',
+    patrolMode: false,
     elapsedTime: 0,
     lastIncomeTime: 0,
     winner: null,
@@ -1376,6 +1405,8 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
     ],
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
+    currentFormation: 'none',
+    patrolMode: false,
     elapsedTime: 0,
     lastIncomeTime: 0,
     winner: null,
@@ -1445,6 +1476,8 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
     ],
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
+    currentFormation: 'none',
+    patrolMode: false,
     elapsedTime: 0,
     lastIncomeTime: 0,
     winner: null,
