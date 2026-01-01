@@ -913,6 +913,9 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     
     // Draw projectile sprite if loaded, otherwise fall back to circle
     if (projectileSpriteLoaded && projectileSprite.complete) {
+      // Save context state before transformations
+      ctx.save();
+      
       // Calculate rotation angle based on velocity direction
       const angle = Math.atan2(projectile.velocity.y, projectile.velocity.x);
       
@@ -928,9 +931,8 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
       const spriteSize = 24; // Size in pixels
       ctx.drawImage(projectileSprite, -spriteSize / 2, -spriteSize / 2, spriteSize, spriteSize);
       
-      // Reset transformations
-      ctx.rotate(-angle);
-      ctx.translate(-screenPos.x, -screenPos.y);
+      // Restore context state (resets transformations and shadow)
+      ctx.restore();
     } else {
       // Fallback to original circle rendering if sprite not loaded
       ctx.fillStyle = projectile.color;
