@@ -56,6 +56,7 @@ const SELECTION_RING_EXPANSION_SPEED = 1.5; // Speed of expanding selection ring
 const SELECTION_RING_MAX_SIZE = 1.8; // Maximum size multiplier for selection ring
 const GLOW_PULSE_FREQUENCY = 1.5; // Hz for glow pulsing
 const ABILITY_READY_PULSE_INTENSITY = 0.4; // Intensity of ability ready pulse
+const MOTION_BLUR_SPEED_THRESHOLD = 1.5; // Minimum speed for motion blur to appear
 
 // Helper function to get bright highlight color for team
 function getTeamHighlightColor(owner: number): string {
@@ -93,6 +94,8 @@ function applyGlowEffect(ctx: CanvasRenderingContext2D, state: GameState, color:
   if (state.settings.enableGlowEffects) {
     ctx.shadowColor = color;
     ctx.shadowBlur = blur;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
   }
 }
 
@@ -100,6 +103,9 @@ function applyGlowEffect(ctx: CanvasRenderingContext2D, state: GameState, color:
 function clearGlowEffect(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (state.settings.enableGlowEffects) {
     ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
   }
 }
 
@@ -970,7 +976,7 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     const useLOD = distanceRatio > 0.7;
     
     // Draw motion blur trail for fast-moving units
-    if (!useLOD && state.settings.enableMotionBlur && unit.currentSpeed && unit.currentSpeed > 1.5) {
+    if (!useLOD && state.settings.enableMotionBlur && unit.currentSpeed && unit.currentSpeed > MOTION_BLUR_SPEED_THRESHOLD) {
       drawMotionBlurTrail(ctx, unit, screenPos, color, state);
     }
     
@@ -1262,7 +1268,7 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
 
 // Draw motion blur trail for fast-moving units
 function drawMotionBlurTrail(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string, state: GameState): void {
-  if (!unit.rotation) return;
+  if (unit.rotation === undefined || unit.rotation === null) return;
   
   const speed = unit.currentSpeed || 0;
   const speedRatio = Math.min(speed / 5, 1); // Normalize speed to 0-1 range

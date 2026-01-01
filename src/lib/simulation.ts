@@ -77,6 +77,7 @@ const ROTATION_SPEED = 8.0; // radians per second - how fast units rotate to fac
 const ACCELERATION_RATE = 15.0; // units per second per second - how fast units accelerate
 const DECELERATION_RATE = 20.0; // units per second per second - how fast units decelerate
 const MIN_SPEED_THRESHOLD = 0.05; // Minimum speed before stopping completely
+const COLLISION_DECELERATION_FACTOR = 0.5; // Factor to slow down when collision detected
 
 // Visual effect constants
 const IMPACT_EFFECT_DURATION = 0.5; // seconds for impact ring animation
@@ -810,7 +811,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
         unit.position = newPosition;
       } else {
         // Collision detected - slow down and retry next frame
-        unit.currentSpeed = Math.max(0, (unit.currentSpeed || 0) * 0.5);
+        unit.currentSpeed = Math.max(0, (unit.currentSpeed || 0) * COLLISION_DECELERATION_FACTOR);
         return;
       }
 
@@ -874,7 +875,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
         unit.position = newPosition;
       } else {
         // Collision detected - slow down and retry next frame
-        unit.currentSpeed = Math.max(0, (unit.currentSpeed || 0) * 0.5);
+        unit.currentSpeed = Math.max(0, (unit.currentSpeed || 0) * COLLISION_DECELERATION_FACTOR);
         return;
       }
 
