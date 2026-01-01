@@ -130,7 +130,13 @@ export function applyFormation(
   };
 
   // Calculate direction from current center to target
-  const direction = normalize(subtract(targetPosition, currentCenter));
+  const directionVector = subtract(targetPosition, currentCenter);
+  const directionLength = Math.sqrt(directionVector.x * directionVector.x + directionVector.y * directionVector.y);
+  
+  // If target is at current position, use default forward direction
+  const direction = directionLength > 0.01 
+    ? normalize(directionVector) 
+    : { x: 0, y: -1 }; // Default to facing up
   
   // Calculate perpendicular direction for proper formation orientation
   const perpendicular = { x: -direction.y, y: direction.x };

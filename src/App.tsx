@@ -1213,7 +1213,6 @@ function createInitialState(): GameState {
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
     currentFormation: 'none',
     patrolMode: false,
-    currentFormation: 'none', // Default to no formation
     elapsedTime: 0,
     lastIncomeTime: 0,
     winner: null,

@@ -453,6 +453,18 @@ function handleAbilityDrag(state: GameState, dragVector: { x: number; y: number 
   });
 }
 
+// Helper function to get return position for patrol commands
+function getPatrolReturnPosition(unit: Unit): Vector2 {
+  // Use current position or last queued position as return point
+  if (unit.commandQueue.length > 0) {
+    const lastNode = unit.commandQueue[unit.commandQueue.length - 1];
+    if (lastNode.type === 'move' || lastNode.type === 'attack-move' || lastNode.type === 'patrol') {
+      return lastNode.position;
+    }
+  }
+  return unit.position;
+}
+
 function addMovementCommand(state: GameState, worldPos: { x: number; y: number }, isPatrol: boolean = false): void {
   const selectedUnitsArray = state.units.filter(unit => state.selectedUnits.has(unit.id));
   
@@ -472,14 +484,7 @@ function addMovementCommand(state: GameState, worldPos: { x: number; y: number }
       if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
       
       if (isPatrol) {
-        // For patrol, we need a return position - use current position or last queued position
-        let returnPos = unit.position;
-        if (unit.commandQueue.length > 0) {
-          const lastNode = unit.commandQueue[unit.commandQueue.length - 1];
-          if (lastNode.type === 'move' || lastNode.type === 'attack-move' || lastNode.type === 'patrol') {
-            returnPos = lastNode.position;
-          }
-        }
+        const returnPos = getPatrolReturnPosition(unit);
         unit.commandQueue.push({ type: 'patrol', position: formationPositions[index], returnPosition: returnPos });
       } else {
         unit.commandQueue.push({ type: 'move', position: formationPositions[index] });
@@ -491,14 +496,7 @@ function addMovementCommand(state: GameState, worldPos: { x: number; y: number }
       if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
       
       if (isPatrol) {
-        // For patrol, we need a return position - use current position or last queued position
-        let returnPos = unit.position;
-        if (unit.commandQueue.length > 0) {
-          const lastNode = unit.commandQueue[unit.commandQueue.length - 1];
-          if (lastNode.type === 'move' || lastNode.type === 'attack-move' || lastNode.type === 'patrol') {
-            returnPos = lastNode.position;
-          }
-        }
+        const returnPos = getPatrolReturnPosition(unit);
         unit.commandQueue.push({ type: 'patrol', position: worldPos, returnPosition: returnPos });
       } else {
         unit.commandQueue.push({ type: 'move', position: worldPos });

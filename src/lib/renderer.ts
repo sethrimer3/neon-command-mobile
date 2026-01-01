@@ -12,6 +12,7 @@ import {
 import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract } from './gameUtils';
 import { Obstacle } from './maps';
 import { MOTION_TRAIL_DURATION } from './simulation';
+import { getFormationName } from './formations';
 
 // FPS Counter constants
 const FPS_GOOD_THRESHOLD = 55;
@@ -1316,7 +1317,7 @@ function drawHUD(ctx: CanvasRenderingContext2D, state: GameState): void {
   
   // Draw current formation indicator
   if (state.currentFormation && state.currentFormation !== 'none') {
-    const formationName = require('./formations').getFormationName(state.currentFormation);
+    const formationName = getFormationName(state.currentFormation);
     ctx.fillStyle = COLORS.telegraph;
     ctx.fillText(`Formation: ${formationName}`, 10, 60);
   } else if (state.elapsedTime < 15) {
