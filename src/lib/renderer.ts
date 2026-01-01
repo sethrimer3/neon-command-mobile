@@ -858,7 +858,7 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.textAlign = 'center';
     ctx.fillText(`${unit.damageMultiplier.toFixed(1)}x`, screenPos.x, screenPos.y + 20);
     
-    // Draw ability cooldown indicator
+    // Draw ability cooldown indicator with enhanced visuals
     const unitDef = UNIT_DEFINITIONS[unit.type];
     if (unitDef.abilityName && unitDef.abilityCooldown > 0) {
       const cooldownPercent = unit.abilityCooldown / unitDef.abilityCooldown;
@@ -866,32 +866,62 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
       const yOffset = -radius - 5;
       
       if (cooldownPercent > 0) {
-        // Draw cooldown arc
+        // Draw cooldown arc with enhanced styling
         ctx.save();
         ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = 2.5;
+        ctx.globalAlpha = 0.4;
         const startAngle = -Math.PI / 2;
         const endAngle = startAngle + (Math.PI * 2 * (1 - cooldownPercent));
         
+        // Background circle
+        ctx.globalAlpha = 0.2;
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y + yOffset, 6, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Cooldown progress
+        ctx.globalAlpha = 0.6;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 8;
         ctx.beginPath();
         ctx.arc(screenPos.x, screenPos.y + yOffset, 6, startAngle, endAngle);
         ctx.stroke();
         ctx.restore();
       } else {
-        // Ability ready - draw pulsing indicator
+        // Ability ready - draw enhanced pulsing indicator
         const time = Date.now() / 1000;
-        const pulse = Math.sin(time * 4) * 0.3 + 0.7;
+        const pulse = Math.sin(time * 5) * 0.4 + 0.6;
         
         ctx.save();
+        
+        // Outer glow ring
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = pulse * 0.5;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y + yOffset, 7 + pulse * 2, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Inner filled circle
         ctx.fillStyle = color;
         ctx.globalAlpha = pulse;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 10;
-        
+        ctx.shadowBlur = 12;
         ctx.beginPath();
         ctx.arc(screenPos.x, screenPos.y + yOffset, 4, 0, Math.PI * 2);
         ctx.fill();
+        
+        // Bright center
+        ctx.fillStyle = getTeamHighlightColor(unit.owner);
+        ctx.globalAlpha = 1.0;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y + yOffset, 2, 0, Math.PI * 2);
+        ctx.fill();
+        
         ctx.restore();
       }
     }
