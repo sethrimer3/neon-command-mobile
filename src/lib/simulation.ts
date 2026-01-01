@@ -73,6 +73,11 @@ const PARTICLE_MIN_SPEED_THRESHOLD = 0.01; // Threshold for detecting nearly sta
 // Rotation constants
 const ROTATION_SPEED = 8.0; // radians per second - how fast units rotate to face direction
 
+// Movement acceleration/deceleration constants
+const ACCELERATION_RATE = 15.0; // units per second per second - how fast units accelerate
+const DECELERATION_RATE = 20.0; // units per second per second - how fast units decelerate
+const MIN_SPEED_THRESHOLD = 0.05; // Minimum speed before stopping completely
+
 // Visual effect constants
 const IMPACT_EFFECT_DURATION = 0.5; // seconds for impact ring animation
 const IMPACT_EFFECT_CLEANUP_TIME = 1.0; // seconds before old effects are removed
@@ -164,6 +169,34 @@ function updateUnitRotation(unit: Unit, direction: Vector2, deltaTime: number): 
   
   // Normalize rotation to [0, 2*PI] range for consistency
   unit.rotation = ((unit.rotation % (Math.PI * 2)) + (Math.PI * 2)) % (Math.PI * 2);
+}
+
+// Apply smooth acceleration/deceleration to unit movement
+function applyMovementAcceleration(unit: Unit, direction: Vector2, targetSpeed: number, deltaTime: number): number {
+  // Initialize current speed if not set
+  if (unit.currentSpeed === undefined) {
+    unit.currentSpeed = 0;
+  }
+  
+  // Calculate speed change based on whether we're accelerating or decelerating
+  const speedDiff = targetSpeed - unit.currentSpeed;
+  
+  if (speedDiff > 0) {
+    // Accelerating
+    const acceleration = Math.min(ACCELERATION_RATE * deltaTime, speedDiff);
+    unit.currentSpeed += acceleration;
+  } else if (speedDiff < 0) {
+    // Decelerating
+    const deceleration = Math.max(-DECELERATION_RATE * deltaTime, speedDiff);
+    unit.currentSpeed += deceleration;
+  }
+  
+  // Clamp to zero if very slow
+  if (unit.currentSpeed < MIN_SPEED_THRESHOLD) {
+    unit.currentSpeed = 0;
+  }
+  
+  return unit.currentSpeed;
 }
 
 // Update particle physics
@@ -754,14 +787,19 @@ function updateUnits(state: GameState, deltaTime: number): void {
 
       if (dist < 0.1) {
         unit.commandQueue.shift();
+        // Decelerate when reaching destination
+        unit.currentSpeed = 0;
         return;
       }
 
       const direction = normalize(subtract(currentNode.position, unit.position));
-      const movement = scale(direction, def.moveSpeed * deltaTime);
-
+      
       // Update unit rotation to face movement direction
       updateUnitRotation(unit, direction, deltaTime);
+      
+      // Apply smooth acceleration to reach target speed
+      const currentSpeed = applyMovementAcceleration(unit, direction, def.moveSpeed, deltaTime);
+      const movement = scale(direction, currentSpeed * deltaTime);
 
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
@@ -771,8 +809,8 @@ function updateUnits(state: GameState, deltaTime: number): void {
           !checkUnitCollision(newPosition, unit.id, state.units)) {
         unit.position = newPosition;
       } else {
-        // Collision detected - unit waits and will retry movement next frame
-        // Units naturally unstick as other units move away
+        // Collision detected - slow down and retry next frame
+        unit.currentSpeed = Math.max(0, (unit.currentSpeed || 0) * 0.5);
         return;
       }
 
@@ -814,14 +852,18 @@ function updateUnits(state: GameState, deltaTime: number): void {
       const dist = distance(unit.position, currentNode.position);
       if (dist < 0.1) {
         unit.commandQueue.shift();
+        unit.currentSpeed = 0;
         return;
       }
 
       const direction = normalize(subtract(currentNode.position, unit.position));
-      const movement = scale(direction, def.moveSpeed * deltaTime);
 
       // Update unit rotation to face movement direction
       updateUnitRotation(unit, direction, deltaTime);
+      
+      // Apply smooth acceleration
+      const currentSpeed = applyMovementAcceleration(unit, direction, def.moveSpeed, deltaTime);
+      const movement = scale(direction, currentSpeed * deltaTime);
 
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
@@ -831,8 +873,8 @@ function updateUnits(state: GameState, deltaTime: number): void {
           !checkUnitCollision(newPosition, unit.id, state.units)) {
         unit.position = newPosition;
       } else {
-        // Collision detected - unit waits and will retry movement next frame
-        // Units naturally unstick as other units move away
+        // Collision detected - slow down and retry next frame
+        unit.currentSpeed = Math.max(0, (unit.currentSpeed || 0) * 0.5);
         return;
       }
 
