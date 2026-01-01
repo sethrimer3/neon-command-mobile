@@ -630,6 +630,21 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.restore();
     }
 
+    // Add radial gradient background glow for aesthetic enhancement
+    if (state.settings.enableGlowEffects) {
+      ctx.save();
+      const gradient = ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, size * 1.2);
+      gradient.addColorStop(0, addAlphaToColor(color, 0.15 * pulseIntensity));
+      gradient.addColorStop(0.5, addAlphaToColor(color, 0.08 * pulseIntensity));
+      gradient.addColorStop(1, addAlphaToColor(color, 0));
+      
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, size * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     ctx.globalAlpha = 0.3;
     if (factionDef.baseShape === 'circle') {
       ctx.beginPath();
@@ -954,8 +969,13 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     // LOD: Simplify distant units
     const useLOD = distanceRatio > 0.7;
     
+    // Draw motion blur trail for fast-moving units
+    if (!useLOD && state.settings.enableMotionBlur && unit.currentSpeed && unit.currentSpeed > 1.5) {
+      drawMotionBlurTrail(ctx, unit, screenPos, color, state);
+    }
+    
     // Draw particles first (behind the unit) - skip for LOD
-    if (!useLOD && unit.particles && unit.particles.length > 0) {
+    if (!useLOD && unit.particles && unit.particles.length > 0 && state.settings.enableParticleEffects) {
       drawParticles(ctx, unit);
     }
 
@@ -1238,6 +1258,47 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
       }
     }
   });
+}
+
+// Draw motion blur trail for fast-moving units
+function drawMotionBlurTrail(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string, state: GameState): void {
+  if (!unit.rotation) return;
+  
+  const speed = unit.currentSpeed || 0;
+  const speedRatio = Math.min(speed / 5, 1); // Normalize speed to 0-1 range
+  
+  // Calculate trail direction (opposite of movement)
+  const trailAngle = unit.rotation + Math.PI;
+  const trailLength = 15 * speedRatio; // Trail length based on speed
+  
+  // Create gradient for trail
+  const endX = screenPos.x + Math.cos(trailAngle) * trailLength;
+  const endY = screenPos.y + Math.sin(trailAngle) * trailLength;
+  
+  const gradient = ctx.createLinearGradient(screenPos.x, screenPos.y, endX, endY);
+  gradient.addColorStop(0, addAlphaToColor(color, 0.4 * speedRatio));
+  gradient.addColorStop(0.5, addAlphaToColor(color, 0.2 * speedRatio));
+  gradient.addColorStop(1, addAlphaToColor(color, 0));
+  
+  ctx.save();
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = 8 * speedRatio;
+  ctx.lineCap = 'round';
+  
+  // Draw multiple trail lines for thickness
+  for (let i = -1; i <= 1; i++) {
+    const offset = i * 2;
+    const perpAngle = trailAngle + Math.PI / 2;
+    const offsetX = Math.cos(perpAngle) * offset;
+    const offsetY = Math.sin(perpAngle) * offset;
+    
+    ctx.beginPath();
+    ctx.moveTo(screenPos.x + offsetX, screenPos.y + offsetY);
+    ctx.lineTo(endX + offsetX, endY + offsetY);
+    ctx.stroke();
+  }
+  
+  ctx.restore();
 }
 
 function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
@@ -2351,11 +2412,31 @@ function drawEnergyPulses(ctx: CanvasRenderingContext2D, state: GameState): void
     const radius = metersToPixels(pulse.radius);
     
     ctx.save();
+    
+    // Add chromatic aberration effect for abilities if enabled
+    if (state.settings.enableGlowEffects) {
+      const offset = 2 * alpha; // Aberration amount
+      
+      // Draw red channel
+      ctx.globalAlpha = alpha * 0.3;
+      ctx.strokeStyle = 'oklch(0.65 0.28 25)'; // Red
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(screenPos.x - offset, screenPos.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Draw blue channel
+      ctx.strokeStyle = 'oklch(0.65 0.25 240)'; // Blue
+      ctx.beginPath();
+      ctx.arc(screenPos.x + offset, screenPos.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    
+    // Draw main pulse
     ctx.globalAlpha = alpha * 0.6;
     ctx.strokeStyle = pulse.color;
     ctx.lineWidth = 2;
-    ctx.shadowColor = pulse.color;
-    ctx.shadowBlur = 15;
+    applyGlowEffect(ctx, state, pulse.color, 15);
     
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
