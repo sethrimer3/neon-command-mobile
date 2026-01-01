@@ -241,7 +241,8 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
             </div>
           </div>
 
-          <div className="relative w-full aspect-square max-w-[300px] mx-auto">
+          {/* Lock the base layout to a predictable square so slot buttons anchor correctly. */}
+          <div className="relative w-full max-w-[300px] mx-auto" style={{ aspectRatio: '1 / 1' }}>
             <div className="absolute inset-0 flex items-center justify-center">
               <div
                 className="w-24 h-24 border-4 relative transition-all"

@@ -33,6 +33,8 @@ import { MultiplayerSync, initializeMultiplayerSync, updateMultiplayerSync } fro
 
 // Matchmaking configuration
 const MATCHMAKING_AUTO_START_DELAY_MS = 2000; // Delay before auto-starting matchmaking game
+// Keep the visible build badge in sync with AI-driven updates and releases.
+const BUILD_NUMBER = 6;
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -192,10 +194,16 @@ function App() {
 
       if (gameStateRef.current.mode === 'countdown') {
         const elapsed = now - (gameStateRef.current.countdownStartTime || now);
-        const secondsRemaining = Math.ceil(3 - elapsed / 1000);
-        const prevSeconds = Math.ceil(3 - (elapsed - 16.67) / 1000);
+        // Track the countdown seconds in game state so the UI re-renders reliably.
+        const secondsRemaining = Math.max(0, Math.ceil(3 - elapsed / 1000));
+        const previousSeconds = gameStateRef.current.countdownSeconds ?? secondsRemaining;
         
-        if (secondsRemaining !== prevSeconds && secondsRemaining > 0) {
+        if (secondsRemaining !== previousSeconds) {
+          gameStateRef.current.countdownSeconds = secondsRemaining;
+          setRenderTrigger(prev => prev + 1);
+        }
+
+        if (secondsRemaining !== previousSeconds && secondsRemaining > 0) {
           soundManager.playCountdown();
         }
         
@@ -211,6 +219,7 @@ function App() {
           initializeCamera(gameStateRef.current);
           
           delete gameStateRef.current.countdownStartTime;
+          delete gameStateRef.current.countdownSeconds;
           setRenderTrigger(prev => prev + 1);
         }
       }
@@ -968,7 +977,7 @@ function App() {
             <div className="orbitron text-8xl font-black text-foreground neon-glow" style={{
               textShadow: '0 0 30px currentColor, 0 0 60px currentColor'
             }}>
-              {Math.ceil(3 - (Date.now() - (gameState.countdownStartTime || Date.now())) / 1000)}
+              {gameState.countdownSeconds ?? 3}
             </div>
           </div>
         </div>
@@ -987,7 +996,7 @@ function App() {
       {gameState.mode === 'menu' && (
         <div className="absolute inset-0 flex items-center justify-center animate-in fade-in duration-500">
           <div className="absolute top-4 left-4 orbitron text-sm text-muted-foreground opacity-70">
-            Build 4
+            Build {BUILD_NUMBER}
           </div>
           <div className="flex flex-col gap-4 w-80 max-w-[90vw]">
             <div className="flex justify-center mb-4 animate-in fade-in zoom-in-95 duration-700">
@@ -1529,7 +1538,9 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
     surrenderExpanded: false,
+    // Seed the countdown clock so the overlay starts at 3 and ticks down.
     countdownStartTime: Date.now(),
+    countdownSeconds: 3,
     matchStats: {
       startTime: Date.now(),
       unitsTrainedByPlayer: 0,
@@ -1766,7 +1777,9 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
     surrenderExpanded: false,
+    // Seed the countdown clock so the overlay starts at 3 and ticks down.
     countdownStartTime: Date.now(),
+    countdownSeconds: 3,
     matchStats: {
       startTime: Date.now(),
       unitsTrainedByPlayer: 0,

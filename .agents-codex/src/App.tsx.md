@@ -162,6 +162,7 @@ Main application component that orchestrates the entire game. Manages game state
 - Switched persistence hook to local storage to avoid Spark-only dependencies
 - **2026-01-01**: Wired multiplayer init to realtime store abstraction and improved error handling
 - **2026-01-01**: Updated menu build badge and sprite URL construction to use the Vite base path.
+- **2026-01-01**: Added tracked countdown seconds for UI refreshes and bumped the visible build number.
 
 ## Watch Out For
 - Game state ref vs React state - use correctly for performance

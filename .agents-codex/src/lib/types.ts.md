@@ -112,6 +112,7 @@ The complete game state structure containing:
 - **settings**: Game configuration
 - **surrenderClicks**: Surrender mechanism tracking
 - **countdownStartTime**: Multiplayer countdown
+- **countdownSeconds**: UI countdown snapshot used for rendering and audio cues
 - **matchStartAnimation**: Intro animation state
 - **matchStats**: Match statistics tracking
 - **matchTimeLimit**: Optional time limit for matches
@@ -153,6 +154,7 @@ None currently identified
 - Added match statistics and time limit support
 - Added topography lines for visual enhancement
 - **2025-12-31**: Added Particle interface and particle physics system for visual effects on marines (10 particles per marine that orbit using attraction forces)
+- **2026-01-01**: Added countdownSeconds to keep UI and audio updates in sync during match start.
 
 ## Watch Out For
 - Always use meters for game logic, only convert to pixels for rendering

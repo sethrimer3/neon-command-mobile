@@ -473,6 +473,8 @@ export interface GameState {
   surrenderExpanded: boolean;
 
   countdownStartTime?: number;
+  // Snapshot of the countdown seconds for UI rendering and audio cues.
+  countdownSeconds?: number;
   matchStartAnimation?: {
     startTime: number;
     phase: 'bases-sliding' | 'go';
