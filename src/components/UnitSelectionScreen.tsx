@@ -115,10 +115,19 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
                     // Reset unit slots to valid units for this faction
                     const availableUnits = FACTION_DEFINITIONS[faction].availableUnits;
                     if (availableUnits.length > 0) {
-                      onSlotChange('left', availableUnits[0]);
-                      onSlotChange('up', availableUnits[Math.min(1, availableUnits.length - 1)]);
-                      onSlotChange('down', availableUnits[Math.min(2, availableUnits.length - 1)]);
-                      onSlotChange('right', availableUnits[Math.min(3, availableUnits.length - 1)]);
+                      // For mobile faction with only 1 unit, set all slots to that unit
+                      if (availableUnits.length === 1) {
+                        onSlotChange('left', availableUnits[0]);
+                        onSlotChange('up', availableUnits[0]);
+                        onSlotChange('down', availableUnits[0]);
+                        onSlotChange('right', availableUnits[0]);
+                      } else {
+                        // For factions with multiple units, set different units in slots
+                        onSlotChange('left', availableUnits[0]);
+                        onSlotChange('up', availableUnits[Math.min(1, availableUnits.length - 1)]);
+                        onSlotChange('down', availableUnits[Math.min(2, availableUnits.length - 1)]);
+                        onSlotChange('right', availableUnits[Math.min(3, availableUnits.length - 1)]);
+                      }
                     }
                   }}
                   className={`p-4 border-2 rounded-lg transition-all ${
