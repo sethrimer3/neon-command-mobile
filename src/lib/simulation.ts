@@ -810,6 +810,54 @@ function updateUnits(state: GameState, deltaTime: number): void {
         executeAbility(state, unit, currentNode);
         unit.commandQueue.shift();
       }
+    } else if (currentNode.type === 'patrol') {
+      // Patrol: move to patrol point, then add return command to create loop
+      const dist = distance(unit.position, currentNode.position);
+      if (dist < 0.1) {
+        // Reached patrol point - add return command and remove current
+        unit.commandQueue.shift();
+        // Add return patrol command if queue isn't full
+        if (unit.commandQueue.length < QUEUE_MAX_LENGTH) {
+          unit.commandQueue.push({ 
+            type: 'patrol', 
+            position: currentNode.returnPosition,
+            returnPosition: currentNode.position 
+          });
+        }
+        return;
+      }
+
+      const def = UNIT_DEFINITIONS[unit.type];
+      const direction = normalize(subtract(currentNode.position, unit.position));
+      const movement = scale(direction, def.moveSpeed * deltaTime);
+      
+      // Update unit rotation to face movement direction
+      updateUnitRotation(unit, direction, deltaTime);
+      
+      const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
+      const newPosition = add(unit.position, scale(direction, moveDist));
+      
+      // Check for collisions
+      if (!checkObstacleCollision(newPosition, UNIT_SIZE_METERS / 2, state.obstacles) &&
+          !checkUnitCollision(newPosition, unit.id, state.units)) {
+        unit.position = newPosition;
+      } else {
+        return;
+      }
+
+      // Track distance traveled
+      const queueMovementNodes = unit.commandQueue.filter((n) => 
+        n.type === 'move' || n.type === 'attack-move' || n.type === 'patrol'
+      ).length;
+      const creditMultiplier = 1.0 + QUEUE_BONUS_PER_NODE * queueMovementNodes;
+      unit.distanceCredit += moveDist * creditMultiplier;
+
+      while (unit.distanceCredit >= PROMOTION_DISTANCE_THRESHOLD) {
+        unit.distanceCredit -= PROMOTION_DISTANCE_THRESHOLD;
+        unit.damageMultiplier *= PROMOTION_MULTIPLIER;
+      }
+
+      unit.distanceTraveled += moveDist;
     }
   });
 }

@@ -1327,6 +1327,18 @@ function drawHUD(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.font = '14px Space Grotesk, sans-serif';
   }
   
+  // Draw patrol mode indicator
+  if (state.patrolMode) {
+    ctx.fillStyle = COLORS.photon;
+    ctx.fillText('PATROL MODE', 10, 80);
+  } else if (state.elapsedTime < 15) {
+    // Show hint for first 15 seconds
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.font = '12px Space Grotesk, sans-serif';
+    ctx.fillText('Hold P for patrol', 10, 80);
+    ctx.font = '14px Space Grotesk, sans-serif';
+  }
+  
   if (state.matchTimeLimit) {
     const timeRemaining = Math.max(0, state.matchTimeLimit - state.elapsedTime);
     const mins = Math.floor(timeRemaining / 60);

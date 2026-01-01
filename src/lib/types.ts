@@ -56,7 +56,8 @@ export interface Projectile {
 export type CommandNode = 
   | { type: 'move'; position: Vector2 }
   | { type: 'ability'; position: Vector2; direction: Vector2 }
-  | { type: 'attack-move'; position: Vector2 };
+  | { type: 'attack-move'; position: Vector2 }
+  | { type: 'patrol'; position: Vector2; returnPosition: Vector2 };
 
 export interface Unit {
   id: string;
@@ -238,6 +239,7 @@ export interface GameState {
   selectedUnits: Set<string>;
   controlGroups: Record<number, Set<string>>; // Number keys 1-8 to unit IDs
   currentFormation: import('./formations').FormationType; // Current formation type for movement commands
+  patrolMode: boolean; // Whether patrol mode is active (P key held)
   
   elapsedTime: number;
   lastIncomeTime: number;

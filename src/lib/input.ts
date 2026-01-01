@@ -411,8 +411,12 @@ function handleTap(state: GameState, screenPos: { x: number; y: number }, canvas
   }
 
   if (state.selectedUnits.size > 0) {
-    addMovementCommand(state, worldPos);
+    addMovementCommand(state, worldPos, state.patrolMode);
     soundManager.playUnitMove();
+    // Show toast if patrol mode is active
+    if (state.patrolMode) {
+      // Toast will be handled by the sound feedback
+    }
   }
 }
 
@@ -449,7 +453,7 @@ function handleAbilityDrag(state: GameState, dragVector: { x: number; y: number 
   });
 }
 
-function addMovementCommand(state: GameState, worldPos: { x: number; y: number }): void {
+function addMovementCommand(state: GameState, worldPos: { x: number; y: number }, isPatrol: boolean = false): void {
   const selectedUnitsArray = state.units.filter(unit => state.selectedUnits.has(unit.id));
   
   if (selectedUnitsArray.length === 0) return;
@@ -466,13 +470,39 @@ function addMovementCommand(state: GameState, worldPos: { x: number; y: number }
     // Assign formation positions to units
     selectedUnitsArray.forEach((unit, index) => {
       if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
-      unit.commandQueue.push({ type: 'move', position: formationPositions[index] });
+      
+      if (isPatrol) {
+        // For patrol, we need a return position - use current position or last queued position
+        let returnPos = unit.position;
+        if (unit.commandQueue.length > 0) {
+          const lastNode = unit.commandQueue[unit.commandQueue.length - 1];
+          if (lastNode.type === 'move' || lastNode.type === 'attack-move' || lastNode.type === 'patrol') {
+            returnPos = lastNode.position;
+          }
+        }
+        unit.commandQueue.push({ type: 'patrol', position: formationPositions[index], returnPosition: returnPos });
+      } else {
+        unit.commandQueue.push({ type: 'move', position: formationPositions[index] });
+      }
     });
   } else {
     // No formation or single unit - all move to same point
     selectedUnitsArray.forEach((unit) => {
       if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
-      unit.commandQueue.push({ type: 'move', position: worldPos });
+      
+      if (isPatrol) {
+        // For patrol, we need a return position - use current position or last queued position
+        let returnPos = unit.position;
+        if (unit.commandQueue.length > 0) {
+          const lastNode = unit.commandQueue[unit.commandQueue.length - 1];
+          if (lastNode.type === 'move' || lastNode.type === 'attack-move' || lastNode.type === 'patrol') {
+            returnPos = lastNode.position;
+          }
+        }
+        unit.commandQueue.push({ type: 'patrol', position: worldPos, returnPosition: returnPos });
+      } else {
+        unit.commandQueue.push({ type: 'move', position: worldPos });
+      }
     });
   }
 }

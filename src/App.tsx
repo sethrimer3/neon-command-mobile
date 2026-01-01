@@ -309,6 +309,12 @@ function App() {
         e.preventDefault();
       }
       
+      // P key to enable patrol mode
+      if (e.key === 'p' || e.key === 'P') {
+        gameStateRef.current.patrolMode = true;
+        e.preventDefault();
+      }
+      
       // R key to reset camera
       if (e.key === 'r' || e.key === 'R') {
         resetCamera(gameStateRef.current);
@@ -330,6 +336,11 @@ function App() {
 
     const handleKeyUp = (e: KeyboardEvent) => {
       pressedKeys.delete(e.key.toLowerCase());
+      
+      // P key released - disable patrol mode
+      if (e.key === 'p' || e.key === 'P') {
+        gameStateRef.current.patrolMode = false;
+      }
     };
 
     // Update camera position based on pressed keys
@@ -1201,6 +1212,7 @@ function createInitialState(): GameState {
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
     currentFormation: 'none',
+    patrolMode: false,
     currentFormation: 'none', // Default to no formation
     elapsedTime: 0,
     lastIncomeTime: 0,
@@ -1267,6 +1279,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
     currentFormation: 'none',
+    patrolMode: false,
     elapsedTime: 0,
     lastIncomeTime: 0,
     winner: null,
@@ -1335,6 +1348,7 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
     currentFormation: 'none',
+    patrolMode: false,
     elapsedTime: 0,
     lastIncomeTime: 0,
     winner: null,
@@ -1393,6 +1407,7 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
     currentFormation: 'none',
+    patrolMode: false,
     elapsedTime: 0,
     lastIncomeTime: 0,
     winner: null,
@@ -1463,6 +1478,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
     currentFormation: 'none',
+    patrolMode: false,
     elapsedTime: 0,
     lastIncomeTime: 0,
     winner: null,
