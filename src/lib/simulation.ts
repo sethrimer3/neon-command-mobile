@@ -1366,12 +1366,21 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
   // Reset attack cooldown
   unit.attackCooldown = 1.0 / def.attackRate;
   
+  // Update rotation to face target
+  const direction = normalize(subtract(target.position, unit.position));
+  const targetRotation = Math.atan2(direction.y, direction.x);
+  unit.rotation = targetRotation;
+  
   if (def.attackType === 'ranged') {
     // Spawn projectile for ranged attacks
     const targetPos = target.position;
     const targetUnit = 'type' in target ? (target as Unit) : undefined;
     const projectile = createProjectile(state, unit, targetPos, targetUnit);
     state.projectiles.push(projectile);
+    
+    // Create muzzle flash effect for visual feedback
+    const color = state.players[unit.owner].color;
+    createHitSparks(state, unit.position, color, 3);
     
     if (unit.owner === 0 && Math.random() < 0.3) {
       soundManager.playAttack();
