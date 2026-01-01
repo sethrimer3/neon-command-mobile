@@ -88,6 +88,21 @@ function isOnScreen(position: Vector2, canvas: HTMLCanvasElement, margin: number
          screenPos.y <= canvas.height + margin;
 }
 
+// Helper function to conditionally apply glow/shadow effects based on settings
+function applyGlowEffect(ctx: CanvasRenderingContext2D, state: GameState, color: string, blur: number): void {
+  if (state.settings.enableGlowEffects) {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = blur;
+  }
+}
+
+// Helper function to clear glow/shadow effects
+function clearGlowEffect(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (state.settings.enableGlowEffects) {
+    ctx.shadowBlur = 0;
+  }
+}
+
 export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canvas: HTMLCanvasElement, selectionRect?: { x1: number; y1: number; x2: number; y2: number } | null): void {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -216,7 +231,7 @@ function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement
       ctx.fill();
       
       // Add subtle glow for larger stars
-      if (star.size > 1.5) {
+      if (star.size > 1.5 && state?.settings?.enableGlowEffects) {
         ctx.shadowColor = `rgba(200, 220, 255, ${alpha * 0.6})`;
         ctx.shadowBlur = star.size * 3;
         ctx.fill();
@@ -288,10 +303,9 @@ function drawObstacles(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.fillRect(-width / 2, -height / 2, width, height);
       ctx.strokeRect(-width / 2, -height / 2, width, height);
       
-      ctx.shadowBlur = 15;
-      ctx.shadowColor = 'oklch(0.55 0.22 240)';
+      applyGlowEffect(ctx, state, 'oklch(0.55 0.22 240)', 15);
       ctx.strokeRect(-width / 2, -height / 2, width, height);
-      ctx.shadowBlur = 0;
+      clearGlowEffect(ctx, state);
     } else if (obstacle.type === 'pillar') {
       const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, width / 2);
       gradient.addColorStop(0, 'oklch(0.45 0.20 280)');
@@ -304,10 +318,9 @@ function drawObstacles(ctx: CanvasRenderingContext2D, state: GameState): void {
       
       ctx.strokeStyle = 'oklch(0.65 0.25 280)';
       ctx.lineWidth = 2;
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = 'oklch(0.65 0.25 280)';
+      applyGlowEffect(ctx, state, 'oklch(0.65 0.25 280)', 20);
       ctx.stroke();
-      ctx.shadowBlur = 0;
+      clearGlowEffect(ctx, state);
     } else if (obstacle.type === 'debris') {
       ctx.fillStyle = 'oklch(0.35 0.12 25)';
       ctx.strokeStyle = 'oklch(0.58 0.20 25)';
@@ -2192,6 +2205,7 @@ function drawImpactEffects(ctx: CanvasRenderingContext2D, state: GameState): voi
 
 function drawExplosionParticles(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (!state.explosionParticles || state.explosionParticles.length === 0) return;
+  if (!state.settings.enableParticleEffects) return; // Skip if particles disabled
   
   state.explosionParticles.forEach((particle) => {
     const screenPos = positionToPixels(particle.position);
@@ -2207,19 +2221,17 @@ function drawExplosionParticles(ctx: CanvasRenderingContext2D, state: GameState)
       
       // Draw rotated square for debris
       ctx.fillStyle = particle.color;
-      ctx.shadowColor = particle.color;
-      ctx.shadowBlur = size * 2;
+      applyGlowEffect(ctx, state, particle.color, size * 2);
       ctx.fillRect(-size / 2, -size / 2, size, size);
       
       // Add extra glow layer
       ctx.globalAlpha = particle.alpha * 0.4;
-      ctx.shadowBlur = size * 4;
+      applyGlowEffect(ctx, state, particle.color, size * 4);
       ctx.fillRect(-size / 2, -size / 2, size, size);
     } else {
       // Draw particle with glow (for sparks)
       ctx.fillStyle = particle.color;
-      ctx.shadowColor = particle.color;
-      ctx.shadowBlur = size * 3;
+      applyGlowEffect(ctx, state, particle.color, size * 3);
       
       ctx.beginPath();
       ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
@@ -2227,7 +2239,7 @@ function drawExplosionParticles(ctx: CanvasRenderingContext2D, state: GameState)
       
       // Add extra glow layer
       ctx.globalAlpha = particle.alpha * 0.4;
-      ctx.shadowBlur = size * 6;
+      applyGlowEffect(ctx, state, particle.color, size * 6);
       ctx.fill();
     }
     
@@ -2238,6 +2250,7 @@ function drawExplosionParticles(ctx: CanvasRenderingContext2D, state: GameState)
 // Draw hit spark effects
 function drawHitSparks(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (!state.hitSparks) return;
+  if (!state.settings.enableParticleEffects) return; // Skip if particles disabled
   
   const now = Date.now();
   state.hitSparks.forEach((spark) => {
@@ -2251,8 +2264,7 @@ function drawHitSparks(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.fillStyle = spark.color;
-    ctx.shadowColor = spark.color;
-    ctx.shadowBlur = size * 3;
+    applyGlowEffect(ctx, state, spark.color, size * 3);
     
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
@@ -2265,6 +2277,7 @@ function drawHitSparks(ctx: CanvasRenderingContext2D, state: GameState): void {
 // Draw celebration particles for victory screen
 function drawCelebrationParticles(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (!state.celebrationParticles || state.celebrationParticles.length === 0) return;
+  if (!state.settings.enableParticleEffects) return; // Skip if particles disabled
   
   const now = Date.now();
   state.celebrationParticles.forEach((particle) => {

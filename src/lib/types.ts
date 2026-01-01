@@ -411,6 +411,9 @@ export interface GameState {
     showNumericHP: boolean;
     playerFaction: FactionType;
     enemyFaction: FactionType;
+    enableGlowEffects?: boolean; // Enable/disable glow/shadow effects
+    enableParticleEffects?: boolean; // Enable/disable particle effects
+    enableMotionBlur?: boolean; // Enable/disable motion blur trails
   };
 
   surrenderClicks: number;

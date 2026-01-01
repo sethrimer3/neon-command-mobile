@@ -61,6 +61,9 @@ function App() {
   const [enableCameraControls, setEnableCameraControls] = useKV<boolean>('enable-camera-controls', true);
   const [playerFaction, setPlayerFaction] = useKV<FactionType>('player-faction', 'radiant');
   const [enemyFaction, setEnemyFaction] = useKV<FactionType>('enemy-faction', 'radiant');
+  const [enableGlowEffects, setEnableGlowEffects] = useKV<boolean>('enable-glow-effects', true);
+  const [enableParticleEffects, setEnableParticleEffects] = useKV<boolean>('enable-particle-effects', true);
+  const [enableMotionBlur, setEnableMotionBlur] = useKV<boolean>('enable-motion-blur', true);
 
   const gameState = gameStateRef.current;
   const lastVictoryStateRef = useRef<boolean>(false);
@@ -114,6 +117,9 @@ function App() {
       showNumericHP: showNumericHP ?? true,
       playerFaction: playerFaction || 'radiant',
       enemyFaction: enemyFaction || 'radiant',
+      enableGlowEffects: enableGlowEffects ?? true,
+      enableParticleEffects: enableParticleEffects ?? true,
+      enableMotionBlur: enableMotionBlur ?? true,
     };
     gameStateRef.current.showMinimap = showMinimap ?? true;
     gameStateRef.current.players = gameStateRef.current.players.map((p, i) => ({
@@ -1207,6 +1213,46 @@ function App() {
                   checked={showPerformance ?? false}
                   onCheckedChange={(checked) => {
                     setShowPerformance(checked);
+                    soundManager.playButtonClick();
+                  }}
+                />
+              </div>
+
+              <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
+                <p><strong>Visual Effects (Shaders):</strong></p>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Label htmlFor="glow-toggle">Glow & Shadow Effects</Label>
+                <Switch
+                  id="glow-toggle"
+                  checked={enableGlowEffects ?? true}
+                  onCheckedChange={(checked) => {
+                    setEnableGlowEffects(checked);
+                    soundManager.playButtonClick();
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Label htmlFor="particle-toggle">Particle Effects</Label>
+                <Switch
+                  id="particle-toggle"
+                  checked={enableParticleEffects ?? true}
+                  onCheckedChange={(checked) => {
+                    setEnableParticleEffects(checked);
+                    soundManager.playButtonClick();
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Label htmlFor="motionblur-toggle">Motion Blur Trails</Label>
+                <Switch
+                  id="motionblur-toggle"
+                  checked={enableMotionBlur ?? true}
+                  onCheckedChange={(checked) => {
+                    setEnableMotionBlur(checked);
                     soundManager.playButtonClick();
                   }}
                 />
