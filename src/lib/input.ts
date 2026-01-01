@@ -480,17 +480,11 @@ function getCommandOrigin(unit: Unit): Vector2 {
   return unit.position;
 }
 
-// Helper function to safely normalize a vector, handling zero-length vectors
-function safeNormalize(vector: Vector2): Vector2 {
-  const len = distance({ x: 0, y: 0 }, vector);
-  return len > 0 ? normalize(vector) : { x: 0, y: 0 };
-}
-
 // Helper function to clamp a vector to max range
 function clampVectorToRange(vector: Vector2, maxRange: number): Vector2 {
   const len = distance({ x: 0, y: 0 }, vector);
   const clampedLen = Math.min(len, maxRange);
-  const direction = safeNormalize(vector);
+  const direction = normalize(vector); // normalize() already handles zero-length vectors
   return scale(direction, clampedLen);
 }
 
