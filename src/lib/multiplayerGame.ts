@@ -2,7 +2,7 @@
  * Multiplayer game integration - handles command synchronization between players
  */
 
-import { GameState, CommandNode, Unit, LASER_RANGE, LASER_WIDTH, LASER_DAMAGE_UNIT, LASER_DAMAGE_BASE, LASER_COOLDOWN, BASE_SIZE_METERS, UnitType } from './types';
+import { GameState, CommandNode, Unit, LASER_RANGE, LASER_WIDTH, LASER_DAMAGE_UNIT, LASER_DAMAGE_BASE, LASER_COOLDOWN, BASE_SIZE_METERS, UnitType, UNIT_DEFINITIONS } from './types';
 import { MultiplayerManager, GameCommand } from './multiplayer';
 import { spawnUnit } from './simulation';
 
@@ -10,6 +10,9 @@ export interface MultiplayerSync {
   lastCommandCheck: number;
   commandBuffer: GameCommand[];
 }
+
+// Configuration constants
+const COMMAND_POLL_INTERVAL_MS = 100; // How often to check for new opponent commands
 
 /**
  * Initialize multiplayer synchronization state for a game
@@ -143,8 +146,8 @@ export function applyOpponentCommands(
             if (command.baseId && command.spawnType && command.position) {
               const base = state.bases.find(b => b.id === command.baseId && b.owner === opponentIndex);
               if (base) {
-                // Validate spawnType is a valid UnitType before spawning
-                const validUnitTypes: UnitType[] = ['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor'];
+                // Validate spawnType using available unit types from UNIT_DEFINITIONS
+                const validUnitTypes = Object.keys(UNIT_DEFINITIONS) as UnitType[];
                 if (validUnitTypes.includes(command.spawnType as UnitType)) {
                   spawnUnit(state, opponentIndex, command.spawnType as UnitType, base.position, command.position);
                 }
@@ -252,8 +255,8 @@ export async function updateMultiplayerSync(
 ): Promise<void> {
   const now = Date.now();
   
-  // Check for new commands every 100ms
-  if (now - sync.lastCommandCheck < 100) {
+  // Check for new commands at configured interval
+  if (now - sync.lastCommandCheck < COMMAND_POLL_INTERVAL_MS) {
     return;
   }
   

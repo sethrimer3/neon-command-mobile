@@ -30,6 +30,9 @@ import { PlayerStatistics, MatchStats, createEmptyStatistics, updateStatistics, 
 import { soundManager } from './lib/sound';
 import { MultiplayerSync, initializeMultiplayerSync, updateMultiplayerSync } from './lib/multiplayerGame';
 
+// Matchmaking configuration
+const MATCHMAKING_AUTO_START_DELAY_MS = 2000; // Delay before auto-starting matchmaking game
+
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameStateRef = useRef<GameState>(createInitialState());
@@ -662,10 +665,10 @@ function App() {
           setCurrentLobby(updatedLobby);
           if (updatedLobby.guestId) {
             toast.success('Opponent found! Starting game...');
-            // Auto-start the game after a short delay
+            // Auto-start the game after a configured delay
             setTimeout(async () => {
               await multiplayerManagerRef.current?.startGame();
-            }, 2000);
+            }, MATCHMAKING_AUTO_START_DELAY_MS);
           }
           if (updatedLobby.status === 'playing') {
             if (lobbyCheckIntervalRef.current) {

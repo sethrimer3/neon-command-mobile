@@ -570,8 +570,8 @@ function handleVectorBasedAbilityDrag(state: GameState, dragVector: { x: number;
   
   const selectedUnitsArray = state.units.filter(unit => state.selectedUnits.has(unit.id));
 
-  state.units.forEach((unit) => {
-    if (!state.selectedUnits.has(unit.id)) return;
+  // Apply ability command to all selected units
+  selectedUnitsArray.forEach((unit) => {
     if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
 
     // Use the command origin (last queued position or current position)
