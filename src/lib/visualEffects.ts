@@ -88,7 +88,7 @@ export function createParticleBurst(
   // Check particle limit and skip if at max
   if (state.explosionParticles.length >= MAX_EXPLOSION_PARTICLES) {
     // Remove oldest particles to make room
-    const toRemove = Math.min(count, state.explosionParticles.length - MAX_EXPLOSION_PARTICLES + count);
+    const toRemove = Math.max(0, state.explosionParticles.length + count - MAX_EXPLOSION_PARTICLES);
     state.explosionParticles.splice(0, toRemove);
   }
 
@@ -131,7 +131,7 @@ export function createHitSparks(
 
   // Check particle limit
   if (state.hitSparks.length >= MAX_HIT_SPARKS) {
-    const toRemove = Math.min(count, state.hitSparks.length - MAX_HIT_SPARKS + count);
+    const toRemove = Math.max(0, state.hitSparks.length + count - MAX_HIT_SPARKS);
     state.hitSparks.splice(0, toRemove);
   }
 

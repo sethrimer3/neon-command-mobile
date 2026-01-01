@@ -45,6 +45,20 @@ function getTeamHighlightColor(owner: number): string {
     : 'oklch(0.95 0.15 25)'; // Enemy color highlight
 }
 
+// Helper function to add alpha to color
+function addAlphaToColor(color: string, alpha: number): string {
+  // Simple approach: check if color already has alpha, if not add it
+  if (color.includes(' / ')) {
+    // Replace existing alpha
+    return color.replace(/ \/ [0-9.]+\)/, ` / ${alpha})`);
+  } else if (color.endsWith(')')) {
+    // Add alpha before closing parenthesis
+    return color.slice(0, -1) + ` / ${alpha})`;
+  }
+  // Fallback: return with global alpha
+  return color;
+}
+
 // Helper function to check if an object is visible on screen
 function isOnScreen(position: Vector2, canvas: HTMLCanvasElement, margin: number = OFFSCREEN_CULLING_MARGIN): boolean {
   const screenPos = positionToPixels(position);
@@ -705,8 +719,8 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     // Create multi-layer gradient for trail
     const outerGradient = ctx.createLinearGradient(trailScreenPos.x, trailScreenPos.y, screenPos.x, screenPos.y);
     outerGradient.addColorStop(0, 'transparent');
-    outerGradient.addColorStop(0.5, projectile.color.replace(')', ` / 0.3)`));
-    outerGradient.addColorStop(1, projectile.color.replace(')', ` / 0.6)`));
+    outerGradient.addColorStop(0.5, addAlphaToColor(projectile.color, 0.3));
+    outerGradient.addColorStop(1, addAlphaToColor(projectile.color, 0.6));
     
     ctx.strokeStyle = outerGradient;
     ctx.lineWidth = 6;
@@ -722,7 +736,7 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     // Draw energy trail with gradient and glow (inner layer)
     const gradient = ctx.createLinearGradient(trailScreenPos.x, trailScreenPos.y, screenPos.x, screenPos.y);
     gradient.addColorStop(0, 'transparent');
-    gradient.addColorStop(0.3, projectile.color.replace(')', ` / 0.5)`));
+    gradient.addColorStop(0.3, addAlphaToColor(projectile.color, 0.5));
     gradient.addColorStop(1, projectile.color);
     
     ctx.strokeStyle = gradient;
