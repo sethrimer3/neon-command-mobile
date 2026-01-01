@@ -90,6 +90,40 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
           <polygon points="10,2 15,10 10,16 5,10" fill={color} opacity="0.8" />
         </svg>
       );
+    } else if (unitType === 'berserker') {
+      return (
+        <svg width={size} height={size} viewBox="0 0 20 20">
+          <circle cx="10" cy="10" r="8" fill={color} opacity="0.8" />
+          <polygon points="10,4 13,10 10,8 7,10" fill="white" opacity="0.9" />
+          <rect x="6" y="11" width="8" height="4" fill="white" opacity="0.9" />
+        </svg>
+      );
+    } else if (unitType === 'assassin') {
+      return (
+        <svg width={size} height={size} viewBox="0 0 20 20">
+          <circle cx="10" cy="10" r="8" fill={color} opacity="0.8" />
+          <polygon points="10,3 14,10 10,9 6,10" fill="white" opacity="0.9" />
+          <line x1="7" y1="13" x2="13" y2="13" stroke="white" strokeWidth="2" opacity="0.9" />
+        </svg>
+      );
+    } else if (unitType === 'juggernaut') {
+      return (
+        <svg width={size} height={size} viewBox="0 0 20 20">
+          <circle cx="10" cy="10" r="9" fill={color} opacity="0.9" stroke={color} strokeWidth="2" />
+          <rect x="6" y="6" width="8" height="8" fill="white" opacity="0.9" />
+          <circle cx="10" cy="10" r="2" fill={color} />
+        </svg>
+      );
+    } else if (unitType === 'striker') {
+      return (
+        <svg width={size} height={size} viewBox="0 0 20 20">
+          <circle cx="10" cy="10" r="8" fill={color} opacity="0.8" />
+          <polygon points="10,4 11,9 9,9" fill="white" opacity="0.9" />
+          <polygon points="10,16 9,11 11,11" fill="white" opacity="0.9" />
+          <polygon points="4,10 9,11 9,9" fill="white" opacity="0.9" />
+          <polygon points="16,10 11,9 11,11" fill="white" opacity="0.9" />
+        </svg>
+      );
     }
     
     return null;

@@ -1556,6 +1556,10 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
     artillery: 14,   // Long-range - moderate-high particles for power
     medic: 12,       // Support unit - moderate particles with healing theme
     interceptor: 14, // Fast attacker - moderate-high particles for aggressive look
+    berserker: 18,   // Heavy melee - lots of particles for rage effect
+    assassin: 10,    // Fast melee - fewer particles for stealth/speed
+    juggernaut: 22,  // Heaviest unit - most particles for imposing presence
+    striker: 14,     // Medium melee - moderate particles for whirlwind effect
   };
   unit.particles = createParticlesForUnit(unit, particleCounts[type]);
 
