@@ -1,7 +1,7 @@
 /**
  * Unit tooltip component displaying unit stats and abilities
  */
-import { UnitType, UNIT_DEFINITIONS } from '@/lib/types';
+import { UnitType, UNIT_DEFINITIONS, UnitModifier } from '@/lib/types';
 import { Card, CardContent } from './ui/card';
 
 interface UnitTooltipProps {
@@ -11,6 +11,29 @@ interface UnitTooltipProps {
   hp?: number;
   maxHp?: number;
   abilityCooldown?: number;
+  armor?: number;
+}
+
+// Helper to get modifier icon
+function getModifierIcon(modifier: UnitModifier): string {
+  switch (modifier) {
+    case 'melee': return '⚔️';
+    case 'ranged': return '🏹';
+    case 'flying': return '✈️';
+    case 'small': return '🐜';
+    case 'healing': return '⚕️';
+  }
+}
+
+// Helper to get modifier color
+function getModifierColor(modifier: UnitModifier): string {
+  switch (modifier) {
+    case 'melee': return 'text-red-500';
+    case 'ranged': return 'text-blue-500';
+    case 'flying': return 'text-cyan-500';
+    case 'small': return 'text-yellow-500';
+    case 'healing': return 'text-green-500';
+  }
 }
 
 export function UnitTooltip({ 
@@ -19,7 +42,8 @@ export function UnitTooltip({
   damageMultiplier = 1.0,
   hp,
   maxHp,
-  abilityCooldown = 0
+  abilityCooldown = 0,
+  armor
 }: UnitTooltipProps) {
   const def = UNIT_DEFINITIONS[unitType];
   
@@ -37,6 +61,21 @@ export function UnitTooltip({
           <div className="font-bold text-primary text-sm uppercase tracking-wider">
             {def.name}
           </div>
+          
+          {/* Modifiers */}
+          {def.modifiers.length > 0 && (
+            <div className="flex gap-1 items-center">
+              {def.modifiers.map((modifier, idx) => (
+                <span
+                  key={idx}
+                  className={`text-base ${getModifierColor(modifier)}`}
+                  title={modifier}
+                >
+                  {getModifierIcon(modifier)}
+                </span>
+              ))}
+            </div>
+          )}
           
           {/* Stats Grid */}
           <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
@@ -87,6 +126,12 @@ export function UnitTooltip({
                 <div className="text-right font-mono">{def.attackRange}m</div>
               </>
             )}
+            
+            {/* Armor */}
+            <div className="text-muted-foreground">Armor:</div>
+            <div className="text-right font-mono text-blue-400">
+              {armor !== undefined ? armor : def.armor}
+            </div>
             
             {/* Speed */}
             <div className="text-muted-foreground">Speed:</div>
