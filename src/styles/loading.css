@@ -1,0 +1,201 @@
+/* Loading Screen Styles - Ported from Thero_Idle_TD */
+
+/* Overlay container */
+#startup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.5s ease-in;
+}
+
+#startup-overlay.visible {
+    opacity: 1;
+}
+
+#startup-overlay.exiting {
+    opacity: 0;
+    transition: opacity 0.8s ease-out;
+}
+
+/* Logo container */
+#startup-logo {
+    max-width: 400px;
+    width: 60%;
+    margin-bottom: 3rem;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: logoFadeIn 1.2s ease-out 0.3s forwards;
+}
+
+#startup-overlay.exiting #startup-logo {
+    animation: logoSlideUp 0.8s ease-in forwards;
+}
+
+/* Loading spinner container */
+#startup-spinner {
+    width: 150px;
+    height: 150px;
+    margin-bottom: 2rem;
+}
+
+/* Sprite sheet animation */
+#startup-spinner-sprite {
+    width: 150px;
+    height: 150px;
+    background-image: url('/ASSETS/sprites/gravyThyme/loadingAnimation/sprite_sheet.png');
+    background-size: 13650px 150px; /* 91 frames * 150px */
+    background-repeat: no-repeat;
+    background-position: 0 0;
+    animation: spriteAnimation 1.75835s steps(90) infinite;
+}
+
+/* Loading hint text */
+#startup-hint {
+    font-family: 'Space Grotesk', 'Orbitron', monospace;
+    font-size: 1.1rem;
+    color: #a0a0c0;
+    text-align: center;
+    letter-spacing: 0.05em;
+    opacity: 0;
+    animation: textFadeIn 0.8s ease-out 0.8s forwards;
+}
+
+/* Build badge */
+#build-badge {
+    position: absolute;
+    top: 1.5rem;
+    left: 1.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    color: #8892b0;
+    letter-spacing: 0.1em;
+    opacity: 0;
+    animation: textFadeIn 0.6s ease-out 1s forwards;
+}
+
+/* Animations */
+@keyframes logoFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes logoSlideUp {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-50px);
+    }
+}
+
+@keyframes textFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes spriteAnimation {
+    from {
+        background-position: 0 0;
+    }
+    to {
+        background-position: -13650px 0; /* 91 frames * 150px */
+    }
+}
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+    #startup-logo {
+        width: 70%;
+        max-width: 300px;
+        margin-bottom: 2rem;
+    }
+    
+    #startup-spinner {
+        width: 120px;
+        height: 120px;
+        margin-bottom: 1.5rem;
+    }
+    
+    #startup-spinner-sprite {
+        width: 120px;
+        height: 120px;
+        background-size: 10920px 120px; /* 91 frames * 120px */
+    }
+    
+    @keyframes spriteAnimation {
+        from {
+            background-position: 0 0;
+        }
+        to {
+            background-position: -10920px 0; /* 91 frames * 120px */
+        }
+    }
+    
+    #startup-hint {
+        font-size: 1rem;
+        padding: 0 1rem;
+    }
+    
+    #build-badge {
+        top: 1rem;
+        left: 1rem;
+        padding: 0.4rem 0.8rem;
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    #startup-logo {
+        width: 80%;
+        max-width: 250px;
+    }
+    
+    #startup-spinner {
+        width: 100px;
+        height: 100px;
+    }
+    
+    #startup-spinner-sprite {
+        width: 100px;
+        height: 100px;
+        background-size: 9100px 100px; /* 91 frames * 100px */
+    }
+    
+    @keyframes spriteAnimation {
+        from {
+            background-position: 0 0;
+        }
+        to {
+            background-position: -9100px 0; /* 91 frames * 100px */
+        }
+    }
+    
+    #startup-hint {
+        font-size: 0.9rem;
+    }
+}
