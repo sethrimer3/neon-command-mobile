@@ -1,6 +1,6 @@
 import { Vector2, BASE_SIZE_METERS } from './types';
 
-export type ObstacleType = 'wall' | 'pillar' | 'debris';
+export type ObstacleType = 'wall' | 'pillar' | 'debris' | 'boundary';
 
 export interface Obstacle {
   id: string;
@@ -308,4 +308,58 @@ function linesIntersect(
   const ub = ((p2.x - p1.x) * (p1.y - p3.y) - (p2.y - p1.y) * (p1.x - p3.x)) / den;
 
   return ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1;
+}
+
+/**
+ * Creates invisible boundary obstacles around the arena to prevent units from getting stuck at screen edges.
+ * Boundaries are thin (1 meter thick) and placed just inside the arena perimeter.
+ * @param arenaWidth Arena width in meters
+ * @param arenaHeight Arena height in meters
+ * @returns Array of boundary obstacles
+ */
+export function createBoundaryObstacles(arenaWidth: number, arenaHeight: number): Obstacle[] {
+  const boundaryThickness = 1.0; // 1 meter thick boundary as specified
+  const boundaries: Obstacle[] = [];
+  
+  // Top boundary
+  boundaries.push({
+    id: generateObstacleId(),
+    type: 'boundary',
+    position: { x: arenaWidth / 2, y: boundaryThickness / 2 },
+    width: arenaWidth,
+    height: boundaryThickness,
+    rotation: 0
+  });
+  
+  // Bottom boundary
+  boundaries.push({
+    id: generateObstacleId(),
+    type: 'boundary',
+    position: { x: arenaWidth / 2, y: arenaHeight - boundaryThickness / 2 },
+    width: arenaWidth,
+    height: boundaryThickness,
+    rotation: 0
+  });
+  
+  // Left boundary
+  boundaries.push({
+    id: generateObstacleId(),
+    type: 'boundary',
+    position: { x: boundaryThickness / 2, y: arenaHeight / 2 },
+    width: boundaryThickness,
+    height: arenaHeight,
+    rotation: 0
+  });
+  
+  // Right boundary
+  boundaries.push({
+    id: generateObstacleId(),
+    type: 'boundary',
+    position: { x: arenaWidth - boundaryThickness / 2, y: arenaHeight / 2 },
+    width: boundaryThickness,
+    height: arenaHeight,
+    rotation: 0
+  });
+  
+  return boundaries;
 }

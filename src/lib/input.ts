@@ -14,6 +14,7 @@ import {
   BASE_SIZE_METERS,
   UNIT_SIZE_METERS,
   UNIT_DEFINITIONS,
+  PIXELS_PER_METER,
 } from './types';
 import { distance, normalize, scale, add, subtract, pixelsToPosition, positionToPixels } from './gameUtils';
 import { spawnUnit } from './simulation';
@@ -124,8 +125,9 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
       touchState.isDragging = true;
 
       const elapsed = Date.now() - touchState.startTime;
-      // Create selection rect if: no base touched AND (no units selected OR held long enough)
-      if (!touchState.touchedBase && (state.selectedUnits.size === 0 || elapsed > HOLD_TIME_MS)) {
+      // Only create selection rect if no units are selected AND no base touched
+      // When units are selected, dragging will be for ability casting instead
+      if (!touchState.touchedBase && state.selectedUnits.size === 0) {
         touchState.selectionRect = {
           x1: touchState.startPos.x,
           y1: touchState.startPos.y,
@@ -138,6 +140,11 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
     if (touchState.selectionRect) {
       touchState.selectionRect.x2 = x;
       touchState.selectionRect.y2 = y;
+    }
+    
+    // Update ability cast preview when units are selected and dragging
+    if (touchState.isDragging && state.selectedUnits.size > 0 && !touchState.touchedBase && !touchState.touchedMovementDot) {
+      updateAbilityCastPreview(state, dx, dy, touchState.startPos);
     }
   });
 }
@@ -182,14 +189,23 @@ export function handleTouchEnd(e: TouchEvent, state: GameState, canvas: HTMLCanv
       handleBaseSwipe(state, touchState.touchedBase, { x: dx, y: dy }, playerIndex);
     } else if (elapsed < TAP_TIME_MS && dist < 10) {
       handleTap(state, { x, y }, canvas, playerIndex);
-    } else if (touchState.isDragging && state.selectedUnits.size > 0) {
-      const worldStart = pixelsToPosition(touchState.startPos);
-      const worldEnd = pixelsToPosition({ x, y });
-      const dragVector = subtract(worldEnd, worldStart);
+    } else if (touchState.isDragging && state.selectedUnits.size > 0 && !touchState.touchedBase && !touchState.touchedMovementDot) {
+      // Use vector-based ability drag: convert screen drag to world vector
+      const dragVectorPixels = { x: dx, y: dy };
+      const dragVectorWorld = {
+        x: dragVectorPixels.x / PIXELS_PER_METER,
+        y: -dragVectorPixels.y / PIXELS_PER_METER // Invert Y because screen Y goes down
+      };
 
-      if (distance({ x: 0, y: 0 }, dragVector) > 0.5) {
-        handleAbilityDrag(state, dragVector, worldStart);
+      if (distance({ x: 0, y: 0 }, dragVectorWorld) > 0.5) {
+        handleVectorBasedAbilityDrag(state, dragVectorWorld);
+      } else {
+        // Clear preview if drag was too short
+        delete state.abilityCastPreview;
       }
+    } else {
+      // Clear preview if no valid action was taken
+      delete state.abilityCastPreview;
     }
 
     touchStates.delete(touch.identifier);
@@ -435,16 +451,8 @@ function handleAbilityDrag(state: GameState, dragVector: { x: number; y: number 
     if (!state.selectedUnits.has(unit.id)) return;
     if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
 
-    // Find the last move command in the queue to use as the starting point
-    let startPosition = unit.position;
-    for (let i = unit.commandQueue.length - 1; i >= 0; i--) {
-      const node = unit.commandQueue[i];
-      if (node.type === 'move' || node.type === 'attack-move') {
-        startPosition = node.position;
-        break;
-      }
-    }
-
+    // Use the command origin helper for consistency
+    const startPosition = getCommandOrigin(unit);
     const abilityPos = add(startPosition, clampedVector);
 
     const pathToAbility: CommandNode = { type: 'move', position: abilityPos };
@@ -456,6 +464,83 @@ function handleAbilityDrag(state: GameState, dragVector: { x: number; y: number 
 
     unit.commandQueue.push(abilityNode);
   });
+  
+  // Clear the ability cast preview after executing the command
+  delete state.abilityCastPreview;
+}
+
+// Helper function to get the command origin for a unit (last queued position or current position)
+function getCommandOrigin(unit: Unit): Vector2 {
+  for (let i = unit.commandQueue.length - 1; i >= 0; i--) {
+    const node = unit.commandQueue[i];
+    if (node.type === 'move' || node.type === 'attack-move') {
+      return node.position;
+    }
+  }
+  return unit.position;
+}
+
+// Helper function to clamp a vector to max range
+function clampVectorToRange(vector: Vector2, maxRange: number): Vector2 {
+  const len = distance({ x: 0, y: 0 }, vector);
+  const clampedLen = Math.min(len, maxRange);
+  const direction = normalize(vector); // normalize() already handles zero-length vectors
+  return scale(direction, clampedLen);
+}
+
+// Helper function to update the ability cast preview during drag
+function updateAbilityCastPreview(state: GameState, screenDx: number, screenDy: number, screenStartPos: { x: number; y: number }): void {
+  // Get the first selected unit to determine the command origin
+  const selectedUnit = state.units.find(unit => state.selectedUnits.has(unit.id));
+  if (!selectedUnit) {
+    delete state.abilityCastPreview;
+    return;
+  }
+  
+  const commandOrigin = getCommandOrigin(selectedUnit);
+  
+  // Convert screen drag distance to world space vector
+  // Note: We use the drag delta in pixels directly and convert to meters
+  const dragVectorPixels = { x: screenDx, y: screenDy };
+  const dragVectorWorld = {
+    x: dragVectorPixels.x / PIXELS_PER_METER,
+    y: -dragVectorPixels.y / PIXELS_PER_METER // Invert Y because screen Y goes down
+  };
+  
+  // Clamp to max range
+  const clampedVector = clampVectorToRange(dragVectorWorld, ABILITY_MAX_RANGE);
+  
+  state.abilityCastPreview = {
+    commandOrigin,
+    dragVector: clampedVector,
+    screenStartPos: pixelsToPosition(screenStartPos)
+  };
+}
+
+// Helper function to execute ability drag from vector-based input
+function handleVectorBasedAbilityDrag(state: GameState, dragVector: { x: number; y: number }): void {
+  const clampedVector = clampVectorToRange(dragVector, ABILITY_MAX_RANGE);
+
+  state.units.forEach((unit) => {
+    if (!state.selectedUnits.has(unit.id)) return;
+    if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
+
+    // Use the command origin (last queued position or current position)
+    const startPosition = getCommandOrigin(unit);
+    const abilityPos = add(startPosition, clampedVector);
+
+    const pathToAbility: CommandNode = { type: 'move', position: abilityPos };
+    const abilityNode: CommandNode = { type: 'ability', position: abilityPos, direction: clampedVector };
+
+    if (unit.commandQueue.length === 0 || unit.commandQueue[unit.commandQueue.length - 1].type === 'ability') {
+      unit.commandQueue.push(pathToAbility);
+    }
+
+    unit.commandQueue.push(abilityNode);
+  });
+  
+  // Clear the ability cast preview after executing the command
+  delete state.abilityCastPreview;
 }
 
 // Helper function to get return position for patrol commands
@@ -583,7 +668,8 @@ export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCan
   if (dist > 10 && !mouseState.isDragging) {
     mouseState.isDragging = true;
 
-    if (!mouseState.touchedBase) {
+    // Only create selection rect if no units are selected AND no base touched
+    if (!mouseState.touchedBase && state.selectedUnits.size === 0) {
       mouseState.selectionRect = {
         x1: mouseState.startPos.x,
         y1: mouseState.startPos.y,
@@ -596,6 +682,11 @@ export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCan
   if (mouseState.selectionRect) {
     mouseState.selectionRect.x2 = x;
     mouseState.selectionRect.y2 = y;
+  }
+  
+  // Update ability cast preview when units are selected and dragging
+  if (mouseState.isDragging && state.selectedUnits.size > 0 && !mouseState.touchedBase && !mouseState.touchedMovementDot) {
+    updateAbilityCastPreview(state, dx, dy, mouseState.startPos);
   }
 }
 
@@ -636,14 +727,23 @@ export function handleMouseUp(e: MouseEvent, state: GameState, canvas: HTMLCanva
     handleBaseSwipe(state, mouseState.touchedBase, { x: dx, y: dy }, playerIndex);
   } else if (elapsed < TAP_TIME_MS && dist < 10) {
     handleTap(state, { x, y }, canvas, playerIndex);
-  } else if (mouseState.isDragging && state.selectedUnits.size > 0) {
-    const worldStart = pixelsToPosition(mouseState.startPos);
-    const worldEnd = pixelsToPosition({ x, y });
-    const dragVector = subtract(worldEnd, worldStart);
+  } else if (mouseState.isDragging && state.selectedUnits.size > 0 && !mouseState.touchedBase && !mouseState.touchedMovementDot) {
+    // Use vector-based ability drag: convert screen drag to world vector
+    const dragVectorPixels = { x: dx, y: dy };
+    const dragVectorWorld = {
+      x: dragVectorPixels.x / PIXELS_PER_METER,
+      y: -dragVectorPixels.y / PIXELS_PER_METER // Invert Y because screen Y goes down
+    };
 
-    if (distance({ x: 0, y: 0 }, dragVector) > 0.5) {
-      handleAbilityDrag(state, dragVector, worldStart);
+    if (distance({ x: 0, y: 0 }, dragVectorWorld) > 0.5) {
+      handleVectorBasedAbilityDrag(state, dragVectorWorld);
+    } else {
+      // Clear preview if drag was too short
+      delete state.abilityCastPreview;
     }
+  } else {
+    // Clear preview if no valid action was taken
+    delete state.abilityCastPreview;
   }
 
   mouseState = null;

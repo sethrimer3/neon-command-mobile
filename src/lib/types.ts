@@ -451,4 +451,11 @@ export interface GameState {
     rotation: number;
     rotationSpeed: number;
   }>;
+  
+  // Ability cast preview for vector-based input
+  abilityCastPreview?: {
+    commandOrigin: Vector2; // Position where arrow starts (unit's last queued position or current position)
+    dragVector: Vector2; // Direction and distance of the drag in world space
+    screenStartPos: Vector2; // Screen position where drag started (for display purposes)
+  };
 }
