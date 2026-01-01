@@ -991,6 +991,93 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
         ctx.stroke();
         ctx.restore();
       }
+
+      // Berserker - Large aggressive unit with spikes
+      if (unit.type === 'berserker') {
+        ctx.save();
+        ctx.translate(screenPos.x, screenPos.y);
+        ctx.rotate(rotation);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = color;
+        // Draw spikes pointing outward
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI * 2 * i) / 6;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(angle) * radius * 0.6, Math.sin(angle) * radius * 0.6);
+          ctx.lineTo(Math.cos(angle) * radius * 1.2, Math.sin(angle) * radius * 1.2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // Assassin - Sharp dagger-like appearance
+      if (unit.type === 'assassin') {
+        ctx.save();
+        ctx.translate(screenPos.x, screenPos.y);
+        ctx.rotate(rotation);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        // Draw blade shape
+        ctx.moveTo(radius * 1.2, 0);
+        ctx.lineTo(-radius * 0.5, radius * 0.5);
+        ctx.lineTo(-radius * 0.5, -radius * 0.5);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Juggernaut - Large imposing square with reinforced corners
+      if (unit.type === 'juggernaut') {
+        ctx.save();
+        ctx.translate(screenPos.x, screenPos.y);
+        ctx.rotate(rotation);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        const halfSize = radius * 0.9;
+        ctx.rect(-halfSize, -halfSize, halfSize * 2, halfSize * 2);
+        ctx.stroke();
+        // Corner reinforcements
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-halfSize * 0.7, -halfSize);
+        ctx.lineTo(-halfSize, -halfSize);
+        ctx.lineTo(-halfSize, -halfSize * 0.7);
+        ctx.moveTo(halfSize * 0.7, -halfSize);
+        ctx.lineTo(halfSize, -halfSize);
+        ctx.lineTo(halfSize, -halfSize * 0.7);
+        ctx.moveTo(-halfSize * 0.7, halfSize);
+        ctx.lineTo(-halfSize, halfSize);
+        ctx.lineTo(-halfSize, halfSize * 0.7);
+        ctx.moveTo(halfSize * 0.7, halfSize);
+        ctx.lineTo(halfSize, halfSize);
+        ctx.lineTo(halfSize, halfSize * 0.7);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Striker - Cross pattern for whirlwind attacks
+      if (unit.type === 'striker') {
+        ctx.save();
+        ctx.translate(screenPos.x, screenPos.y);
+        ctx.rotate(rotation);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        // Curved lines for whirlwind effect
+        ctx.moveTo(-radius, -radius);
+        ctx.lineTo(radius, radius);
+        ctx.moveTo(radius, -radius);
+        ctx.lineTo(-radius, radius);
+        ctx.stroke();
+        // Add curved motion lines
+        ctx.beginPath();
+        ctx.arc(0, 0, radius * 0.6, 0, Math.PI * 0.5);
+        ctx.arc(0, 0, radius * 0.6, Math.PI, Math.PI * 1.5);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     ctx.restore();

@@ -23,7 +23,7 @@ function performAIActions(state: GameState): void {
 
   const aiPhotons = state.players[aiPlayer].photons;
 
-  const unitTypes: UnitType[] = (['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor'] as UnitType[]).filter((type) =>
+  const unitTypes: UnitType[] = (['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor', 'berserker', 'assassin', 'juggernaut', 'striker'] as UnitType[]).filter((type) =>
     state.settings.enabledUnits.has(type)
   );
 

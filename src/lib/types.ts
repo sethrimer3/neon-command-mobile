@@ -110,7 +110,7 @@ export const FACTION_DEFINITIONS: Record<FactionType, FactionDefinition> = {
     baseMoveSpeed: 3.0,
     baseShape: 'circle',
     ability: 'shield',
-    availableUnits: ['snaker'],
+    availableUnits: ['snaker', 'berserker', 'assassin', 'juggernaut', 'striker'],
   },
 };
 
@@ -128,7 +128,7 @@ export interface Base {
   shieldActive?: { endTime: number }; // Shield ability for mobile faction
 }
 
-export type UnitType = 'marine' | 'warrior' | 'snaker' | 'tank' | 'scout' | 'artillery' | 'medic' | 'interceptor';
+export type UnitType = 'marine' | 'warrior' | 'snaker' | 'tank' | 'scout' | 'artillery' | 'medic' | 'interceptor' | 'berserker' | 'assassin' | 'juggernaut' | 'striker';
 
 export interface UnitDefinition {
   name: string;
@@ -246,6 +246,58 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 2.5,
     cost: 45,
     abilityName: 'Missile Barrage',
+    abilityCooldown: 8,
+    canDamageStructures: true,
+  },
+  berserker: {
+    name: 'Berserker',
+    hp: 150,
+    moveSpeed: 3.5,
+    attackType: 'melee',
+    attackRange: 1.2,
+    attackDamage: 25,
+    attackRate: 0.8,
+    cost: 50,
+    abilityName: 'Rage',
+    abilityCooldown: 10,
+    canDamageStructures: true,
+  },
+  assassin: {
+    name: 'Assassin',
+    hp: 80,
+    moveSpeed: 5,
+    attackType: 'melee',
+    attackRange: 1,
+    attackDamage: 15,
+    attackRate: 2,
+    cost: 35,
+    abilityName: 'Shadow Strike',
+    abilityCooldown: 7,
+    canDamageStructures: false,
+  },
+  juggernaut: {
+    name: 'Juggernaut',
+    hp: 250,
+    moveSpeed: 2,
+    attackType: 'melee',
+    attackRange: 1.5,
+    attackDamage: 30,
+    attackRate: 0.6,
+    cost: 70,
+    abilityName: 'Ground Slam',
+    abilityCooldown: 12,
+    canDamageStructures: true,
+  },
+  striker: {
+    name: 'Striker',
+    hp: 100,
+    moveSpeed: 4,
+    attackType: 'melee',
+    attackRange: 1,
+    attackDamage: 20,
+    attackRate: 1.2,
+    cost: 45,
+    abilityName: 'Whirlwind',
     abilityCooldown: 8,
     canDamageStructures: true,
   },
