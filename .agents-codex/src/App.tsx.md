@@ -11,6 +11,7 @@ Main application component that orchestrates the entire game. Manages game state
 - `./components/*` - UI components and screens
 - `@phosphor-icons/react` - Icon library
 - `sonner` - Toast notifications
+- `./lib/realtimeStore` - Multiplayer realtime backend selection
 
 ### Used By
 - `main.tsx` - Entry point renders this component
@@ -92,6 +93,7 @@ Main application component that orchestrates the entire game. Manages game state
 - **joinLobby(gameId)**: Join existing game
 - **leaveLobby()**: Exit lobby
 - **startOnlineGame()**: Begin multiplayer match
+- **multiplayerManagerRef init**: Selects Spark or Supabase backend via `createRealtimeStore`
 
 ### Event Handlers
 - Touch and mouse event wrappers for input system
@@ -158,6 +160,7 @@ Main application component that orchestrates the entire game. Manages game state
 - Added surrender mechanic
 - Added time limit support
 - Switched persistence hook to local storage to avoid Spark-only dependencies
+- **2026-01-01**: Wired multiplayer init to realtime store abstraction and improved error handling
 
 ## Watch Out For
 - Game state ref vs React state - use correctly for performance

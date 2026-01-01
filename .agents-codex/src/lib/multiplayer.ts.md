@@ -1,11 +1,12 @@
 # multiplayer.ts
 
 ## Purpose
-Manages online multiplayer functionality including lobby creation, matchmaking, game synchronization, and command transmission. Uses Spark KV store for real-time multiplayer state management.
+Manages online multiplayer functionality including lobby creation, matchmaking, game synchronization, and command transmission. Uses a realtime KV store abstraction (Spark or Supabase) for multiplayer state management.
 
 ## Dependencies
 ### Imports
 - `./types` - Game state types and command structures
+- `./realtimeStore` - Realtime KV store abstraction and backend selection
 
 ### Used By
 - `App.tsx` - Multiplayer game coordination
@@ -43,9 +44,9 @@ Public lobby information:
 
 ### MultiplayerManager Class
 
-#### Constructor(playerId: string)
-- **Purpose:** Initialize manager with player ID
-- **Notes:** Player ID used for authentication
+#### Constructor(playerId: string, store?: RealtimeKVStore)
+- **Purpose:** Initialize manager with player ID and a realtime store
+- **Notes:** Store injection enables swapping backends without touching game logic
 
 #### createGame(...): Promise<string>
 - **Purpose:** Host creates new multiplayer lobby
@@ -106,7 +107,7 @@ Public lobby information:
 ## Implementation Notes
 
 ### Critical Details
-- Uses Spark KV for distributed state storage
+- Uses a realtime KV store abstraction for distributed state storage (Spark or Supabase)
 - Commands batched to reduce network calls
 - Turn-based synchronization prevents desync
 - Lobby list maintained separately for browsing
@@ -130,6 +131,7 @@ Public lobby information:
 - No reconnection support if connection lost
 - Limited error handling for network failures
 - Turn-based sync may feel laggy for fast actions
+- `commandQueue` is defined but not currently used for batching
 
 ## Future Changes
 
@@ -139,7 +141,7 @@ Public lobby information:
 ### Needed
 - Reconnection support
 - Better error handling and retry logic
-- Peer-to-peer networking (bypass KV store)
+- Paid provider adapter that can replace Supabase without changing game logic
 - Spectator mode
 - Replays
 - Ranked matchmaking
@@ -154,6 +156,7 @@ Public lobby information:
 - Initial creation with basic lobby system
 - Added command synchronization
 - Implemented lobby browser and matchmaking
+- **2026-01-01**: Replaced direct Spark KV usage with realtime store abstraction for Supabase support
 
 ## Watch Out For
 - KV store operations are async - always await

@@ -25,6 +25,7 @@ import { MultiplayerLobbyScreen } from './components/MultiplayerLobbyScreen';
 import { StatisticsScreen } from './components/StatisticsScreen';
 import { getMapById, getValidBasePositions, createBoundaryObstacles } from './lib/maps';
 import { MultiplayerManager, LobbyData } from './lib/multiplayer';
+import { createRealtimeStore } from './lib/realtimeStore';
 import { PlayerStatistics, MatchStats, createEmptyStatistics, updateStatistics, calculateMMRChange } from './lib/statistics';
 import { soundManager } from './lib/sound';
 
@@ -71,7 +72,8 @@ function App() {
         }
       }
       setUserId(uid);
-      multiplayerManagerRef.current = new MultiplayerManager(uid);
+      // Initialize multiplayer with the best available realtime backend (Spark or Supabase).
+      multiplayerManagerRef.current = new MultiplayerManager(uid, createRealtimeStore());
     };
     initUser();
     soundManager.setEnabled(soundEnabled ?? true);
@@ -652,7 +654,8 @@ function App() {
         }
       }, 1000);
     } catch (error) {
-      toast.error('Failed to create game');
+      const message = error instanceof Error ? error.message : 'Failed to create game';
+      toast.error(message);
     }
   };
 
@@ -691,7 +694,8 @@ function App() {
         toast.error('Failed to join game');
       }
     } catch (error) {
-      toast.error('Failed to join game');
+      const message = error instanceof Error ? error.message : 'Failed to join game';
+      toast.error(message);
     }
   };
 
