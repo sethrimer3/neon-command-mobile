@@ -56,6 +56,7 @@ const SELECTION_RING_EXPANSION_SPEED = 1.5; // Speed of expanding selection ring
 const SELECTION_RING_MAX_SIZE = 1.8; // Maximum size multiplier for selection ring
 const GLOW_PULSE_FREQUENCY = 1.5; // Hz for glow pulsing
 const ABILITY_READY_PULSE_INTENSITY = 0.4; // Intensity of ability ready pulse
+const MOTION_BLUR_SPEED_THRESHOLD = 1.5; // Minimum speed for motion blur to appear
 
 // Helper function to get bright highlight color for team
 function getTeamHighlightColor(owner: number): string {
@@ -86,6 +87,26 @@ function isOnScreen(position: Vector2, canvas: HTMLCanvasElement, margin: number
          screenPos.x <= canvas.width + margin && 
          screenPos.y >= -margin && 
          screenPos.y <= canvas.height + margin;
+}
+
+// Helper function to conditionally apply glow/shadow effects based on settings
+function applyGlowEffect(ctx: CanvasRenderingContext2D, state: GameState, color: string, blur: number): void {
+  if (state.settings.enableGlowEffects) {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = blur;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  }
+}
+
+// Helper function to clear glow/shadow effects
+function clearGlowEffect(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (state.settings.enableGlowEffects) {
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  }
 }
 
 export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canvas: HTMLCanvasElement, selectionRect?: { x1: number; y1: number; x2: number; y2: number } | null): void {
@@ -216,7 +237,7 @@ function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement
       ctx.fill();
       
       // Add subtle glow for larger stars
-      if (star.size > 1.5) {
+      if (star.size > 1.5 && state?.settings?.enableGlowEffects) {
         ctx.shadowColor = `rgba(200, 220, 255, ${alpha * 0.6})`;
         ctx.shadowBlur = star.size * 3;
         ctx.fill();
@@ -288,10 +309,9 @@ function drawObstacles(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.fillRect(-width / 2, -height / 2, width, height);
       ctx.strokeRect(-width / 2, -height / 2, width, height);
       
-      ctx.shadowBlur = 15;
-      ctx.shadowColor = 'oklch(0.55 0.22 240)';
+      applyGlowEffect(ctx, state, 'oklch(0.55 0.22 240)', 15);
       ctx.strokeRect(-width / 2, -height / 2, width, height);
-      ctx.shadowBlur = 0;
+      clearGlowEffect(ctx, state);
     } else if (obstacle.type === 'pillar') {
       const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, width / 2);
       gradient.addColorStop(0, 'oklch(0.45 0.20 280)');
@@ -304,10 +324,9 @@ function drawObstacles(ctx: CanvasRenderingContext2D, state: GameState): void {
       
       ctx.strokeStyle = 'oklch(0.65 0.25 280)';
       ctx.lineWidth = 2;
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = 'oklch(0.65 0.25 280)';
+      applyGlowEffect(ctx, state, 'oklch(0.65 0.25 280)', 20);
       ctx.stroke();
-      ctx.shadowBlur = 0;
+      clearGlowEffect(ctx, state);
     } else if (obstacle.type === 'debris') {
       ctx.fillStyle = 'oklch(0.35 0.12 25)';
       ctx.strokeStyle = 'oklch(0.58 0.20 25)';
@@ -614,6 +633,21 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
       } else {
         ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
       }
+      ctx.restore();
+    }
+
+    // Add radial gradient background glow for aesthetic enhancement
+    if (state.settings.enableGlowEffects) {
+      ctx.save();
+      const gradient = ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, size * 1.2);
+      gradient.addColorStop(0, addAlphaToColor(color, 0.15 * pulseIntensity));
+      gradient.addColorStop(0.5, addAlphaToColor(color, 0.08 * pulseIntensity));
+      gradient.addColorStop(1, addAlphaToColor(color, 0));
+      
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, size * 1.2, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
 
@@ -941,8 +975,13 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     // LOD: Simplify distant units
     const useLOD = distanceRatio > 0.7;
     
+    // Draw motion blur trail for fast-moving units
+    if (!useLOD && state.settings.enableMotionBlur && unit.currentSpeed && unit.currentSpeed > MOTION_BLUR_SPEED_THRESHOLD) {
+      drawMotionBlurTrail(ctx, unit, screenPos, color, state);
+    }
+    
     // Draw particles first (behind the unit) - skip for LOD
-    if (!useLOD && unit.particles && unit.particles.length > 0) {
+    if (!useLOD && unit.particles && unit.particles.length > 0 && state.settings.enableParticleEffects) {
       drawParticles(ctx, unit);
     }
 
@@ -1225,6 +1264,47 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
       }
     }
   });
+}
+
+// Draw motion blur trail for fast-moving units
+function drawMotionBlurTrail(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string, state: GameState): void {
+  if (unit.rotation === undefined || unit.rotation === null) return;
+  
+  const speed = unit.currentSpeed || 0;
+  const speedRatio = Math.min(speed / 5, 1); // Normalize speed to 0-1 range
+  
+  // Calculate trail direction (opposite of movement)
+  const trailAngle = unit.rotation + Math.PI;
+  const trailLength = 15 * speedRatio; // Trail length based on speed
+  
+  // Create gradient for trail
+  const endX = screenPos.x + Math.cos(trailAngle) * trailLength;
+  const endY = screenPos.y + Math.sin(trailAngle) * trailLength;
+  
+  const gradient = ctx.createLinearGradient(screenPos.x, screenPos.y, endX, endY);
+  gradient.addColorStop(0, addAlphaToColor(color, 0.4 * speedRatio));
+  gradient.addColorStop(0.5, addAlphaToColor(color, 0.2 * speedRatio));
+  gradient.addColorStop(1, addAlphaToColor(color, 0));
+  
+  ctx.save();
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = 8 * speedRatio;
+  ctx.lineCap = 'round';
+  
+  // Draw multiple trail lines for thickness
+  for (let i = -1; i <= 1; i++) {
+    const offset = i * 2;
+    const perpAngle = trailAngle + Math.PI / 2;
+    const offsetX = Math.cos(perpAngle) * offset;
+    const offsetY = Math.sin(perpAngle) * offset;
+    
+    ctx.beginPath();
+    ctx.moveTo(screenPos.x + offsetX, screenPos.y + offsetY);
+    ctx.lineTo(endX + offsetX, endY + offsetY);
+    ctx.stroke();
+  }
+  
+  ctx.restore();
 }
 
 function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
@@ -2192,6 +2272,7 @@ function drawImpactEffects(ctx: CanvasRenderingContext2D, state: GameState): voi
 
 function drawExplosionParticles(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (!state.explosionParticles || state.explosionParticles.length === 0) return;
+  if (!state.settings.enableParticleEffects) return; // Skip if particles disabled
   
   state.explosionParticles.forEach((particle) => {
     const screenPos = positionToPixels(particle.position);
@@ -2207,19 +2288,17 @@ function drawExplosionParticles(ctx: CanvasRenderingContext2D, state: GameState)
       
       // Draw rotated square for debris
       ctx.fillStyle = particle.color;
-      ctx.shadowColor = particle.color;
-      ctx.shadowBlur = size * 2;
+      applyGlowEffect(ctx, state, particle.color, size * 2);
       ctx.fillRect(-size / 2, -size / 2, size, size);
       
       // Add extra glow layer
       ctx.globalAlpha = particle.alpha * 0.4;
-      ctx.shadowBlur = size * 4;
+      applyGlowEffect(ctx, state, particle.color, size * 4);
       ctx.fillRect(-size / 2, -size / 2, size, size);
     } else {
       // Draw particle with glow (for sparks)
       ctx.fillStyle = particle.color;
-      ctx.shadowColor = particle.color;
-      ctx.shadowBlur = size * 3;
+      applyGlowEffect(ctx, state, particle.color, size * 3);
       
       ctx.beginPath();
       ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
@@ -2227,7 +2306,7 @@ function drawExplosionParticles(ctx: CanvasRenderingContext2D, state: GameState)
       
       // Add extra glow layer
       ctx.globalAlpha = particle.alpha * 0.4;
-      ctx.shadowBlur = size * 6;
+      applyGlowEffect(ctx, state, particle.color, size * 6);
       ctx.fill();
     }
     
@@ -2238,6 +2317,7 @@ function drawExplosionParticles(ctx: CanvasRenderingContext2D, state: GameState)
 // Draw hit spark effects
 function drawHitSparks(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (!state.hitSparks) return;
+  if (!state.settings.enableParticleEffects) return; // Skip if particles disabled
   
   const now = Date.now();
   state.hitSparks.forEach((spark) => {
@@ -2251,8 +2331,7 @@ function drawHitSparks(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.fillStyle = spark.color;
-    ctx.shadowColor = spark.color;
-    ctx.shadowBlur = size * 3;
+    applyGlowEffect(ctx, state, spark.color, size * 3);
     
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
@@ -2265,6 +2344,7 @@ function drawHitSparks(ctx: CanvasRenderingContext2D, state: GameState): void {
 // Draw celebration particles for victory screen
 function drawCelebrationParticles(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (!state.celebrationParticles || state.celebrationParticles.length === 0) return;
+  if (!state.settings.enableParticleEffects) return; // Skip if particles disabled
   
   const now = Date.now();
   state.celebrationParticles.forEach((particle) => {
@@ -2338,11 +2418,31 @@ function drawEnergyPulses(ctx: CanvasRenderingContext2D, state: GameState): void
     const radius = metersToPixels(pulse.radius);
     
     ctx.save();
+    
+    // Add chromatic aberration effect for abilities if enabled
+    if (state.settings.enableGlowEffects) {
+      const offset = 2 * alpha; // Aberration amount
+      
+      // Draw red channel
+      ctx.globalAlpha = alpha * 0.3;
+      ctx.strokeStyle = 'oklch(0.65 0.28 25)'; // Red
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(screenPos.x - offset, screenPos.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Draw blue channel
+      ctx.strokeStyle = 'oklch(0.65 0.25 240)'; // Blue
+      ctx.beginPath();
+      ctx.arc(screenPos.x + offset, screenPos.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    
+    // Draw main pulse
     ctx.globalAlpha = alpha * 0.6;
     ctx.strokeStyle = pulse.color;
     ctx.lineWidth = 2;
-    ctx.shadowColor = pulse.color;
-    ctx.shadowBlur = 15;
+    applyGlowEffect(ctx, state, pulse.color, 15);
     
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);

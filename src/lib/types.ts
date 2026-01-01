@@ -85,6 +85,8 @@ export interface Unit {
   selectionRing?: { startTime: number }; // Selection ring animation
   rotation?: number; // Current rotation angle in radians (0 = facing right)
   targetRotation?: number; // Target rotation angle for smooth interpolation
+  velocity?: Vector2; // Current velocity for smooth acceleration/deceleration
+  currentSpeed?: number; // Current movement speed for acceleration/deceleration
 }
 
 export type FactionType = 'radiant' | 'aurum' | 'solari';
@@ -409,6 +411,9 @@ export interface GameState {
     showNumericHP: boolean;
     playerFaction: FactionType;
     enemyFaction: FactionType;
+    enableGlowEffects?: boolean; // Enable/disable glow/shadow effects
+    enableParticleEffects?: boolean; // Enable/disable particle effects
+    enableMotionBlur?: boolean; // Enable/disable motion blur trails
   };
 
   surrenderClicks: number;
