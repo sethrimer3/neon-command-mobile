@@ -19,6 +19,7 @@ import { distance, normalize, scale, add, subtract, pixelsToPosition, positionTo
 import { spawnUnit } from './simulation';
 import { soundManager } from './sound';
 import { applyFormation } from './formations';
+import { createLaserParticles, createEnergyPulse } from './visualEffects';
 
 interface TouchState {
   startPos: { x: number; y: number };
@@ -273,6 +274,10 @@ function fireLaser(state: GameState, base: Base, direction: { x: number; y: numb
     endTime: Date.now() + 500, // 0.5 second beam duration
     direction: { ...direction },
   };
+
+  // Create laser particle effects
+  const laserColor = 'oklch(0.70 0.30 320)';
+  createLaserParticles(state, base.position, direction, LASER_RANGE, laserColor);
 
   state.units.forEach((unit) => {
     if (unit.owner === base.owner) return;

@@ -347,6 +347,14 @@ export interface GameState {
     startTime: number;
   };
   
+  // Screen flash effect for critical events
+  screenFlash?: {
+    color: string;
+    intensity: number; // 0 to 1
+    duration: number; // seconds
+    startTime: number;
+  };
+  
   // Tooltip system
   tooltip?: {
     text: string[];

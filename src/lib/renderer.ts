@@ -110,6 +110,24 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
   if (state.screenShake && (Date.now() - state.screenShake.startTime) / 1000 < state.screenShake.duration) {
     ctx.restore();
   }
+  
+  // Draw screen flash effect on top of everything
+  if (state.screenFlash) {
+    const elapsed = (Date.now() - state.screenFlash.startTime) / 1000;
+    if (elapsed < state.screenFlash.duration) {
+      const progress = elapsed / state.screenFlash.duration;
+      const alpha = state.screenFlash.intensity * (1 - progress); // Fade out
+      
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = state.screenFlash.color;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    } else {
+      // Flash expired
+      delete state.screenFlash;
+    }
+  }
 }
 
 function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, state?: GameState): void {
@@ -623,22 +641,42 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     
     ctx.save();
     
-    // Draw energy trail with gradient and glow
-    const trailLength = 12;
+    // Calculate age for pulsing effect
+    const age = (Date.now() - projectile.createdAt) / 1000;
+    const pulseIntensity = 0.8 + Math.sin(age * 30) * 0.2; // Fast pulse
+    
+    // Draw outer glow layer
+    const trailLength = 18;
     const direction = normalize(projectile.velocity);
     const trailStart = subtract(projectile.position, scale(direction, trailLength / 20));
     const trailScreenPos = positionToPixels(trailStart);
     
-    // Create gradient for trail
+    // Create multi-layer gradient for trail
+    const outerGradient = ctx.createLinearGradient(trailScreenPos.x, trailScreenPos.y, screenPos.x, screenPos.y);
+    outerGradient.addColorStop(0, 'transparent');
+    outerGradient.addColorStop(0.5, projectile.color.replace(')', ` / 0.3)`));
+    outerGradient.addColorStop(1, projectile.color.replace(')', ` / 0.6)`));
+    
+    ctx.strokeStyle = outerGradient;
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = projectile.color;
+    ctx.shadowBlur = 25 * pulseIntensity;
+    
+    ctx.beginPath();
+    ctx.moveTo(trailScreenPos.x, trailScreenPos.y);
+    ctx.lineTo(screenPos.x, screenPos.y);
+    ctx.stroke();
+    
+    // Draw energy trail with gradient and glow (inner layer)
     const gradient = ctx.createLinearGradient(trailScreenPos.x, trailScreenPos.y, screenPos.x, screenPos.y);
     gradient.addColorStop(0, 'transparent');
+    gradient.addColorStop(0.3, projectile.color.replace(')', ` / 0.5)`));
     gradient.addColorStop(1, projectile.color);
     
     ctx.strokeStyle = gradient;
     ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.shadowColor = projectile.color;
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = 18 * pulseIntensity;
     
     ctx.beginPath();
     ctx.moveTo(trailScreenPos.x, trailScreenPos.y);
@@ -647,16 +685,16 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     
     // Draw projectile core with enhanced glow
     ctx.fillStyle = projectile.color;
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = 20 * pulseIntensity;
     ctx.beginPath();
-    ctx.arc(screenPos.x, screenPos.y, 4, 0, Math.PI * 2);
+    ctx.arc(screenPos.x, screenPos.y, 5, 0, Math.PI * 2);
     ctx.fill();
     
     // Draw bright center with appropriate team color
     ctx.fillStyle = getTeamHighlightColor(projectile.owner);
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 25 * pulseIntensity;
     ctx.beginPath();
-    ctx.arc(screenPos.x, screenPos.y, 2, 0, Math.PI * 2);
+    ctx.arc(screenPos.x, screenPos.y, 2.5, 0, Math.PI * 2);
     ctx.fill();
     
     ctx.restore();

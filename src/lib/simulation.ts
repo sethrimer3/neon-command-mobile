@@ -17,7 +17,7 @@ import {
 import { distance, normalize, scale, add, subtract, generateId } from './gameUtils';
 import { checkObstacleCollision } from './maps';
 import { soundManager } from './sound';
-import { createSpawnEffect, createHitSparks, createAbilityEffect, createEnhancedDeathExplosion } from './visualEffects';
+import { createSpawnEffect, createHitSparks, createAbilityEffect, createEnhancedDeathExplosion, createScreenFlash } from './visualEffects';
 
 // Unit collision constants
 const UNIT_COLLISION_RADIUS = UNIT_SIZE_METERS / 2; // Minimum distance between unit centers
@@ -1358,6 +1358,9 @@ function checkVictory(state: GameState): void {
       soundManager.playBaseDestroyed();
       // Big screen shake for base destruction
       createScreenShake(state, SCREEN_SHAKE_BASE_DESTROY_INTENSITY, SCREEN_SHAKE_DURATION_LONG);
+      // Screen flash effect for dramatic impact
+      const flashColor = base.owner === 0 ? 'oklch(0.62 0.28 25 / 0.7)' : 'oklch(0.65 0.25 240 / 0.7)';
+      createScreenFlash(state, flashColor, 0.7, 0.6);
       // Big impact effect for base destruction with enhanced explosion
       const color = state.players[base.owner === 0 ? 1 : 0].color; // Use attacker's color
       createImpactEffect(state, base.position, color, 4.0);

@@ -163,6 +163,88 @@ export function createEnhancedDeathExplosion(
 }
 
 /**
+ * Create laser particle effects along a beam
+ */
+export function createLaserParticles(
+  state: GameState,
+  startPos: Vector2,
+  direction: Vector2,
+  length: number,
+  color: string = 'oklch(0.70 0.30 320)'
+): void {
+  if (!state.explosionParticles) {
+    state.explosionParticles = [];
+  }
+
+  const particleCount = Math.floor(length * 3); // 3 particles per meter
+  
+  for (let i = 0; i < particleCount; i++) {
+    const progress = i / particleCount;
+    const position = {
+      x: startPos.x + direction.x * length * progress,
+      y: startPos.y + direction.y * length * progress,
+    };
+
+    // Add some perpendicular spread
+    const perpX = -direction.y;
+    const perpY = direction.x;
+    const spread = (Math.random() - 0.5) * 0.3;
+    
+    position.x += perpX * spread;
+    position.y += perpY * spread;
+
+    // Particles move outward from laser
+    const velocity = {
+      x: perpX * (Math.random() - 0.5) * 8 + direction.x * 2,
+      y: perpY * (Math.random() - 0.5) * 8 + direction.y * 2,
+    };
+
+    const particle = {
+      id: generateId(),
+      position,
+      velocity,
+      color,
+      size: 0.1 + Math.random() * 0.15,
+      lifetime: 0.4 + Math.random() * 0.3,
+      createdAt: Date.now() + i * 2, // Slight stagger
+      alpha: 1.0,
+      rotation: Math.random() * Math.PI * 2,
+      rotationSpeed: (Math.random() - 0.5) * 15,
+    };
+
+    state.explosionParticles.push(particle);
+  }
+
+  // Create energy pulse at start
+  createEnergyPulse(state, startPos, color, 0.8, 3.0);
+  
+  // Create impact effect at end
+  const endPos = {
+    x: startPos.x + direction.x * length,
+    y: startPos.y + direction.y * length,
+  };
+  createEnergyPulse(state, endPos, color, 0.6, 2.5);
+  createParticleBurst(state, endPos, color, 25, 10);
+}
+
+/**
+ * Create a screen flash effect for critical events
+ */
+export function createScreenFlash(
+  state: GameState,
+  color: string,
+  intensity: number = 0.6,
+  duration: number = 0.5
+): void {
+  state.screenFlash = {
+    color,
+    intensity,
+    duration,
+    startTime: Date.now(),
+  };
+}
+
+/**
  * Create celebration particles for victory screen
  */
 export function createCelebrationParticles(state: GameState, canvasWidth: number, canvasHeight: number): void {
