@@ -9,6 +9,7 @@ This directory contains UI screen components that handle different game modes an
 - **Dependencies:** UI components, type definitions
 - **Key Features:**
   - Visual unit icons with SVG
+  - Faction logo assets resolve with the Vite base path for GitHub Pages
   - Slot assignment (4 slots: left, up, down, right)
   - Interactive unit selection
   - Color customization per player

@@ -117,6 +117,104 @@ const STUCK_DETECTION_THRESHOLD = 0.1; // Minimum distance unit must move to not
 const STUCK_TIMEOUT = 2.5; // Seconds before a stuck unit cancels its command queue
 export const QUEUE_FADE_DURATION = 1.0; // Seconds for command queue fade animation
 
+/**
+ * Derives the playable arena bounds from boundary obstacles.
+ * Uses boundary thickness to inset the playable area from the screen edge.
+ * @param obstacles - Obstacles in the current level, including boundary walls
+ * @returns Inset bounds or undefined when boundary data is unavailable
+ */
+function getPlayableBoundsFromObstacles(
+  obstacles: import('./maps').Obstacle[]
+): { minX: number; maxX: number; minY: number; maxY: number } | undefined {
+  // Filter for boundary walls that define the arena perimeter.
+  const boundaryObstacles = obstacles.filter((obstacle) => obstacle.type === 'boundary');
+
+  if (boundaryObstacles.length < 4) {
+    return undefined;
+  }
+
+  // Determine the outer edges of the arena from boundary rectangles.
+  const minEdgeX = Math.min(...boundaryObstacles.map((obstacle) => obstacle.position.x - obstacle.width / 2));
+  const maxEdgeX = Math.max(...boundaryObstacles.map((obstacle) => obstacle.position.x + obstacle.width / 2));
+  const minEdgeY = Math.min(...boundaryObstacles.map((obstacle) => obstacle.position.y - obstacle.height / 2));
+  const maxEdgeY = Math.max(...boundaryObstacles.map((obstacle) => obstacle.position.y + obstacle.height / 2));
+
+  // Infer boundary thickness from the thinner side of each boundary rectangle.
+  const boundaryThickness = Math.min(
+    ...boundaryObstacles.map((obstacle) => Math.min(obstacle.width, obstacle.height))
+  );
+
+  return {
+    minX: minEdgeX + boundaryThickness,
+    maxX: maxEdgeX - boundaryThickness,
+    minY: minEdgeY + boundaryThickness,
+    maxY: maxEdgeY - boundaryThickness,
+  };
+}
+
+/**
+ * Clamps a rally position so spawned units don't aim into obstacles or off-screen.
+ * Steps back toward the base if the initial rally point is blocked.
+ * @param state - Current game state with obstacle data
+ * @param spawnPos - Base position where the unit spawns
+ * @param desiredRallyPos - Intended rally point from input
+ * @returns Safe rally position inside the playable area
+ */
+function getSafeRallyPosition(
+  state: GameState,
+  spawnPos: Vector2,
+  desiredRallyPos: Vector2
+): Vector2 {
+  const unitRadius = UNIT_SIZE_METERS / 2;
+  const bounds = getPlayableBoundsFromObstacles(state.obstacles);
+
+  // Clamp the rally point into the playable area if bounds are available.
+  let clampedRallyPos = { ...desiredRallyPos };
+  if (bounds) {
+    const minX = bounds.minX + unitRadius;
+    const maxX = bounds.maxX - unitRadius;
+    const minY = bounds.minY + unitRadius;
+    const maxY = bounds.maxY - unitRadius;
+
+    clampedRallyPos = {
+      x: Math.min(maxX, Math.max(minX, clampedRallyPos.x)),
+      y: Math.min(maxY, Math.max(minY, clampedRallyPos.y)),
+    };
+  }
+
+  // Accept the clamped position if it is not colliding with any obstacle.
+  if (!checkObstacleCollision(clampedRallyPos, unitRadius, state.obstacles)) {
+    return clampedRallyPos;
+  }
+
+  // Step back toward the spawn position until a valid rally point is found.
+  const fallbackDirection = normalize(subtract(spawnPos, clampedRallyPos));
+  const stepSize = 0.5;
+  const maxSteps = 20;
+
+  // If we cannot determine a direction, fall back to the spawn position immediately.
+  if (fallbackDirection.x === 0 && fallbackDirection.y === 0) {
+    return spawnPos;
+  }
+
+  for (let stepIndex = 1; stepIndex <= maxSteps; stepIndex += 1) {
+    const candidate = add(clampedRallyPos, scale(fallbackDirection, stepSize * stepIndex));
+    const boundedCandidate = bounds
+      ? {
+          x: Math.min(bounds.maxX - unitRadius, Math.max(bounds.minX + unitRadius, candidate.x)),
+          y: Math.min(bounds.maxY - unitRadius, Math.max(bounds.minY + unitRadius, candidate.y)),
+        }
+      : candidate;
+
+    if (!checkObstacleCollision(boundedCandidate, unitRadius, state.obstacles)) {
+      return boundedCandidate;
+    }
+  }
+
+  // Fall back to the spawn position if no safe rally spot is found.
+  return spawnPos;
+}
+
 // Check if a position would collide with any existing unit
 function checkUnitCollision(position: Vector2, currentUnitId: string, allUnits: Unit[]): boolean {
   // Use a slightly smaller collision radius to allow units to squeeze past each other
@@ -1781,6 +1879,9 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
     soundManager.playUnitTrain();
   }
 
+  // Clamp the rally point so new units don't get stuck on boundaries or obstacles.
+  const safeRallyPos = getSafeRallyPosition(state, spawnPos, rallyPos);
+
   const unit: Unit = {
     id: generateId(),
     type,
@@ -1789,7 +1890,7 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
     hp: def.hp,
     maxHp: def.hp,
     armor: def.armor,
-    commandQueue: [{ type: 'move', position: rallyPos }],
+    commandQueue: [{ type: 'move', position: safeRallyPos }],
     damageMultiplier: 1.0,
     distanceTraveled: 0,
     distanceCredit: 0,

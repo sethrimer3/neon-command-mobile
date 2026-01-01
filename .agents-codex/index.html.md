@@ -18,6 +18,10 @@ Defines the HTML entry point for the Vite-powered React application, including m
 ### Root Mount Point
 - **Purpose:** Provides the `#root` element where React renders the app.
 
+### Startup Overlay
+- **Purpose:** Shows the build badge, logo, and loading sprite before React mounts.
+- **Notes:** The spinner sprite URL is injected via a CSS variable so it can use a relative base path.
+
 ### Entry Module Script
 - **Purpose:** Loads the Vite entry module to bootstrap the React application.
 - **Notes:** Uses a relative path to ensure correct asset resolution on GitHub Pages.
@@ -29,6 +33,7 @@ Defines the HTML entry point for the Vite-powered React application, including m
 ### Critical Details
 - Relative asset paths (`./src/...`) ensure compatibility when the site is served from a subdirectory.
 - Font preconnects improve font loading performance.
+- Startup overlay assets use relative paths to avoid breaking when the Vite base path changes.
 
 ### Known Issues
 - None documented.
@@ -42,6 +47,7 @@ Defines the HTML entry point for the Vite-powered React application, including m
 
 ## Change History
 - **2025-02-14:** Updated asset paths to be relative for GitHub Pages compatibility and added explanatory comments.
+- **2026-01-01:** Updated startup overlay build badge and sprite sheet URL handling for base-path-safe assets.
 
 ## Watch Out For
 - Keep asset paths relative if the site is hosted under a non-root base path.

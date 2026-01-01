@@ -58,9 +58,15 @@ Contains the core game simulation loop and logic. Handles unit movement, combat,
 - **Notes:** 
   - Deducts photon cost
   - Initializes unit with full HP
-  - Sets initial command queue to rally position
+  - Clamps rally position into the playable arena before queuing movement
   - Updates match statistics
   - Initializes 10 particles for marines in an orbital pattern
+
+### getSafeRallyPosition(state, spawnPos, desiredRallyPos): Vector2
+- **Purpose:** Ensures rally points stay within the 1m boundary and avoid obstacles
+- **Parameters:** Game state, spawn position, desired rally point
+- **Returns:** A safe movement target for newly spawned units
+- **Notes:** Uses boundary obstacles to infer playable bounds and steps back toward the base if blocked
 
 ### Particle Physics Functions
 - **createParticlesForUnit(unit, count):** Creates particles in circular formation around unit
@@ -101,6 +107,7 @@ Multiple functions for unit abilities:
 - All abilities have unique implementations and effects
 - Combat uses attack rate to determine damage intervals
 - Bases can move but slowly (for gameplay balance)
+- Spawn rally points are clamped inside the 1m boundary to prevent off-screen movement targets
 
 ### Known Issues
 - None currently identified
@@ -123,6 +130,7 @@ Multiple functions for unit abilities:
 - Added match statistics tracking
 - Added time limit support
 - **2025-12-31**: Added particle physics system for marines with 10 particles per unit that orbit using attraction forces
+- **2026-01-01**: Clamped spawn rally points to playable bounds to prevent stuck units
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds

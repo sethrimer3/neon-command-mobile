@@ -51,7 +51,8 @@
 #startup-spinner-sprite {
     width: 150px;
     height: 150px;
-    background-image: url('/ASSETS/sprites/gravyThyme/loadingAnimation/sprite_sheet.png');
+    /* Use a CSS variable so the sprite sheet can follow the configured base path. */
+    background-image: var(--startup-spinner-image);
     background-size: 13650px 150px; /* 91 frames * 150px */
     background-repeat: no-repeat;
     background-position: 0 0;

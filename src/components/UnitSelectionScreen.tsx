@@ -15,6 +15,8 @@ interface UnitSelectionScreenProps {
 
 export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerColor, playerFaction, onFactionChange }: UnitSelectionScreenProps) {
   const [selectedSlot, setSelectedSlot] = useState<'left' | 'up' | 'down' | 'right' | null>(null);
+  // Build faction logo URLs with the configured base path for GitHub Pages compatibility.
+  const assetBaseUrl = import.meta.env.BASE_URL;
 
   const handleSlotClick = (slot: 'left' | 'up' | 'down' | 'right') => {
     setSelectedSlot(slot);
@@ -221,7 +223,7 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
                   }}
                 >
                   <img 
-                    src={`/ASSETS/sprites/factions/${faction}/${faction}Logo.png`}
+                    src={`${assetBaseUrl}ASSETS/sprites/factions/${faction}/${faction}Logo.png`}
                     alt={`${FACTION_DEFINITIONS[faction].name} logo`}
                     className="w-16 h-16 object-contain"
                   />

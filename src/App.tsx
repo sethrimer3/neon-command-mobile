@@ -68,6 +68,8 @@ function App() {
 
   const gameState = gameStateRef.current;
   const lastVictoryStateRef = useRef<boolean>(false);
+  // Use Vite's base URL to build sprite paths that work in subdirectory deployments.
+  const assetBaseUrl = import.meta.env.BASE_URL;
 
   useEffect(() => {
     const initUser = async () => {
@@ -983,12 +985,12 @@ function App() {
       {gameState.mode === 'menu' && (
         <div className="absolute inset-0 flex items-center justify-center animate-in fade-in duration-500">
           <div className="absolute top-4 left-4 orbitron text-sm text-muted-foreground opacity-70">
-            Build 1
+            Build 4
           </div>
           <div className="flex flex-col gap-4 w-80 max-w-[90vw]">
             <div className="flex justify-center mb-4 animate-in fade-in zoom-in-95 duration-700">
               <img 
-                src="/ASSETS/sprites/menus/mainMenuTitle.png" 
+                src={`${assetBaseUrl}ASSETS/sprites/menus/mainMenuTitle.png`} 
                 alt="Speed of Light RTS"
                 className="w-full max-w-md neon-glow"
                 style={{
