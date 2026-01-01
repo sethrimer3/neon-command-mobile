@@ -58,6 +58,7 @@ const projectilePool = new ObjectPool<Projectile>(
 // Unit collision constants
 const UNIT_COLLISION_RADIUS = UNIT_SIZE_METERS / 2; // Minimum distance between unit centers
 const UNIT_COLLISION_SQUEEZE_FACTOR = 0.8; // Allow units to squeeze past each other (80% of full diameter)
+const FRIENDLY_SLIDE_DISTANCE = 0.3; // Distance to slide perpendicular when avoiding friendly units
 
 // Particle physics constants
 const PARTICLE_ATTRACTION_STRENGTH = 6.0; // How strongly particles are attracted to their unit
@@ -165,17 +166,16 @@ function checkUnitCollisionWithSliding(
     // Try sliding perpendicular to movement direction
     const perpendicular1 = { x: -movementDirection.y, y: movementDirection.x };
     const perpendicular2 = { x: movementDirection.y, y: -movementDirection.x };
-    const slideDistance = 0.3; // Small offset to slide around friendly unit
     
     // Try sliding to the right
-    const slidePos1 = add(desiredPosition, scale(perpendicular1, slideDistance));
+    const slidePos1 = add(desiredPosition, scale(perpendicular1, FRIENDLY_SLIDE_DISTANCE));
     if (!checkObstacleCollision(slidePos1, UNIT_SIZE_METERS / 2, obstacles) &&
         !checkUnitCollision(slidePos1, unit.id, allUnits)) {
       return { blocked: false, alternativePosition: slidePos1 };
     }
     
     // Try sliding to the left
-    const slidePos2 = add(desiredPosition, scale(perpendicular2, slideDistance));
+    const slidePos2 = add(desiredPosition, scale(perpendicular2, FRIENDLY_SLIDE_DISTANCE));
     if (!checkObstacleCollision(slidePos2, UNIT_SIZE_METERS / 2, obstacles) &&
         !checkUnitCollision(slidePos2, unit.id, allUnits)) {
       return { blocked: false, alternativePosition: slidePos2 };
@@ -194,6 +194,30 @@ function markQueueForCancellation(unit: Unit): void {
   // Start fade animation for cancelled commands
   if (!unit.queueFadeStartTime) {
     unit.queueFadeStartTime = Date.now();
+  }
+}
+
+// Helper function to update stuck detection for a unit that's blocked
+function updateStuckDetection(unit: Unit, deltaTime: number): void {
+  if (!unit.lastPosition) {
+    unit.lastPosition = { ...unit.position };
+    unit.stuckTimer = 0;
+  } else {
+    const distMoved = distance(unit.position, unit.lastPosition);
+    
+    if (distMoved < STUCK_DETECTION_THRESHOLD) {
+      // Unit hasn't moved much - increment stuck timer
+      unit.stuckTimer = (unit.stuckTimer || 0) + deltaTime;
+      
+      // If stuck for too long, cancel command queue
+      if (unit.stuckTimer >= STUCK_TIMEOUT) {
+        markQueueForCancellation(unit);
+      }
+    } else {
+      // Unit moved enough - reset stuck timer
+      unit.stuckTimer = 0;
+      unit.lastPosition = { ...unit.position };
+    }
   }
 }
 
@@ -922,26 +946,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
         unit.currentSpeed = Math.max(0, (unit.currentSpeed || 0) * COLLISION_DECELERATION_FACTOR);
         
         // Track stuck state
-        if (!unit.lastPosition) {
-          unit.lastPosition = { ...unit.position };
-          unit.stuckTimer = 0;
-        } else {
-          const distMoved = distance(unit.position, unit.lastPosition);
-          
-          if (distMoved < STUCK_DETECTION_THRESHOLD) {
-            // Unit hasn't moved much - increment stuck timer
-            unit.stuckTimer = (unit.stuckTimer || 0) + deltaTime;
-            
-            // If stuck for too long, cancel command queue
-            if (unit.stuckTimer >= STUCK_TIMEOUT) {
-              markQueueForCancellation(unit);
-            }
-          } else {
-            // Unit moved enough - reset stuck timer
-            unit.stuckTimer = 0;
-            unit.lastPosition = { ...unit.position };
-          }
-        }
+        updateStuckDetection(unit, deltaTime);
         return;
       }
 
@@ -1012,24 +1017,8 @@ function updateUnits(state: GameState, deltaTime: number): void {
         // Collision detected - slow down
         unit.currentSpeed = Math.max(0, (unit.currentSpeed || 0) * COLLISION_DECELERATION_FACTOR);
         
-        // Track stuck state (similar to move command)
-        if (!unit.lastPosition) {
-          unit.lastPosition = { ...unit.position };
-          unit.stuckTimer = 0;
-        } else {
-          const distMoved = distance(unit.position, unit.lastPosition);
-          
-          if (distMoved < STUCK_DETECTION_THRESHOLD) {
-            unit.stuckTimer = (unit.stuckTimer || 0) + deltaTime;
-            
-            if (unit.stuckTimer >= STUCK_TIMEOUT) {
-              markQueueForCancellation(unit);
-            }
-          } else {
-            unit.stuckTimer = 0;
-            unit.lastPosition = { ...unit.position };
-          }
-        }
+        // Track stuck state
+        updateStuckDetection(unit, deltaTime);
         return;
       }
 
@@ -1106,24 +1095,8 @@ function updateUnits(state: GameState, deltaTime: number): void {
         unit.stuckTimer = 0;
         unit.lastPosition = { ...unit.position };
       } else {
-        // Track stuck state for patrol commands too
-        if (!unit.lastPosition) {
-          unit.lastPosition = { ...unit.position };
-          unit.stuckTimer = 0;
-        } else {
-          const distMoved = distance(unit.position, unit.lastPosition);
-          
-          if (distMoved < STUCK_DETECTION_THRESHOLD) {
-            unit.stuckTimer = (unit.stuckTimer || 0) + deltaTime;
-            
-            if (unit.stuckTimer >= STUCK_TIMEOUT) {
-              markQueueForCancellation(unit);
-            }
-          } else {
-            unit.stuckTimer = 0;
-            unit.lastPosition = { ...unit.position };
-          }
-        }
+        // Track stuck state
+        updateStuckDetection(unit, deltaTime);
         return;
       }
 
