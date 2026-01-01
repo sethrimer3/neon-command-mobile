@@ -2,16 +2,18 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { ArrowLeft } from '@phosphor-icons/react';
-import { UnitType, UNIT_DEFINITIONS, COLORS } from '../lib/types';
+import { UnitType, UNIT_DEFINITIONS, COLORS, FactionType, FACTION_DEFINITIONS } from '../lib/types';
 
 interface UnitSelectionScreenProps {
   unitSlots: Record<'left' | 'up' | 'down' | 'right', UnitType>;
   onSlotChange: (slot: 'left' | 'up' | 'down' | 'right', unitType: UnitType) => void;
   onBack: () => void;
   playerColor: string;
+  playerFaction: FactionType;
+  onFactionChange: (faction: FactionType) => void;
 }
 
-export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerColor }: UnitSelectionScreenProps) {
+export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerColor, playerFaction, onFactionChange }: UnitSelectionScreenProps) {
   const [selectedSlot, setSelectedSlot] = useState<'left' | 'up' | 'down' | 'right' | null>(null);
 
   const handleSlotClick = (slot: 'left' | 'up' | 'down' | 'right') => {
@@ -98,9 +100,58 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
       <Card className="w-[500px] max-w-full">
         <CardHeader>
           <CardTitle className="orbitron text-2xl">Unit Selection</CardTitle>
-          <p className="text-sm text-muted-foreground">Click a slot, then choose a unit</p>
+          <p className="text-sm text-muted-foreground">Select your faction and configure unit slots</p>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Faction Selection */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Select Faction:</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(['standard', 'mobile'] as FactionType[]).map((faction) => (
+                <button
+                  key={faction}
+                  onClick={() => {
+                    onFactionChange(faction);
+                    // Reset unit slots to valid units for this faction
+                    const availableUnits = FACTION_DEFINITIONS[faction].availableUnits;
+                    if (availableUnits.length > 0) {
+                      // For mobile faction with only 1 unit, set all slots to that unit
+                      if (availableUnits.length === 1) {
+                        onSlotChange('left', availableUnits[0]);
+                        onSlotChange('up', availableUnits[0]);
+                        onSlotChange('down', availableUnits[0]);
+                        onSlotChange('right', availableUnits[0]);
+                      } else {
+                        // For factions with multiple units, set different units in slots
+                        onSlotChange('left', availableUnits[0]);
+                        onSlotChange('up', availableUnits[Math.min(1, availableUnits.length - 1)]);
+                        onSlotChange('down', availableUnits[Math.min(2, availableUnits.length - 1)]);
+                        onSlotChange('right', availableUnits[Math.min(3, availableUnits.length - 1)]);
+                      }
+                    }
+                  }}
+                  className={`p-4 border-2 rounded-lg transition-all ${
+                    playerFaction === faction ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
+                  }`}
+                  style={{
+                    borderColor: playerColor || COLORS.playerDefault,
+                    backgroundColor: playerFaction === faction ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
+                  }}
+                >
+                  <div className="text-center">
+                    <div className="text-lg font-bold orbitron">{FACTION_DEFINITIONS[faction].name}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {FACTION_DEFINITIONS[faction].ability === 'laser' ? 'Giant Laser' : 'Shield Defense'}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {FACTION_DEFINITIONS[faction].availableUnits.length} unit{FACTION_DEFINITIONS[faction].availableUnits.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="relative w-full aspect-square max-w-[300px] mx-auto">
             <div className="absolute inset-0 flex items-center justify-center">
               <div
@@ -108,6 +159,7 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
                 style={{
                   borderColor: playerColor || COLORS.playerDefault,
                   backgroundColor: `${playerColor || COLORS.playerDefault}20`,
+                  borderRadius: FACTION_DEFINITIONS[playerFaction].baseShape === 'circle' ? '50%' : '0',
                 }}
               >
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -181,7 +233,7 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
             <div className="space-y-2">
               <p className="text-sm text-center orbitron">Select unit for {selectedSlot} slot:</p>
               <div className="grid grid-cols-4 gap-2 justify-center max-w-md mx-auto">
-                {(['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor'] as UnitType[]).map((unitType) => (
+                {FACTION_DEFINITIONS[playerFaction].availableUnits.map((unitType) => (
                   <button
                     key={unitType}
                     onClick={() => handleUnitSelect(unitType)}

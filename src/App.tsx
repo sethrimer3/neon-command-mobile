@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useKV } from './hooks/useKV';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
-import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS } from './lib/types';
+import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS, FactionType, FACTION_DEFINITIONS } from './lib/types';
 import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, isPortraitOrientation } from './lib/gameUtils';
 import { updateGame } from './lib/simulation';
 import { updateAI } from './lib/ai';
@@ -53,6 +53,8 @@ function App() {
   const [showMinimap, setShowMinimap] = useKV<boolean>('show-minimap', true);
   const [showPerformance, setShowPerformance] = useKV<boolean>('show-performance', false);
   const [enableCameraControls, setEnableCameraControls] = useKV<boolean>('enable-camera-controls', true);
+  const [playerFaction, setPlayerFaction] = useKV<FactionType>('player-faction', 'standard');
+  const [enemyFaction, setEnemyFaction] = useKV<FactionType>('enemy-faction', 'standard');
 
   const gameState = gameStateRef.current;
   const lastVictoryStateRef = useRef<boolean>(false);
@@ -103,13 +105,15 @@ function App() {
       unitSlots: (unitSlots || { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' }) as Record<'left' | 'up' | 'down' | 'right', UnitType>,
       selectedMap: selectedMap || 'open',
       showNumericHP: showNumericHP ?? true,
+      playerFaction: playerFaction || 'standard',
+      enemyFaction: enemyFaction || 'standard',
     };
     gameStateRef.current.showMinimap = showMinimap ?? true;
     gameStateRef.current.players = gameStateRef.current.players.map((p, i) => ({
       ...p,
       color: i === 0 ? (playerColor || COLORS.playerDefault) : (enemyColor || COLORS.enemyDefault),
     }));
-  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showMinimap]);
+  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showMinimap, playerFaction, enemyFaction]);
 
   // Cleanup interval on unmount
   useEffect(() => {
@@ -1096,6 +1100,8 @@ function App() {
           onSlotChange={handleSlotChange}
           onBack={backToMenu}
           playerColor={playerColor || COLORS.playerDefault}
+          playerFaction={playerFaction || 'standard'}
+          onFactionChange={setPlayerFaction}
         />
       )}
 
@@ -1223,6 +1229,8 @@ function createInitialState(): GameState {
       unitSlots: { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' },
       selectedMap: 'open',
       showNumericHP: true,
+      playerFaction: 'standard',
+      enemyFaction: 'standard',
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
@@ -1264,6 +1272,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
+        faction: settings.playerFaction || 'standard',
       },
       {
         id: generateId(),
@@ -1274,6 +1283,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
+        faction: settings.enemyFaction || 'standard',
       },
     ],
     players: [
@@ -1338,6 +1348,7 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
+        faction: settings.playerFaction || 'standard',
       },
       {
         id: generateId(),
@@ -1348,6 +1359,7 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
+        faction: settings.enemyFaction || 'standard',
       },
     ],
     players: [
@@ -1402,6 +1414,7 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
+        faction: 'standard',
       },
       {
         id: generateId(),
@@ -1412,6 +1425,7 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
+        faction: 'standard',
       },
     ],
     players: [
@@ -1432,6 +1446,8 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
       unitSlots: { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' },
       selectedMap: lobby.mapId,
       showNumericHP: true,
+      playerFaction: 'standard',
+      enemyFaction: 'standard',
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
@@ -1478,6 +1494,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
+        faction: 'standard',
       },
       {
         id: generateId(),
@@ -1488,6 +1505,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
+        faction: 'standard',
       },
     ],
     players: [
@@ -1508,6 +1526,8 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
       unitSlots: { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' },
       selectedMap: lobby.mapId,
       showNumericHP: true,
+      playerFaction: 'standard',
+      enemyFaction: 'standard',
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
