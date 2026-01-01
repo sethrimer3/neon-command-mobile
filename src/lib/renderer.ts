@@ -553,13 +553,26 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
     if (base.isSelected) {
       ctx.save();
       ctx.shadowColor = color;
-      ctx.shadowBlur = 20 * pulseIntensity;
+      ctx.shadowBlur = 35 * pulseIntensity;
+      ctx.lineWidth = 5;
+      ctx.globalAlpha = 0.9;
       if (factionDef.baseShape === 'circle') {
         ctx.beginPath();
         ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
         ctx.stroke();
       } else {
         ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+      }
+
+      // Add a larger secondary ring to make the selected base stand out
+      ctx.globalAlpha = 0.45;
+      if (factionDef.baseShape === 'circle') {
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y, size * 0.65, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        const expanded = size * 1.3;
+        ctx.strokeRect(screenPos.x - expanded / 2, screenPos.y - expanded / 2, expanded, expanded);
       }
       ctx.restore();
     } else {

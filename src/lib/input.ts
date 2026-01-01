@@ -127,7 +127,11 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
       const elapsed = Date.now() - touchState.startTime;
       // Only create selection rect if no units are selected AND no base touched
       // When units are selected, dragging will be for ability casting instead
-      if (!touchState.touchedBase && state.selectedUnits.size === 0) {
+      const playerIndex = state.vsMode === 'player' && touchState.startPos.x > canvas.width / 2 ? 1 : 0;
+      const selectedBase = getSelectedBase(state, playerIndex);
+
+      // Skip selection rects when the base is selected so swipes spawn units anywhere
+      if (!touchState.touchedBase && state.selectedUnits.size === 0 && !selectedBase) {
         touchState.selectionRect = {
           x1: touchState.startPos.x,
           y1: touchState.startPos.y,
@@ -187,6 +191,13 @@ export function handleTouchEnd(e: TouchEvent, state: GameState, canvas: HTMLCanv
       }
     } else if (touchState.touchedBase && touchState.isDragging && dist > SWIPE_THRESHOLD_PX) {
       handleBaseSwipe(state, touchState.touchedBase, { x: dx, y: dy }, playerIndex);
+    } else if (touchState.isDragging && dist > SWIPE_THRESHOLD_PX) {
+      const selectedBase = getSelectedBase(state, playerIndex);
+
+      // Allow swipe-to-spawn anywhere when the player's base is selected
+      if (selectedBase && state.selectedUnits.size === 0) {
+        handleBaseSwipe(state, selectedBase, { x: dx, y: dy }, playerIndex);
+      }
     } else if (elapsed < TAP_TIME_MS && dist < 10) {
       handleTap(state, { x, y }, canvas, playerIndex);
     } else if (touchState.isDragging && state.selectedUnits.size > 0 && !touchState.touchedBase && !touchState.touchedMovementDot) {
@@ -218,6 +229,11 @@ function findTouchedBase(state: GameState, worldPos: { x: number; y: number }, p
     const dist = distance(base.position, worldPos);
     return dist < BASE_SIZE_METERS / 2;
   });
+}
+
+// Helper to find the currently selected base for a given player
+function getSelectedBase(state: GameState, playerIndex: number): Base | undefined {
+  return state.bases.find((base) => base.owner === playerIndex && base.isSelected);
 }
 
 function findTouchedMovementDot(
@@ -259,6 +275,19 @@ function handleRectSelection(
   });
 
   if (state.selectedUnits.size > 0 && state.selectedUnits.size !== prevSize) {
+    soundManager.playUnitSelect();
+    return;
+  }
+
+  const selectedBase = state.bases.find((base) => {
+    if (base.owner !== playerIndex) return false;
+    const screenPos = positionToPixels(base.position);
+    return screenPos.x >= minX && screenPos.x <= maxX && screenPos.y >= minY && screenPos.y <= maxY;
+  });
+
+  // Only select the base if no units were captured by the selection rectangle
+  if (selectedBase) {
+    selectedBase.isSelected = true;
     soundManager.playUnitSelect();
   }
 }
@@ -322,8 +351,6 @@ function fireLaser(state: GameState, base: Base, direction: { x: number; y: numb
 }
 
 function handleBaseSwipe(state: GameState, base: Base, swipe: { x: number; y: number }, playerIndex: number): void {
-  if (base.isSelected) return;
-
   const swipeLen = Math.sqrt(swipe.x * swipe.x + swipe.y * swipe.y);
   if (swipeLen < SWIPE_THRESHOLD_PX) return;
 
@@ -669,7 +696,11 @@ export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCan
     mouseState.isDragging = true;
 
     // Only create selection rect if no units are selected AND no base touched
-    if (!mouseState.touchedBase && state.selectedUnits.size === 0) {
+    const playerIndex = state.vsMode === 'player' && mouseState.startPos.x > canvas.width / 2 ? 1 : 0;
+    const selectedBase = getSelectedBase(state, playerIndex);
+
+    // Skip selection rects when the base is selected so swipes spawn units anywhere
+    if (!mouseState.touchedBase && state.selectedUnits.size === 0 && !selectedBase) {
       mouseState.selectionRect = {
         x1: mouseState.startPos.x,
         y1: mouseState.startPos.y,
@@ -725,6 +756,13 @@ export function handleMouseUp(e: MouseEvent, state: GameState, canvas: HTMLCanva
     }
   } else if (mouseState.touchedBase && mouseState.isDragging && dist > SWIPE_THRESHOLD_PX) {
     handleBaseSwipe(state, mouseState.touchedBase, { x: dx, y: dy }, playerIndex);
+  } else if (mouseState.isDragging && dist > SWIPE_THRESHOLD_PX) {
+    const selectedBase = getSelectedBase(state, playerIndex);
+
+    // Allow swipe-to-spawn anywhere when the player's base is selected
+    if (selectedBase && state.selectedUnits.size === 0) {
+      handleBaseSwipe(state, selectedBase, { x: dx, y: dy }, playerIndex);
+    }
   } else if (elapsed < TAP_TIME_MS && dist < 10) {
     handleTap(state, { x, y }, canvas, playerIndex);
   } else if (mouseState.isDragging && state.selectedUnits.size > 0 && !mouseState.touchedBase && !mouseState.touchedMovementDot) {

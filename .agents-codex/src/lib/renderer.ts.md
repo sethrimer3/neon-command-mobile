@@ -41,7 +41,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - **Notes:**
   - Shows laser firing animation
   - Health bar with color coding (green→yellow→red)
-  - Pulsing selection indicator
+  - Pulsing selection indicator with a secondary ring for clearer selection state
   - Movement target indicator (dot)
 
 #### drawCommandQueues(ctx, state): void
@@ -139,6 +139,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - Implemented ability effect visuals
 - Added match statistics to HUD
 - **2025-12-31**: Added particle physics rendering for marines with glowing effect
+- **2026-01-01**: Strengthened base selection glow with a thicker outline and secondary ring
 
 ## Watch Out For
 - Always convert game positions to pixels before drawing

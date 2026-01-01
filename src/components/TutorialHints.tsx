@@ -51,7 +51,7 @@ export function TutorialHint({ title, message, position, onDismiss }: TutorialHi
 export const TUTORIAL_HINTS = {
   firstUnit: {
     title: '💡 Spawn Units',
-    message: 'Swipe from your base (blue square) in different directions to spawn units. Each direction spawns a different unit type.',
+    message: 'Select your base (blue square), then swipe anywhere in different directions to spawn units. Each direction spawns a different unit type.',
   },
   selectUnits: {
     title: '💡 Select Units',

@@ -38,8 +38,8 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - **Purpose:** Handles dragging and selection box
 - **Notes:**
   - Enters drag mode after 10px movement
-  - Creates selection rectangle when no units selected OR after hold time (200ms)
-  - This allows immediate box selection on mobile when no units are selected
+  - Creates selection rectangle only when no units are selected and no base is selected
+  - This allows swiping anywhere to spawn units once the base is selected
   - Updates base movement target
   - Handles movement dot dragging
 
@@ -48,7 +48,7 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - **Notes:**
   - Tap: Select/deselect units or bases
   - Hold: Show unit spawn menu
-  - Swipe: Issue unit commands
+  - Swipe: Spawn units when the base is selected, or issue unit commands
   - Drag: Box select or move base
 
 ### Helper Functions
@@ -57,9 +57,13 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - **Purpose:** Detect what the user interacted with
 - **Notes:** Uses distance checks with appropriate radii
 
+#### getSelectedBase
+- **Purpose:** Find the currently selected base for a player
+- **Notes:** Used to gate swipe-to-spawn behavior and selection rect creation
+
 #### selectUnitsInBox
 - **Purpose:** Box selection for multiple units
-- **Notes:** Filters by player ownership
+- **Notes:** Filters by player ownership and prioritizes units over base selection
 
 #### issueCommandToSelected
 - **Purpose:** Add command to selected units' queues
@@ -131,6 +135,7 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - Added base movement via dragging
 - Added unit spawn hold mechanic
 - **2025-12-31**: Fixed mobile selection box to create immediately when no units are selected (removed hold time requirement for empty selection)
+- **2026-01-01**: Allowed swipe-to-spawn anywhere when the base is selected and prioritized units over base selection in box select
 
 ## Watch Out For
 - Always prevent default on touch events to avoid scrolling
