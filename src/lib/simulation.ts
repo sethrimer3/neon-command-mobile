@@ -20,6 +20,12 @@ import { soundManager } from './sound';
 import { createSpawnEffect, createHitSparks, createAbilityEffect, createEnhancedDeathExplosion, createScreenFlash } from './visualEffects';
 import { ObjectPool } from './objectPool';
 
+// Projectile constants - must be declared before object pool
+const PROJECTILE_SPEED = 15; // meters per second
+const PROJECTILE_LIFETIME = 2.0; // seconds before projectile disappears
+const MELEE_EFFECT_DURATION = 0.2; // seconds for melee attack visual
+const LASER_BEAM_DURATION = 0.5; // seconds for laser beam visual
+
 // Object pool for projectiles - reuse projectiles instead of creating/destroying
 const projectilePool = new ObjectPool<Projectile>(
   () => ({
@@ -62,12 +68,6 @@ const PARTICLE_ORBITAL_FORCE = 1.2; // Force applied for orbital motion
 const PARTICLE_ORBITAL_VELOCITY_SCALE = 0.5; // Scale factor for orbital velocity contribution
 const PARTICLE_TRAIL_LENGTH = 6; // Number of trail positions to keep
 const PARTICLE_MIN_SPEED_THRESHOLD = 0.01; // Threshold for detecting nearly stationary particles
-
-// Projectile constants
-const PROJECTILE_SPEED = 15; // meters per second
-const PROJECTILE_LIFETIME = 2.0; // seconds before projectile disappears
-const MELEE_EFFECT_DURATION = 0.2; // seconds for melee attack visual
-const LASER_BEAM_DURATION = 0.5; // seconds for laser beam visual
 
 // Rotation constants
 const ROTATION_SPEED = 8.0; // radians per second - how fast units rotate to face direction
