@@ -12,6 +12,10 @@ import {
   BASE_SIZE_METERS,
   UNIT_SIZE_METERS,
   ABILITY_MAX_RANGE,
+  ABILITY_LASER_DAMAGE,
+  ABILITY_LASER_WIDTH,
+  ABILITY_LASER_DURATION,
+  ABILITY_LASER_BASE_DAMAGE_MULTIPLIER,
   Particle,
   Projectile,
   FACTION_DEFINITIONS,
@@ -1414,13 +1418,12 @@ function executeGenericLaser(state: GameState, unit: Unit, direction: { x: numbe
   // Calculate laser range based on the drag distance
   const dragDistance = distance({ x: 0, y: 0 }, direction);
   const laserRange = Math.min(dragDistance, ABILITY_MAX_RANGE);
-  const laserWidth = 0.5; // Width of the laser beam in meters
   
   const dir = normalize(direction);
   
-  // Store laser beam for visual effect (1 second duration)
+  // Store laser beam for visual effect
   unit.laserBeam = {
-    endTime: Date.now() + 1000,
+    endTime: Date.now() + ABILITY_LASER_DURATION,
     direction: { ...dir },
     range: laserRange
   };
@@ -1433,16 +1436,16 @@ function executeGenericLaser(state: GameState, unit: Unit, direction: { x: numbe
   const enemies = state.units.filter((u) => u.owner !== unit.owner);
   const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
   
-  const baseDamage = 10; // Base damage for generic laser
-  const damage = baseDamage * unit.damageMultiplier;
+  const damage = ABILITY_LASER_DAMAGE * unit.damageMultiplier;
+  const laserWidthHalf = ABILITY_LASER_WIDTH / 2;
   
-  // Check units in the laser path
+  // Check units in the laser path (using perpendicular distance from laser line)
   enemies.forEach((enemy) => {
     const toEnemy = subtract(enemy.position, unit.position);
     const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
-    const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x);
+    const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x); // 2D cross product for perpendicular distance
     
-    if (projectedDist > 0 && projectedDist < laserRange && perpDist < laserWidth / 2) {
+    if (projectedDist > 0 && projectedDist < laserRange && perpDist < laserWidthHalf) {
       enemy.hp -= damage;
       createHitSparks(state, enemy.position, laserColor, 6);
       
@@ -1459,11 +1462,12 @@ function executeGenericLaser(state: GameState, unit: Unit, direction: { x: numbe
     const perpDist = Math.abs(toBase.x * dir.y - toBase.y * dir.x);
     
     const baseRadius = BASE_SIZE_METERS / 2;
-    if (projectedDist > 0 && projectedDist < laserRange && perpDist < laserWidth / 2 + baseRadius) {
-      base.hp -= damage * 0.5; // Reduced damage to bases
+    if (projectedDist > 0 && projectedDist < laserRange && perpDist < laserWidthHalf + baseRadius) {
+      const baseDamage = damage * ABILITY_LASER_BASE_DAMAGE_MULTIPLIER;
+      base.hp -= baseDamage;
       
       if (state.matchStats && unit.owner === 0) {
-        state.matchStats.damageDealtByPlayer += damage * 0.5;
+        state.matchStats.damageDealtByPlayer += baseDamage;
       }
     }
   });

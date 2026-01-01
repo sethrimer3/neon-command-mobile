@@ -11,6 +11,12 @@ export const LASER_DAMAGE_UNIT = 200;
 export const LASER_DAMAGE_BASE = 300;
 export const LASER_COOLDOWN = 10;
 
+// Unit ability laser constants
+export const ABILITY_LASER_DAMAGE = 10;
+export const ABILITY_LASER_WIDTH = 0.5;
+export const ABILITY_LASER_DURATION = 1000; // milliseconds
+export const ABILITY_LASER_BASE_DAMAGE_MULTIPLIER = 0.5;
+
 export const PROMOTION_DISTANCE_THRESHOLD = 10;
 export const PROMOTION_MULTIPLIER = 1.1;
 export const QUEUE_BONUS_PER_NODE = 0.1;

@@ -9,6 +9,7 @@ import {
   Projectile,
   LASER_RANGE,
   ABILITY_MAX_RANGE,
+  ABILITY_LASER_DURATION,
   FACTION_DEFINITIONS,
   UnitModifier,
 } from './types';
@@ -1670,7 +1671,7 @@ function drawUnitLaserBeam(ctx: CanvasRenderingContext2D, unit: Unit, color: str
   const endScreen = positionToPixels(endPos);
   
   const timeLeft = unit.laserBeam.endTime - Date.now();
-  const fadeProgress = 1 - Math.min(1, timeLeft / 1000);
+  const fadeProgress = 1 - Math.min(1, timeLeft / ABILITY_LASER_DURATION);
   
   ctx.save();
   
