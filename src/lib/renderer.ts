@@ -18,6 +18,15 @@ import { Obstacle } from './maps';
 import { MOTION_TRAIL_DURATION, QUEUE_FADE_DURATION } from './simulation';
 import { getFormationName } from './formations';
 
+// Load projectile sprite
+const projectileSprite = new Image();
+const assetBaseUrl = import.meta.env.BASE_URL;
+projectileSprite.src = `${assetBaseUrl}ASSETS/sprites/projectiles/throw/throw1.png`;
+let projectileSpriteLoaded = false;
+projectileSprite.onload = () => {
+  projectileSpriteLoaded = true;
+};
+
 // Helper function to get modifier icon emoji
 function getModifierIcon(modifier: UnitModifier): string {
   switch (modifier) {
@@ -902,19 +911,41 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     ctx.lineTo(screenPos.x, screenPos.y);
     ctx.stroke();
     
-    // Draw projectile core with enhanced glow
-    ctx.fillStyle = projectile.color;
-    ctx.shadowBlur = 20 * pulseIntensity;
-    ctx.beginPath();
-    ctx.arc(screenPos.x, screenPos.y, 5, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Draw bright center with appropriate team color
-    ctx.fillStyle = getTeamHighlightColor(projectile.owner);
-    ctx.shadowBlur = 25 * pulseIntensity;
-    ctx.beginPath();
-    ctx.arc(screenPos.x, screenPos.y, 2.5, 0, Math.PI * 2);
-    ctx.fill();
+    // Draw projectile sprite if loaded, otherwise fall back to circle
+    if (projectileSpriteLoaded && projectileSprite.complete) {
+      // Calculate rotation angle based on velocity direction
+      const angle = Math.atan2(projectile.velocity.y, projectile.velocity.x);
+      
+      // Set glow effect for the sprite
+      ctx.shadowColor = projectile.color;
+      ctx.shadowBlur = 20 * pulseIntensity;
+      
+      // Draw sprite rotated in the direction of travel
+      ctx.translate(screenPos.x, screenPos.y);
+      ctx.rotate(angle);
+      
+      // Draw the sprite centered and scaled appropriately
+      const spriteSize = 24; // Size in pixels
+      ctx.drawImage(projectileSprite, -spriteSize / 2, -spriteSize / 2, spriteSize, spriteSize);
+      
+      // Reset transformations
+      ctx.rotate(-angle);
+      ctx.translate(-screenPos.x, -screenPos.y);
+    } else {
+      // Fallback to original circle rendering if sprite not loaded
+      ctx.fillStyle = projectile.color;
+      ctx.shadowBlur = 20 * pulseIntensity;
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, 5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Draw bright center with appropriate team color
+      ctx.fillStyle = getTeamHighlightColor(projectile.owner);
+      ctx.shadowBlur = 25 * pulseIntensity;
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
     
     ctx.restore();
   });
