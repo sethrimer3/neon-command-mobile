@@ -13,7 +13,7 @@ import {
 } from './types';
 import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract } from './gameUtils';
 import { Obstacle } from './maps';
-import { MOTION_TRAIL_DURATION } from './simulation';
+import { MOTION_TRAIL_DURATION, QUEUE_FADE_DURATION } from './simulation';
 import { getFormationName } from './formations';
 
 // FPS Counter constants
@@ -357,10 +357,22 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
   state.units.forEach((unit) => {
     const color = state.players[unit.owner].color;
     
+    // Calculate fade alpha if queue is being cancelled
+    let fadeAlpha = 1.0;
+    if (unit.queueFadeStartTime) {
+      const fadeElapsed = (Date.now() - unit.queueFadeStartTime) / 1000;
+      fadeAlpha = Math.max(0, 1.0 - fadeElapsed / QUEUE_FADE_DURATION);
+      
+      // Clean up fade tracking after animation completes
+      if (fadeAlpha <= 0) {
+        unit.queueFadeStartTime = undefined;
+      }
+    }
+    
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.7;
+    ctx.globalAlpha = 0.7 * fadeAlpha;
 
     let lastPos = unit.position;
 
@@ -381,14 +393,14 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
 
         // Draw waypoint with pulsing animation
         const pulse = Math.sin(time * 2 + index) * 0.3 + 0.7;
-        ctx.globalAlpha = 0.8 * pulse;
+        ctx.globalAlpha = 0.8 * pulse * fadeAlpha;
         ctx.shadowColor = color;
         ctx.shadowBlur = 12;
         ctx.beginPath();
         ctx.arc(screenPos.x, screenPos.y, 4 + pulse * 2, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
-        ctx.globalAlpha = 0.7;
+        ctx.globalAlpha = 0.7 * fadeAlpha;
 
         lastPos = node.position;
       } else if (node.type === 'ability') {
@@ -405,7 +417,7 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
         // Draw arrow with enhanced glow
         ctx.shadowColor = color;
         ctx.shadowBlur = 15;
-        ctx.globalAlpha = 0.9;
+        ctx.globalAlpha = 0.9 * fadeAlpha;
         ctx.beginPath();
         ctx.moveTo(arrowLen, 0);
         ctx.lineTo(0, -6);
@@ -425,7 +437,7 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
           const lastScreenPos = positionToPixels(lastPos);
           ctx.strokeStyle = color;
           ctx.lineWidth = 2;
-          ctx.globalAlpha = 0.4;
+          ctx.globalAlpha = 0.4 * fadeAlpha;
           ctx.setLineDash([5, 5]);
           ctx.beginPath();
           ctx.moveTo(lastScreenPos.x, lastScreenPos.y);
@@ -439,7 +451,7 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
         ctx.strokeStyle = color;
         ctx.shadowColor = color;
         ctx.shadowBlur = 8;
-        ctx.globalAlpha = 0.8;
+        ctx.globalAlpha = 0.8 * fadeAlpha;
         
         // Outer circle
         ctx.lineWidth = 2;
@@ -456,13 +468,13 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
         ctx.stroke();
         
         // Center dot with pulse
-        const pulse = Math.sin(time * 3 + i * 0.3) * 0.5 + 0.5;
+        const pulse = Math.sin(time * 3 + index * 0.3) * 0.5 + 0.5;
         ctx.shadowBlur = 15;
         ctx.beginPath();
         ctx.arc(screenPos.x, screenPos.y, 3 + pulse * 2, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
-        ctx.globalAlpha = 0.7;
+        ctx.globalAlpha = 0.7 * fadeAlpha;
 
         lastPos = node.position;
       } else if (node.type === 'patrol') {
@@ -473,7 +485,7 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
         // Draw bidirectional dashed path
         ctx.strokeStyle = color;
         ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.5;
+        ctx.globalAlpha = 0.5 * fadeAlpha;
         ctx.setLineDash([8, 4]);
         ctx.lineDashOffset = time * 20; // Animated dashes
         ctx.shadowColor = color;
@@ -488,7 +500,7 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
         
         // Draw patrol markers at both ends with pulsing
         const pulse = Math.sin(time * 2.5) * 0.3 + 0.7;
-        ctx.globalAlpha = 0.7 * pulse;
+        ctx.globalAlpha = 0.7 * pulse * fadeAlpha;
         ctx.fillStyle = color;
         ctx.shadowColor = color;
         ctx.shadowBlur = 12;
@@ -511,7 +523,7 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
         drawPatrolMarker(returnScreenPos.x, returnScreenPos.y);
         
         ctx.shadowBlur = 0;
-        ctx.globalAlpha = 0.7;
+        ctx.globalAlpha = 0.7 * fadeAlpha;
         
         lastPos = node.position;
       }
