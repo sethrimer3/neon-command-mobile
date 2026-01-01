@@ -2,7 +2,7 @@
  * Multiplayer game integration - handles command synchronization between players
  */
 
-import { GameState, CommandNode, Unit } from './types';
+import { GameState, CommandNode, Unit, LASER_RANGE, LASER_WIDTH, LASER_DAMAGE_UNIT, LASER_DAMAGE_BASE, LASER_COOLDOWN, BASE_SIZE_METERS, UnitType } from './types';
 import { MultiplayerManager, GameCommand } from './multiplayer';
 import { spawnUnit } from './simulation';
 
@@ -143,7 +143,11 @@ export function applyOpponentCommands(
             if (command.baseId && command.spawnType && command.position) {
               const base = state.bases.find(b => b.id === command.baseId && b.owner === opponentIndex);
               if (base) {
-                spawnUnit(state, opponentIndex, command.spawnType as any, base.position, command.position);
+                // Validate spawnType is a valid UnitType before spawning
+                const validUnitTypes: UnitType[] = ['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor'];
+                if (validUnitTypes.includes(command.spawnType as UnitType)) {
+                  spawnUnit(state, opponentIndex, command.spawnType as UnitType, base.position, command.position);
+                }
               }
             }
             break;
@@ -193,14 +197,9 @@ export function applyOpponentCommands(
                   endTime: Date.now() + 500,
                   direction: command.direction,
                 };
-                base.laserCooldown = 10; // LASER_COOLDOWN
+                base.laserCooldown = LASER_COOLDOWN;
                 
-                // Apply laser damage (same logic as in input.ts fireLaser)
-                const LASER_RANGE = 20;
-                const LASER_WIDTH = 0.5;
-                const LASER_DAMAGE_UNIT = 200;
-                const LASER_DAMAGE_BASE = 300;
-                
+                // Apply laser damage
                 state.units.forEach((unit) => {
                   if (unit.owner === base.owner) return;
 
@@ -220,7 +219,6 @@ export function applyOpponentCommands(
                   const projectedDist = toBase.x * command.direction!.x + toBase.y * command.direction!.y;
                   const perpDist = Math.abs(toBase.x * command.direction!.y - toBase.y * command.direction!.x);
 
-                  const BASE_SIZE_METERS = 3;
                   const baseRadius = BASE_SIZE_METERS / 2;
                   if (projectedDist > 0 && projectedDist < LASER_RANGE && perpDist < LASER_WIDTH / 2 + baseRadius) {
                     targetBase.hp -= LASER_DAMAGE_BASE;
