@@ -3,7 +3,7 @@
  * Provides tactical positioning options for groups of units
  */
 
-import { Vector2, Unit, UNIT_SIZE_METERS } from './types';
+import { Vector2, Unit } from './types';
 import { distance, normalize, scale, add, subtract } from './gameUtils';
 
 export type FormationType = 'none' | 'line' | 'spread' | 'cluster' | 'wedge' | 'circle';
@@ -195,6 +195,6 @@ export function getFormationDescription(formation: FormationType): string {
     case 'wedge': return 'V-shaped assault formation. Strong frontal attack.';
     case 'circle': return 'Circular defensive formation. 360° coverage.';
     case 'none':
-    default: return 'Units move to the same point without formation.';
+    default: return 'Units automatically space out in a grid. Prevents stacking.';
   }
 }

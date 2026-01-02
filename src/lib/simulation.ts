@@ -1020,12 +1020,6 @@ function updateUnits(state: GameState, deltaTime: number): void {
       const movementDirection = normalize(subtract(targetNode.position, movingUnit.position));
       const toStationary = normalize(subtract(stationaryUnit.position, movingUnit.position));
       
-      // Skip if either direction is zero (units at same position or target at unit position)
-      if ((movementDirection.x === 0 && movementDirection.y === 0) || 
-          (toStationary.x === 0 && toStationary.y === 0)) {
-        continue;
-      }
-      
       const dotProduct = movementDirection.x * toStationary.x + movementDirection.y * toStationary.y;
       
       // If dot product exceeds threshold, moving unit is heading towards stationary unit
@@ -1038,7 +1032,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
         if (!checkObstacleCollision(avoidancePos, UNIT_SIZE_METERS / 2, state.obstacles)) {
           // Store original position and set return delay
           stationaryUnit.temporaryAvoidance = {
-            originalPosition: { ...stationaryUnit.position },
+            originalPosition: { x: stationaryUnit.position.x, y: stationaryUnit.position.y },
             returnDelay: AVOIDANCE_RETURN_DELAY
           };
           
