@@ -977,6 +977,7 @@ function updateIncome(state: GameState, deltaTime: number): void {
 const AVOIDANCE_DETECTION_RANGE = 2.0; // Range to detect approaching friendly units
 const AVOIDANCE_MOVE_DISTANCE = 1.5; // Distance to temporarily move aside
 const AVOIDANCE_RETURN_DELAY = 1.0; // Seconds to wait before returning to original position
+const AVOIDANCE_HEADING_THRESHOLD = 0.5; // Dot product threshold to determine if unit is heading toward another (0.5 = ~60 degree cone)
 
 function updateUnits(state: GameState, deltaTime: number): void {
   // First pass: detect stationary units that should move aside for moving units
@@ -1018,10 +1019,17 @@ function updateUnits(state: GameState, deltaTime: number): void {
       // Check if moving unit is moving towards stationary unit
       const movementDirection = normalize(subtract(targetNode.position, movingUnit.position));
       const toStationary = normalize(subtract(stationaryUnit.position, movingUnit.position));
+      
+      // Skip if either direction is zero (units at same position or target at unit position)
+      if ((movementDirection.x === 0 && movementDirection.y === 0) || 
+          (toStationary.x === 0 && toStationary.y === 0)) {
+        continue;
+      }
+      
       const dotProduct = movementDirection.x * toStationary.x + movementDirection.y * toStationary.y;
       
-      // If dot product > 0.5, moving unit is heading towards stationary unit
-      if (dotProduct > 0.5) {
+      // If dot product exceeds threshold, moving unit is heading towards stationary unit
+      if (dotProduct > AVOIDANCE_HEADING_THRESHOLD) {
         // Move stationary unit aside perpendicular to movement direction
         const perpendicular = { x: -movementDirection.y, y: movementDirection.x };
         const avoidancePos = add(stationaryUnit.position, scale(perpendicular, AVOIDANCE_MOVE_DISTANCE));

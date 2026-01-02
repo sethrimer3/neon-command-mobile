@@ -3,7 +3,7 @@
  * Provides tactical positioning options for groups of units
  */
 
-import { Vector2, Unit, UNIT_SIZE_METERS, UNIT_DEFINITIONS } from './types';
+import { Vector2, Unit, UNIT_SIZE_METERS } from './types';
 import { distance, normalize, scale, add, subtract } from './gameUtils';
 
 export type FormationType = 'none' | 'line' | 'spread' | 'cluster' | 'wedge' | 'circle';
@@ -11,23 +11,6 @@ export type FormationType = 'none' | 'line' | 'spread' | 'cluster' | 'wedge' | '
 interface FormationOffset {
   x: number;
   y: number;
-}
-
-/**
- * Calculate the optimal spacing between units based on their sizes
- * Returns spacing in meters that ensures units don't overlap
- */
-export function calculateUnitSpacing(units: Unit[]): number {
-  if (units.length === 0) return 1.0;
-  
-  // Find the largest unit radius
-  // Currently all units use UNIT_SIZE_METERS, but this function is ready for future unit-specific sizes
-  const maxRadius = UNIT_SIZE_METERS / 2;
-  
-  // Spacing should be at least 2 * maxRadius to prevent overlap, plus a buffer
-  // We use 1 meter minimum spacing as specified in requirements
-  const minSpacing = Math.max(1.0, maxRadius * 2 + 0.2); // 0.2m buffer
-  return minSpacing;
 }
 
 /**
