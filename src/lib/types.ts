@@ -101,6 +101,8 @@ export interface Unit {
   stuckTimer?: number; // Time in seconds that unit has been stuck (unable to move with commands queued)
   lastPosition?: Vector2; // Last recorded position for stuck detection
   queueFadeStartTime?: number; // Timestamp when queue fade animation started (for cancelled commands)
+  queueDrawStartTime?: number; // Timestamp when queue drawing animation started (for new commands)
+  queueDrawReverse?: boolean; // Whether queue should un-draw in reverse (true when unit dies)
 }
 
 export type FactionType = 'radiant' | 'aurum' | 'solari';
@@ -721,6 +723,7 @@ export interface GameState {
   vsMode: 'ai' | 'player' | 'online' | null;
   
   units: Unit[];
+  dyingUnits?: Unit[]; // Units that have died but are still showing queue un-draw animation
   bases: Base[];
   obstacles: import('./maps').Obstacle[];
   projectiles: Projectile[]; // Active projectiles in the game

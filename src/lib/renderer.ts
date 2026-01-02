@@ -12,10 +12,12 @@ import {
   ABILITY_LASER_DURATION,
   FACTION_DEFINITIONS,
   UnitModifier,
+  Vector2,
+  CommandNode,
 } from './types';
 import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract } from './gameUtils';
 import { Obstacle } from './maps';
-import { MOTION_TRAIL_DURATION, QUEUE_FADE_DURATION } from './simulation';
+import { MOTION_TRAIL_DURATION, QUEUE_FADE_DURATION, QUEUE_DRAW_DURATION, QUEUE_UNDRAW_DURATION } from './simulation';
 import { getFormationName } from './formations';
 
 // Load projectile sprite
@@ -375,14 +377,18 @@ function drawObstacles(ctx: CanvasRenderingContext2D, state: GameState): void {
 
 function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): void {
   const time = Date.now() / 1000; // Calculate once for efficiency
+  const currentTime = Date.now();
   
-  state.units.forEach((unit) => {
+  // Helper function to draw a single unit's command queue with animation
+  const drawUnitQueue = (unit: Unit) => {
+    if (unit.commandQueue.length === 0) return;
+    
     const color = state.players[unit.owner].color;
     
     // Calculate fade alpha if queue is being cancelled
     let fadeAlpha = 1.0;
     if (unit.queueFadeStartTime) {
-      const fadeElapsed = (Date.now() - unit.queueFadeStartTime) / 1000;
+      const fadeElapsed = (currentTime - unit.queueFadeStartTime) / 1000;
       fadeAlpha = Math.max(0, 1.0 - fadeElapsed / QUEUE_FADE_DURATION);
       
       // Clean up fade tracking after animation completes
@@ -391,52 +397,118 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
       }
     }
     
+    // Calculate draw progress (for draw-in or reverse un-draw animations)
+    let drawProgress = 1.0; // Default: fully drawn
+    if (unit.queueDrawStartTime) {
+      const elapsed = (currentTime - unit.queueDrawStartTime) / 1000;
+      if (unit.queueDrawReverse) {
+        // Reverse animation: start from 1.0 and go to 0.0
+        drawProgress = Math.max(0, 1.0 - elapsed / QUEUE_UNDRAW_DURATION);
+      } else {
+        // Forward animation: start from 0.0 and go to 1.0
+        drawProgress = Math.min(1.0, elapsed / QUEUE_DRAW_DURATION);
+        // Clean up once animation completes
+        if (drawProgress >= 1.0) {
+          unit.queueDrawStartTime = undefined;
+        }
+      }
+    }
+    
+    // Calculate total path length to determine how much to draw
+    const pathSegments: Array<{
+      start: Vector2;
+      end: Vector2;
+      type: 'move' | 'ability' | 'attack-move' | 'patrol';
+      node: CommandNode;
+      index: number;
+    }> = [];
+    
+    let totalLength = 0;
+    let lastPos = unit.position;
+    
+    unit.commandQueue.forEach((node, index) => {
+      const segmentStart = lastPos;
+      const segmentEnd = node.position;
+      const segmentLength = distance(segmentStart, segmentEnd);
+      
+      pathSegments.push({
+        start: segmentStart,
+        end: segmentEnd,
+        type: node.type,
+        node,
+        index
+      });
+      
+      totalLength += segmentLength;
+      lastPos = segmentEnd;
+    });
+    
+    // Calculate how much of the path to draw based on progress
+    const drawLength = totalLength * drawProgress;
+    let accumulatedLength = 0;
+    
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 2;
     ctx.globalAlpha = 0.7 * fadeAlpha;
-
-    let lastPos = unit.position;
-
-    unit.commandQueue.forEach((node, index) => {
-      const screenPos = positionToPixels(node.position);
-
-      if (node.type === 'move') {
-        const lastScreenPos = positionToPixels(lastPos);
-        
+    
+    // Draw each segment up to the draw length
+    for (const segment of pathSegments) {
+      const segmentLength = distance(segment.start, segment.end);
+      const segmentStartLength = accumulatedLength;
+      const segmentEndLength = accumulatedLength + segmentLength;
+      
+      // Skip if this segment hasn't started drawing yet
+      if (drawLength <= segmentStartLength) break;
+      
+      // Calculate how much of this segment to draw
+      const segmentDrawLength = Math.min(drawLength - segmentStartLength, segmentLength);
+      const segmentProgress = segmentDrawLength / segmentLength;
+      
+      // Calculate the actual end point for partial drawing
+      const drawEnd = {
+        x: segment.start.x + (segment.end.x - segment.start.x) * segmentProgress,
+        y: segment.start.y + (segment.end.y - segment.start.y) * segmentProgress
+      };
+      
+      const startScreen = positionToPixels(segment.start);
+      const endScreen = positionToPixels(drawEnd);
+      const fullEndScreen = positionToPixels(segment.end);
+      
+      if (segment.type === 'move') {
         // Draw path with glow
         ctx.shadowColor = color;
         ctx.shadowBlur = 8;
         ctx.beginPath();
-        ctx.moveTo(lastScreenPos.x, lastScreenPos.y);
-        ctx.lineTo(screenPos.x, screenPos.y);
+        ctx.moveTo(startScreen.x, startScreen.y);
+        ctx.lineTo(endScreen.x, endScreen.y);
         ctx.stroke();
         ctx.shadowBlur = 0;
-
-        // Draw waypoint with pulsing animation
-        const pulse = Math.sin(time * 2 + index) * 0.3 + 0.7;
-        ctx.globalAlpha = 0.8 * pulse * fadeAlpha;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 12;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y, 4 + pulse * 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.globalAlpha = 0.7 * fadeAlpha;
-
-        lastPos = node.position;
-      } else if (node.type === 'ability') {
-        const dir = normalize(node.direction);
+        
+        // Draw waypoint if segment is fully drawn
+        if (segmentProgress >= 1.0) {
+          const pulse = Math.sin(time * 2 + segment.index) * 0.3 + 0.7;
+          ctx.globalAlpha = 0.8 * pulse * fadeAlpha;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.arc(fullEndScreen.x, fullEndScreen.y, 4 + pulse * 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.globalAlpha = 0.7 * fadeAlpha;
+        }
+      } else if (segment.type === 'ability' && segmentProgress >= 1.0) {
+        // Only draw ability arrow if segment is fully drawn
+        const dir = normalize(segment.node.type === 'ability' ? segment.node.direction : { x: 1, y: 0 });
         const arrowLen = 12;
-        const arrowEnd = add(node.position, scale(dir, 0.5));
+        const arrowEnd = add(segment.end, scale(dir, 0.5));
         const arrowEndScreen = positionToPixels(arrowEnd);
-
+        
         ctx.save();
         ctx.translate(arrowEndScreen.x, arrowEndScreen.y);
         const angle = Math.atan2(dir.y, dir.x);
         ctx.rotate(angle);
-
-        // Draw arrow with enhanced glow
+        
         ctx.shadowColor = color;
         ctx.shadowBlur = 15;
         ctx.globalAlpha = 0.9 * fadeAlpha;
@@ -446,88 +518,74 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
         ctx.lineTo(0, 6);
         ctx.closePath();
         ctx.fill();
-
+        
         ctx.restore();
-
-        lastPos = node.position;
-      } else if (node.type === 'attack-move') {
-        // Draw attack-move nodes with cross-hair symbol
-        const screenPos = positionToPixels(node.position);
-
-        // Draw path line to this position
-        if (lastPos) {
-          const lastScreenPos = positionToPixels(lastPos);
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 2;
-          ctx.globalAlpha = 0.4 * fadeAlpha;
-          ctx.setLineDash([5, 5]);
-          ctx.beginPath();
-          ctx.moveTo(lastScreenPos.x, lastScreenPos.y);
-          ctx.lineTo(screenPos.x, screenPos.y);
-          ctx.stroke();
-          ctx.setLineDash([]);
-        }
-
-        // Draw cross-hair symbol
-        ctx.fillStyle = color;
-        ctx.strokeStyle = color;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
-        ctx.globalAlpha = 0.8 * fadeAlpha;
-        
-        // Outer circle
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y, 8, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        // Cross lines
-        ctx.beginPath();
-        ctx.moveTo(screenPos.x - 10, screenPos.y);
-        ctx.lineTo(screenPos.x + 10, screenPos.y);
-        ctx.moveTo(screenPos.x, screenPos.y - 10);
-        ctx.lineTo(screenPos.x, screenPos.y + 10);
-        ctx.stroke();
-        
-        // Center dot with pulse
-        const pulse = Math.sin(time * 3 + index * 0.3) * 0.5 + 0.5;
-        ctx.shadowBlur = 15;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y, 3 + pulse * 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
         ctx.globalAlpha = 0.7 * fadeAlpha;
-
-        lastPos = node.position;
-      } else if (node.type === 'patrol') {
-        // Draw patrol path with bidirectional arrow
-        const screenPos = positionToPixels(node.position);
-        const returnScreenPos = positionToPixels(node.returnPosition);
+      } else if (segment.type === 'attack-move') {
+        // Draw path line
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.4 * fadeAlpha;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(startScreen.x, startScreen.y);
+        ctx.lineTo(endScreen.x, endScreen.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
         
-        // Draw bidirectional dashed path
+        // Draw cross-hair if segment is fully drawn
+        if (segmentProgress >= 1.0) {
+          ctx.fillStyle = color;
+          ctx.strokeStyle = color;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 8;
+          ctx.globalAlpha = 0.8 * fadeAlpha;
+          
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(fullEndScreen.x, fullEndScreen.y, 8, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          ctx.beginPath();
+          ctx.moveTo(fullEndScreen.x - 10, fullEndScreen.y);
+          ctx.lineTo(fullEndScreen.x + 10, fullEndScreen.y);
+          ctx.moveTo(fullEndScreen.x, fullEndScreen.y - 10);
+          ctx.lineTo(fullEndScreen.x, fullEndScreen.y + 10);
+          ctx.stroke();
+          
+          const pulse = Math.sin(time * 3 + segment.index * 0.3) * 0.5 + 0.5;
+          ctx.shadowBlur = 15;
+          ctx.beginPath();
+          ctx.arc(fullEndScreen.x, fullEndScreen.y, 3 + pulse * 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+        ctx.globalAlpha = 0.7 * fadeAlpha;
+      } else if (segment.type === 'patrol' && segmentProgress >= 1.0) {
+        // Only draw patrol path if segment is fully drawn
+        const returnScreenPos = positionToPixels(segment.node.type === 'patrol' ? segment.node.returnPosition : segment.end);
+        
         ctx.strokeStyle = color;
         ctx.lineWidth = 2;
         ctx.globalAlpha = 0.5 * fadeAlpha;
         ctx.setLineDash([8, 4]);
-        ctx.lineDashOffset = time * 20; // Animated dashes
+        ctx.lineDashOffset = time * 20;
         ctx.shadowColor = color;
         ctx.shadowBlur = 10;
         
         ctx.beginPath();
-        ctx.moveTo(screenPos.x, screenPos.y);
+        ctx.moveTo(fullEndScreen.x, fullEndScreen.y);
         ctx.lineTo(returnScreenPos.x, returnScreenPos.y);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.shadowBlur = 0;
         
-        // Draw patrol markers at both ends with pulsing
         const pulse = Math.sin(time * 2.5) * 0.3 + 0.7;
         ctx.globalAlpha = 0.7 * pulse * fadeAlpha;
         ctx.fillStyle = color;
         ctx.shadowColor = color;
         ctx.shadowBlur = 12;
         
-        // Draw diamond shapes for patrol points
         const drawPatrolMarker = (x: number, y: number) => {
           ctx.save();
           ctx.translate(x, y);
@@ -541,18 +599,26 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
           ctx.restore();
         };
         
-        drawPatrolMarker(screenPos.x, screenPos.y);
+        drawPatrolMarker(fullEndScreen.x, fullEndScreen.y);
         drawPatrolMarker(returnScreenPos.x, returnScreenPos.y);
         
         ctx.shadowBlur = 0;
         ctx.globalAlpha = 0.7 * fadeAlpha;
-        
-        lastPos = node.position;
       }
-    });
-
+      
+      accumulatedLength += segmentLength;
+    }
+    
     ctx.globalAlpha = 1.0;
-  });
+  };
+  
+  // Draw queues for all units
+  state.units.forEach(drawUnitQueue);
+  
+  // Also draw queues for dying units (for reverse animation)
+  if (state.dyingUnits && state.dyingUnits.length > 0) {
+    state.dyingUnits.forEach(drawUnitQueue);
+  }
 }
 
 function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {

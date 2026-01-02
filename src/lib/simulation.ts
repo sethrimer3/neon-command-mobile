@@ -121,6 +121,8 @@ export const MOTION_TRAIL_DURATION = 0.5; // seconds for motion trail fade
 const STUCK_DETECTION_THRESHOLD = 0.1; // Minimum distance unit must move to not be considered stuck
 const STUCK_TIMEOUT = 2.5; // Seconds before a stuck unit cancels its command queue
 export const QUEUE_FADE_DURATION = 1.0; // Seconds for command queue fade animation
+export const QUEUE_DRAW_DURATION = 0.5; // Seconds for command queue draw-in animation
+export const QUEUE_UNDRAW_DURATION = 0.5; // Seconds for command queue reverse un-draw animation
 
 /**
  * Derives the playable arena bounds from boundary obstacles.
@@ -940,6 +942,7 @@ export function updateGame(state: GameState, deltaTime: number): void {
   updateProjectiles(state, deltaTime);
   updateCombat(state, deltaTime);
   cleanupDeadUnits(state); // Clean up dead units after combat
+  cleanupDyingUnits(state); // Clean up dying units after animation completes
   updateExplosionParticles(state, deltaTime);
   updateEnergyPulses(state);
   updateHitSparks(state, deltaTime);
@@ -2662,10 +2665,27 @@ function cleanupDeadUnits(state: GameState): void {
     return acc;
   }, {} as Record<number, number>);
   
+  // Identify dead units and move them to dyingUnits array for queue animation
+  const deadUnits = oldUnits.filter(u => u.hp <= 0);
+  if (deadUnits.length > 0) {
+    // Initialize dyingUnits array if it doesn't exist
+    if (!state.dyingUnits) {
+      state.dyingUnits = [];
+    }
+    
+    deadUnits.forEach(u => {
+      // Trigger reverse un-draw animation if unit has queued commands
+      if (u.commandQueue.length > 0) {
+        u.queueDrawStartTime = Date.now();
+        u.queueDrawReverse = true;
+        state.dyingUnits!.push(u);
+      }
+    });
+  }
+  
   state.units = state.units.filter((u) => u.hp > 0);
   
   // Create impact effects for dead units and screen shake for multiple deaths
-  const deadUnits = oldUnits.filter(u => u.hp <= 0);
   if (deadUnits.length > 0) {
     deadUnits.forEach(u => {
       const color = state.players[u.owner].color;
@@ -2689,6 +2709,21 @@ function cleanupDeadUnits(state: GameState): void {
     
     const enemyUnitsKilled = (unitsByOwner[1] || 0) - (afterUnitsByOwner[1] || 0);
     state.matchStats.unitsKilledByPlayer += enemyUnitsKilled;
+  }
+}
+
+function cleanupDyingUnits(state: GameState): void {
+  // Remove dying units whose queue un-draw animation has completed
+  if (state.dyingUnits && state.dyingUnits.length > 0) {
+    state.dyingUnits = state.dyingUnits.filter(unit => {
+      if (unit.queueDrawStartTime && unit.queueDrawReverse) {
+        const elapsed = (Date.now() - unit.queueDrawStartTime) / 1000;
+        // Keep unit until animation completes
+        return elapsed < QUEUE_UNDRAW_DURATION;
+      }
+      // Remove unit if no animation is running
+      return false;
+    });
   }
 }
 
