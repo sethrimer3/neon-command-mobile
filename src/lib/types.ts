@@ -107,12 +107,74 @@ export interface Unit {
 
 export type FactionType = 'radiant' | 'aurum' | 'solari';
 
+export type BaseType = 'standard' | 'defense' | 'assault' | 'support';
+
+export interface BaseTypeDefinition {
+  name: string;
+  description: string;
+  hp: number;
+  armor: number;
+  moveSpeed: number; // 0 for stationary
+  ability: 'laser' | 'shield' | 'pulse' | 'auto-cannon' | 'regeneration';
+  canMove: boolean;
+  autoAttack?: {
+    range: number;
+    damage: number;
+    attackRate: number; // attacks per second
+  };
+}
+
+export const BASE_TYPE_DEFINITIONS: Record<BaseType, BaseTypeDefinition> = {
+  standard: {
+    name: 'Standard Base',
+    description: 'Mobile base with faction ability',
+    hp: 1000,
+    armor: 15,
+    moveSpeed: 0, // Will use faction baseMoveSpeed
+    ability: 'laser', // Will use faction ability
+    canMove: true,
+  },
+  defense: {
+    name: 'Defense Fortress',
+    description: 'Stationary base with auto-targeting cannon',
+    hp: 1500,
+    armor: 25,
+    moveSpeed: 0,
+    ability: 'auto-cannon',
+    canMove: false,
+    autoAttack: {
+      range: 15,
+      damage: 6, // Similar to marine damage
+      attackRate: 2, // 2 attacks per second
+    },
+  },
+  assault: {
+    name: 'Assault Base',
+    description: 'Fast mobile base with enhanced shield',
+    hp: 800,
+    armor: 10,
+    moveSpeed: 4.5, // Faster than standard
+    ability: 'shield',
+    canMove: true,
+  },
+  support: {
+    name: 'Support Nexus',
+    description: 'Slow base with regeneration aura',
+    hp: 1200,
+    armor: 20,
+    moveSpeed: 1.0,
+    ability: 'regeneration',
+    canMove: true,
+  },
+};
+
 export interface FactionDefinition {
   name: string;
   baseMoveSpeed: number;
   baseShape: 'square' | 'circle' | 'star';
   ability: 'laser' | 'shield' | 'pulse';
   availableUnits: UnitType[];
+  availableBaseTypes: BaseType[];
 }
 
 export const FACTION_DEFINITIONS: Record<FactionType, FactionDefinition> = {
@@ -122,6 +184,7 @@ export const FACTION_DEFINITIONS: Record<FactionType, FactionDefinition> = {
     baseShape: 'square',
     ability: 'laser',
     availableUnits: ['marine', 'warrior', 'tank', 'scout', 'artillery', 'medic', 'interceptor', 'guardian', 'marksman', 'engineer', 'skirmisher', 'paladin'],
+    availableBaseTypes: ['standard', 'defense'],
   },
   aurum: {
     name: 'Aurum',
@@ -129,6 +192,7 @@ export const FACTION_DEFINITIONS: Record<FactionType, FactionDefinition> = {
     baseShape: 'circle',
     ability: 'shield',
     availableUnits: ['snaker', 'berserker', 'assassin', 'juggernaut', 'striker', 'reaper', 'oracle', 'harbinger', 'gladiator', 'ravager', 'warlord', 'duelist'],
+    availableBaseTypes: ['standard', 'assault'],
   },
   solari: {
     name: 'Solari',
@@ -136,6 +200,7 @@ export const FACTION_DEFINITIONS: Record<FactionType, FactionDefinition> = {
     baseShape: 'star',
     ability: 'pulse',
     availableUnits: ['flare', 'nova', 'eclipse', 'corona', 'supernova', 'zenith', 'pulsar', 'celestial', 'voidwalker', 'chronomancer', 'nebula', 'quasar'],
+    availableBaseTypes: ['standard', 'support'],
   },
 };
 
@@ -151,7 +216,10 @@ export interface Base {
   laserCooldown: number;
   laserBeam?: { endTime: number; direction: Vector2 }; // Visual effect for laser
   faction: FactionType;
+  baseType: BaseType;
   shieldActive?: { endTime: number }; // Shield ability for aurum faction
+  autoAttackCooldown?: number; // Cooldown for auto-attack (defense base)
+  regenerationPulse?: { endTime: number; radius: number }; // Visual effect for regeneration pulse
 }
 
 export type UnitType = 'marine' | 'warrior' | 'snaker' | 'tank' | 'scout' | 'artillery' | 'medic' | 'interceptor' | 'berserker' | 'assassin' | 'juggernaut' | 'striker' | 'flare' | 'nova' | 'eclipse' | 'corona' | 'supernova' | 'guardian' | 'reaper' | 'oracle' | 'harbinger' | 'zenith' | 'pulsar' | 'celestial' | 'marksman' | 'engineer' | 'skirmisher' | 'paladin' | 'gladiator' | 'ravager' | 'warlord' | 'duelist' | 'voidwalker' | 'chronomancer' | 'nebula' | 'quasar';
@@ -753,6 +821,8 @@ export interface GameState {
     showNumericHP: boolean;
     playerFaction: FactionType;
     enemyFaction: FactionType;
+    playerBaseType: BaseType;
+    enemyBaseType: BaseType;
     enableGlowEffects?: boolean; // Enable/disable glow/shadow effects
     enableParticleEffects?: boolean; // Enable/disable particle effects
     enableMotionBlur?: boolean; // Enable/disable motion blur trails

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useKV } from './hooks/useKV';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
-import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS, FactionType, FACTION_DEFINITIONS } from './lib/types';
+import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS, FactionType, FACTION_DEFINITIONS, BASE_TYPE_DEFINITIONS, BaseType } from './lib/types';
 import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, isPortraitOrientation } from './lib/gameUtils';
 import { updateGame } from './lib/simulation';
 import { updateAI } from './lib/ai';
@@ -63,6 +63,8 @@ function App() {
   const [enableCameraControls, setEnableCameraControls] = useKV<boolean>('enable-camera-controls', true);
   const [playerFaction, setPlayerFaction] = useKV<FactionType>('player-faction', 'radiant');
   const [enemyFaction, setEnemyFaction] = useKV<FactionType>('enemy-faction', 'radiant');
+  const [playerBaseType, setPlayerBaseType] = useKV<import('./lib/types').BaseType>('player-base-type', 'standard');
+  const [enemyBaseType, setEnemyBaseType] = useKV<import('./lib/types').BaseType>('enemy-base-type', 'standard');
   const [enableGlowEffects, setEnableGlowEffects] = useKV<boolean>('enable-glow-effects', true);
   const [enableParticleEffects, setEnableParticleEffects] = useKV<boolean>('enable-particle-effects', true);
   const [enableMotionBlur, setEnableMotionBlur] = useKV<boolean>('enable-motion-blur', true);
@@ -122,6 +124,8 @@ function App() {
       showNumericHP: showNumericHP ?? true,
       playerFaction: playerFaction || 'radiant',
       enemyFaction: enemyFaction || 'radiant',
+      playerBaseType: playerBaseType || 'standard',
+      enemyBaseType: enemyBaseType || 'standard',
       enableGlowEffects: enableGlowEffects ?? true,
       enableParticleEffects: enableParticleEffects ?? true,
       enableMotionBlur: enableMotionBlur ?? true,
@@ -1342,6 +1346,8 @@ function App() {
           playerColor={playerColor || COLORS.playerDefault}
           playerFaction={playerFaction || 'radiant'}
           onFactionChange={setPlayerFaction}
+          playerBaseType={playerBaseType || 'standard'}
+          onBaseTypeChange={setPlayerBaseType}
         />
       )}
 
@@ -1483,6 +1489,8 @@ function createInitialState(): GameState {
       showNumericHP: true,
       playerFaction: 'radiant',
       enemyFaction: 'radiant',
+      playerBaseType: 'standard',
+      enemyBaseType: 'standard',
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
@@ -1508,6 +1516,9 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
   const stars = generateStarfield(canvas.width, canvas.height);
   const nebulaClouds = generateNebulaClouds(canvas.width, canvas.height);
 
+  const playerBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.playerBaseType || 'standard'];
+  const enemyBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.enemyBaseType || 'standard'];
+
   return {
     mode: 'countdown',
     vsMode: mode,
@@ -1519,25 +1530,29 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
         id: generateId(),
         owner: 0,
         position: basePositions.player,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: playerBaseTypeDef.hp,
+        maxHp: playerBaseTypeDef.hp,
+        armor: playerBaseTypeDef.armor,
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
         faction: settings.playerFaction || 'radiant',
+        baseType: settings.playerBaseType || 'standard',
+        autoAttackCooldown: 0,
       },
       {
         id: generateId(),
         owner: 1,
         position: basePositions.enemy,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: enemyBaseTypeDef.hp,
+        maxHp: enemyBaseTypeDef.hp,
+        armor: enemyBaseTypeDef.armor,
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
         faction: settings.enemyFaction || 'radiant',
+        baseType: settings.enemyBaseType || 'standard',
+        autoAttackCooldown: 0,
       },
     ],
     players: [
@@ -1588,6 +1603,9 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
   
   const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
 
+  const playerBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.playerBaseType || 'standard'];
+  const enemyBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.enemyBaseType || 'standard'];
+
   return {
     mode: 'game',
     vsMode: mode,
@@ -1599,25 +1617,29 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
         id: generateId(),
         owner: 0,
         position: basePositions.player,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: playerBaseTypeDef.hp,
+        maxHp: playerBaseTypeDef.hp,
+        armor: playerBaseTypeDef.armor,
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
         faction: settings.playerFaction || 'radiant',
+        baseType: settings.playerBaseType || 'standard',
+        autoAttackCooldown: 0,
       },
       {
         id: generateId(),
         owner: 1,
         position: basePositions.enemy,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: enemyBaseTypeDef.hp,
+        maxHp: enemyBaseTypeDef.hp,
+        armor: enemyBaseTypeDef.armor,
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
         faction: settings.enemyFaction || 'radiant',
+        baseType: settings.enemyBaseType || 'standard',
+        autoAttackCooldown: 0,
       },
     ],
     players: [
@@ -1656,6 +1678,10 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
   
   const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
 
+  // For online games, use standard base type for now
+  const playerBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
+  const enemyBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
+
   return {
     mode: 'game',
     vsMode: 'online',
@@ -1667,25 +1693,29 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
         id: generateId(),
         owner: 0,
         position: basePositions.player,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: playerBaseTypeDef.hp,
+        maxHp: playerBaseTypeDef.hp,
+        armor: playerBaseTypeDef.armor,
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
         faction: 'radiant',
+        baseType: 'standard',
+        autoAttackCooldown: 0,
       },
       {
         id: generateId(),
         owner: 1,
         position: basePositions.enemy,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: enemyBaseTypeDef.hp,
+        maxHp: enemyBaseTypeDef.hp,
+        armor: enemyBaseTypeDef.armor,
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
         faction: 'radiant',
+        baseType: 'standard',
+        autoAttackCooldown: 0,
       },
     ],
     players: [
@@ -1708,6 +1738,8 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
       showNumericHP: true,
       playerFaction: 'radiant',
       enemyFaction: 'radiant',
+      playerBaseType: 'standard',
+      enemyBaseType: 'standard',
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
@@ -1738,6 +1770,10 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
   const stars = generateStarfield(canvas.width, canvas.height);
   const nebulaClouds = generateNebulaClouds(canvas.width, canvas.height);
 
+  // For online games, use standard base type for now
+  const playerBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
+  const enemyBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
+
   return {
     mode: 'countdown',
     vsMode: 'online',
@@ -1749,25 +1785,29 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
         id: generateId(),
         owner: 0,
         position: basePositions.player,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: playerBaseTypeDef.hp,
+        maxHp: playerBaseTypeDef.hp,
+        armor: playerBaseTypeDef.armor,
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
         faction: 'radiant',
+        baseType: 'standard',
+        autoAttackCooldown: 0,
       },
       {
         id: generateId(),
         owner: 1,
         position: basePositions.enemy,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: enemyBaseTypeDef.hp,
+        maxHp: enemyBaseTypeDef.hp,
+        armor: enemyBaseTypeDef.armor,
         movementTarget: null,
         isSelected: false,
         laserCooldown: 0,
         faction: 'radiant',
+        baseType: 'standard',
+        autoAttackCooldown: 0,
       },
     ],
     players: [
@@ -1790,6 +1830,8 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
       showNumericHP: true,
       playerFaction: 'radiant',
       enemyFaction: 'radiant',
+      playerBaseType: 'standard',
+      enemyBaseType: 'standard',
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,

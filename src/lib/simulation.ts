@@ -21,6 +21,7 @@ import {
   FACTION_DEFINITIONS,
   UnitModifier,
   QUEUE_MAX_LENGTH,
+  BASE_TYPE_DEFINITIONS,
 } from './types';
 import { distance, normalize, scale, add, subtract, generateId } from './gameUtils';
 import { checkObstacleCollision } from './maps';
@@ -1339,6 +1340,112 @@ function updateBases(state: GameState, deltaTime: number): void {
       base.laserCooldown = Math.max(0, base.laserCooldown - deltaTime);
     }
 
+    // Regeneration logic for support base type
+    if (base.baseType === 'support') {
+      // Heal nearby friendly units periodically
+      const REGEN_RADIUS = 8; // meters
+      const REGEN_AMOUNT = 15; // HP per second
+      const REGEN_PULSE_INTERVAL = 2; // seconds between visual pulses
+      
+      // Initialize cooldown if needed
+      if (base.autoAttackCooldown === undefined) {
+        base.autoAttackCooldown = 0;
+      }
+      
+      if (base.autoAttackCooldown > 0) {
+        base.autoAttackCooldown = Math.max(0, base.autoAttackCooldown - deltaTime);
+      }
+      
+      // Continuous healing
+      state.units.forEach((unit) => {
+        if (unit.owner === base.owner) {
+          const dist = distance(base.position, unit.position);
+          if (dist <= REGEN_RADIUS && unit.hp < unit.maxHp) {
+            unit.hp = Math.min(unit.maxHp, unit.hp + REGEN_AMOUNT * deltaTime);
+          }
+        }
+      });
+      
+      // Heal self
+      if (base.hp < base.maxHp) {
+        base.hp = Math.min(base.maxHp, base.hp + REGEN_AMOUNT * deltaTime * 0.5); // Half rate for self
+      }
+      
+      // Create visual pulse effect
+      if (base.autoAttackCooldown === 0) {
+        base.regenerationPulse = {
+          endTime: Date.now() + 500, // 0.5 second pulse duration
+          radius: REGEN_RADIUS,
+        };
+        base.autoAttackCooldown = REGEN_PULSE_INTERVAL;
+      }
+    }
+
+    // Auto-attack logic for defense base type
+    if (base.baseType === 'defense') {
+      const baseTypeDef = BASE_TYPE_DEFINITIONS[base.baseType];
+      if (baseTypeDef.autoAttack) {
+        // Update auto-attack cooldown
+        if (base.autoAttackCooldown === undefined) {
+          base.autoAttackCooldown = 0;
+        }
+        
+        if (base.autoAttackCooldown > 0) {
+          base.autoAttackCooldown = Math.max(0, base.autoAttackCooldown - deltaTime);
+        }
+
+        // Find closest enemy unit or base within range
+        if (base.autoAttackCooldown === 0) {
+          let closestTarget: { position: Vector2; isUnit: boolean; id: string } | null = null;
+          let closestDist = Infinity;
+
+          // Check enemy units
+          state.units.forEach((unit) => {
+            if (unit.owner !== base.owner) {
+              const dist = distance(base.position, unit.position);
+              if (dist <= baseTypeDef.autoAttack!.range && dist < closestDist) {
+                closestDist = dist;
+                closestTarget = { position: unit.position, isUnit: true, id: unit.id };
+              }
+            }
+          });
+
+          // Check enemy bases
+          state.bases.forEach((targetBase) => {
+            if (targetBase.owner !== base.owner) {
+              const dist = distance(base.position, targetBase.position);
+              if (dist <= baseTypeDef.autoAttack!.range && dist < closestDist) {
+                closestDist = dist;
+                closestTarget = { position: targetBase.position, isUnit: false, id: targetBase.id };
+              }
+            }
+          });
+
+          // Fire at closest target
+          if (closestTarget) {
+            const direction = normalize(subtract(closestTarget.position, base.position));
+            const projectile = projectilePool.acquire();
+            projectile.position = { ...base.position };
+            projectile.velocity = scale(direction, PROJECTILE_SPEED);
+            projectile.target = { ...closestTarget.position };
+            projectile.damage = baseTypeDef.autoAttack!.damage;
+            projectile.owner = base.owner;
+            projectile.color = state.players[base.owner].color;
+            projectile.lifetime = PROJECTILE_LIFETIME;
+            projectile.createdAt = Date.now();
+            projectile.sourceUnit = base.id;
+            if (closestTarget.isUnit) {
+              projectile.targetUnit = closestTarget.id;
+            }
+            state.projectiles.push(projectile);
+
+            // Set cooldown
+            base.autoAttackCooldown = 1 / baseTypeDef.autoAttack!.attackRate;
+          }
+        }
+      }
+    }
+
     if (!base.movementTarget) {
       // Deactivate shield when not moving (for mobile faction)
       if (base.shieldActive) {
@@ -1357,17 +1464,26 @@ function updateBases(state: GameState, deltaTime: number): void {
       return;
     }
 
-    // Activate shield for mobile faction when moving
-    const factionDef = FACTION_DEFINITIONS[base.faction];
-    if (factionDef.ability === 'shield' && !base.shieldActive) {
+    // Get base type definition for movement speed
+    const baseTypeDef = BASE_TYPE_DEFINITIONS[base.baseType];
+    if (!baseTypeDef.canMove) {
+      // Stationary base cannot move
+      base.movementTarget = null;
+      return;
+    }
+
+    // Activate shield for assault base when moving
+    if (base.baseType === 'assault' && !base.shieldActive) {
       base.shieldActive = { endTime: Date.now() + 10000 }; // Shield lasts while moving
     }
 
     const direction = normalize(subtract(base.movementTarget, base.position));
-    const movement = scale(direction, factionDef.baseMoveSpeed * deltaTime);
+    // Use baseTypeDef moveSpeed if > 0, otherwise use faction baseMoveSpeed
+    const moveSpeed = baseTypeDef.moveSpeed > 0 ? baseTypeDef.moveSpeed : FACTION_DEFINITIONS[base.faction].baseMoveSpeed;
+    const movement = scale(direction, moveSpeed * deltaTime);
     base.position = add(base.position, movement);
     
-    // Update shield endTime to keep it active while moving
+    // Update shield endTime to keep it active while moving (assault base)
     if (base.shieldActive) {
       base.shieldActive.endTime = Date.now() + 100; // Keep extending while moving
     }

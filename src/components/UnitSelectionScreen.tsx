@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { ArrowLeft } from '@phosphor-icons/react';
-import { UnitType, UNIT_DEFINITIONS, COLORS, FactionType, FACTION_DEFINITIONS } from '../lib/types';
+import { UnitType, UNIT_DEFINITIONS, COLORS, FactionType, FACTION_DEFINITIONS, BaseType, BASE_TYPE_DEFINITIONS } from '../lib/types';
 
 interface UnitSelectionScreenProps {
   unitSlots: Record<'left' | 'up' | 'down' | 'right', UnitType>;
@@ -11,9 +11,11 @@ interface UnitSelectionScreenProps {
   playerColor: string;
   playerFaction: FactionType;
   onFactionChange: (faction: FactionType) => void;
+  playerBaseType: BaseType;
+  onBaseTypeChange: (baseType: BaseType) => void;
 }
 
-export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerColor, playerFaction, onFactionChange }: UnitSelectionScreenProps) {
+export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerColor, playerFaction, onFactionChange, playerBaseType, onBaseTypeChange }: UnitSelectionScreenProps) {
   const [selectedUnit, setSelectedUnit] = useState<UnitType | null>(null);
   // Build faction logo URLs with the configured base path for GitHub Pages compatibility.
   const assetBaseUrl = import.meta.env.BASE_URL;
@@ -258,6 +260,39 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
                   </div>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Base Type Selection */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Select Base Type:</p>
+            <div className="grid grid-cols-2 gap-2">
+              {FACTION_DEFINITIONS[playerFaction].availableBaseTypes.map((baseType) => {
+                const baseTypeDef = BASE_TYPE_DEFINITIONS[baseType];
+                return (
+                  <button
+                    key={baseType}
+                    onClick={() => onBaseTypeChange(baseType)}
+                    className={`p-3 border-2 rounded-lg transition-all text-left ${
+                      playerBaseType === baseType ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
+                    }`}
+                    style={{
+                      borderColor: playerColor || COLORS.playerDefault,
+                      backgroundColor: playerBaseType === baseType ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
+                    }}
+                  >
+                    <div className="text-sm font-bold orbitron">{baseTypeDef.name}</div>
+                    <div className="text-xs text-muted-foreground mt-1">{baseTypeDef.description}</div>
+                    <div className="text-xs mt-1 space-y-0.5">
+                      <div>HP: {baseTypeDef.hp} | Armor: {baseTypeDef.armor}</div>
+                      <div>{baseTypeDef.canMove ? `Speed: ${baseTypeDef.moveSpeed}` : 'Stationary'}</div>
+                      {baseTypeDef.autoAttack && (
+                        <div className="text-green-500">Auto-Cannon: {baseTypeDef.autoAttack.damage} dmg @ {baseTypeDef.autoAttack.range}m</div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
