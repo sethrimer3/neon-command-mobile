@@ -1447,6 +1447,54 @@ function executeAbility(state: GameState, unit: Unit, node: CommandNode): void {
   } else if (unit.type === 'quasar') {
     createAbilityEffect(state, unit, node.position, 'stellar-convergence');
     executeStellarConvergence(state, unit, node.position);
+  } else if (unit.type === 'berserker') {
+    createAbilityEffect(state, unit, node.position, 'rage');
+    executeRage(state, unit);
+  } else if (unit.type === 'assassin') {
+    createAbilityEffect(state, unit, node.position, 'shadow-strike');
+    executeShadowStrike(state, unit, node.position);
+  } else if (unit.type === 'juggernaut') {
+    createAbilityEffect(state, unit, node.position, 'ground-slam');
+    executeGroundSlam(state, unit);
+  } else if (unit.type === 'striker') {
+    createAbilityEffect(state, unit, node.position, 'whirlwind');
+    executeWhirlwind(state, unit);
+  } else if (unit.type === 'flare') {
+    createAbilityEffect(state, unit, node.position, 'solar-beam');
+    executeSolarBeam(state, unit, node.direction);
+  } else if (unit.type === 'nova') {
+    createAbilityEffect(state, unit, node.position, 'stellar-burst');
+    executeStellarBurst(state, unit);
+  } else if (unit.type === 'eclipse') {
+    createAbilityEffect(state, unit, node.position, 'shadow-veil');
+    executeShadowVeil(state, unit);
+  } else if (unit.type === 'corona') {
+    createAbilityEffect(state, unit, node.position, 'radiation-wave');
+    executeRadiationWave(state, unit, node.direction);
+  } else if (unit.type === 'supernova') {
+    createAbilityEffect(state, unit, node.position, 'cosmic-explosion');
+    executeCosmicExplosion(state, unit, node.position);
+  } else if (unit.type === 'guardian') {
+    createAbilityEffect(state, unit, node.position, 'protect-allies');
+    executeProtectAllies(state, unit);
+  } else if (unit.type === 'reaper') {
+    createAbilityEffect(state, unit, node.position, 'soul-strike');
+    executeSoulStrike(state, unit, node.direction);
+  } else if (unit.type === 'oracle') {
+    createAbilityEffect(state, unit, node.position, 'divine-restoration');
+    executeDivineRestoration(state, unit);
+  } else if (unit.type === 'harbinger') {
+    createAbilityEffect(state, unit, node.position, 'ethereal-strike');
+    executeEtherealStrike(state, unit, node.direction);
+  } else if (unit.type === 'zenith') {
+    createAbilityEffect(state, unit, node.position, 'solar-blessing');
+    executeSolarBlessing(state, unit);
+  } else if (unit.type === 'pulsar') {
+    createAbilityEffect(state, unit, node.position, 'stellar-dive');
+    executeStellarDive(state, unit, node.position);
+  } else if (unit.type === 'celestial') {
+    createAbilityEffect(state, unit, node.position, 'astral-charge');
+    executeAstralCharge(state, unit, node.position);
   }
 }
 
@@ -1979,6 +2027,473 @@ function executeStellarConvergence(state: GameState, unit: Unit, targetPos: { x:
     
     createEnergyPulse(state, targetPos, state.players[unit.owner].color, 4, 0.8);
   }, 2500);
+}
+
+// Berserker - Rage: Temporary damage boost
+function executeRage(state: GameState, unit: Unit): void {
+  // Store original damage multiplier to reset correctly
+  const originalMultiplier = unit.damageMultiplier;
+  unit.damageMultiplier += 0.8;
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 2, 0.5);
+  createHitSparks(state, unit.position, state.players[unit.owner].color, 10);
+  
+  // Reset buff after 6 seconds
+  setTimeout(() => {
+    unit.damageMultiplier = originalMultiplier;
+  }, 6000);
+}
+
+// Assassin - Shadow Strike: Teleport to nearby enemy and deal high damage
+function executeShadowStrike(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  const nearbyEnemies = enemies.filter((e) => distance(e.position, targetPos) <= 3);
+  
+  if (nearbyEnemies.length === 0) return;
+  
+  let nearest = nearbyEnemies[0];
+  let minDist = distance(unit.position, nearest.position);
+  
+  nearbyEnemies.forEach((enemy) => {
+    const dist = distance(unit.position, enemy.position);
+    if (dist < minDist) {
+      minDist = dist;
+      nearest = enemy;
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 2, 0.3);
+  
+  // Position assassin next to target, not on top of it
+  const direction = normalize(subtract(nearest.position, unit.position));
+  unit.position = {
+    x: nearest.position.x - direction.x * 1.2,
+    y: nearest.position.y - direction.y * 1.2,
+  };
+  
+  const damage = 45 * unit.damageMultiplier;
+  nearest.hp -= damage;
+  
+  createHitSparks(state, nearest.position, state.players[unit.owner].color, 8);
+  createEnergyPulse(state, nearest.position, state.players[unit.owner].color, 2, 0.4);
+  
+  if (state.matchStats && unit.owner === 0) {
+    state.matchStats.damageDealtByPlayer += damage;
+  }
+  
+  // Brief cloak after strike
+  unit.cloaked = {
+    endTime: Date.now() + 1500,
+  };
+}
+
+// Juggernaut - Ground Slam: Area of effect damage and stun
+function executeGroundSlam(state: GameState, unit: Unit): void {
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  enemies.forEach((enemy) => {
+    if (distance(unit.position, enemy.position) <= 4) {
+      const damage = 35 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+      
+      // Slow enemy temporarily - store original speed to restore properly
+      const def = UNIT_DEFINITIONS[enemy.type];
+      const originalSpeed = enemy.currentSpeed;
+      enemy.currentSpeed = def.moveSpeed * 0.2;
+      
+      setTimeout(() => {
+        enemy.currentSpeed = originalSpeed;
+      }, 3000);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 4, 0.7);
+  createScreenFlash(state, state.players[unit.owner].color, 0.3, 0.2);
+}
+
+// Striker - Whirlwind: Spin attack hitting all nearby enemies
+function executeWhirlwind(state: GameState, unit: Unit): void {
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  enemies.forEach((enemy) => {
+    if (distance(unit.position, enemy.position) <= 3) {
+      const damage = 30 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 5);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  // Create spinning energy pulse effect
+  for (let i = 0; i < 3; i++) {
+    setTimeout(() => {
+      createEnergyPulse(state, unit.position, state.players[unit.owner].color, 3, 0.4);
+    }, i * 200);
+  }
+}
+
+// Flare - Solar Beam: Focused beam dealing sustained damage
+function executeSolarBeam(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const dir = normalize(direction);
+  const beamRange = 7;
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
+  
+  const damage = 35 * unit.damageMultiplier;
+  const beamWidthHalf = 0.3;
+  
+  // Check units in beam path
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x);
+    
+    if (projectedDist > 0 && projectedDist < beamRange && perpDist < beamWidthHalf) {
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  // Check bases in beam path
+  enemyBases.forEach((base) => {
+    const toBase = subtract(base.position, unit.position);
+    const projectedDist = toBase.x * dir.x + toBase.y * dir.y;
+    const perpDist = Math.abs(toBase.x * dir.y - toBase.y * dir.x);
+    
+    const baseRadius = BASE_SIZE_METERS / 2;
+    if (projectedDist > 0 && projectedDist < beamRange && perpDist < beamWidthHalf + baseRadius) {
+      const baseDamage = damage * 0.5;
+      base.hp -= baseDamage;
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += baseDamage;
+      }
+    }
+  });
+  
+  createLaserParticles(state, unit.position, dir, beamRange, state.players[unit.owner].color);
+}
+
+// Nova - Stellar Burst: Explode dealing damage around the unit
+function executeStellarBurst(state: GameState, unit: Unit): void {
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  enemies.forEach((enemy) => {
+    if (distance(unit.position, enemy.position) <= 3.5) {
+      const damage = 40 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 7);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 3.5, 0.6);
+  createScreenFlash(state, state.players[unit.owner].color, 0.2, 0.15);
+}
+
+// Eclipse - Shadow Veil: Cloak self and nearby allies
+function executeShadowVeil(state: GameState, unit: Unit): void {
+  const allies = state.units.filter((u) => u.owner === unit.owner);
+  
+  allies.forEach((ally) => {
+    if (distance(ally.position, unit.position) <= 6) {
+      ally.cloaked = {
+        endTime: Date.now() + 5000,
+      };
+      createEnergyPulse(state, ally.position, state.players[unit.owner].color, 2, 0.3);
+    }
+  });
+}
+
+// Corona - Radiation Wave: Forward cone of damaging radiation
+function executeRadiationWave(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const dir = normalize(direction);
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const dist = distance(unit.position, enemy.position);
+    if (dist > 7) return;
+    
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x);
+    
+    // Cone shape: perpendicular distance proportional to forward distance
+    if (projectedDist > 0 && perpDist < projectedDist * 0.5 + 1) {
+      const damage = 32 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 3, 0.5);
+}
+
+// Supernova - Cosmic Explosion: Massive delayed explosion at target location
+function executeCosmicExplosion(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  const EXPLOSION_DELAY = 2000; // milliseconds
+  const EXPLOSION_DURATION = 2500; // milliseconds
+  
+  unit.bombardmentActive = {
+    endTime: Date.now() + EXPLOSION_DURATION,
+    targetPos,
+    impactTime: Date.now() + EXPLOSION_DELAY,
+  };
+  
+  setTimeout(() => {
+    const enemies = state.units.filter((u) => u.owner !== unit.owner);
+    const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
+    
+    enemies.forEach((enemy) => {
+      if (distance(enemy.position, targetPos) <= 5) {
+        const damage = 70 * unit.damageMultiplier;
+        enemy.hp -= damage;
+        createHitSparks(state, enemy.position, state.players[unit.owner].color, 10);
+        
+        if (state.matchStats && unit.owner === 0) {
+          state.matchStats.damageDealtByPlayer += damage;
+        }
+      }
+    });
+    
+    enemyBases.forEach((base) => {
+      if (distance(base.position, targetPos) <= 5) {
+        const baseDamage = 100 * unit.damageMultiplier;
+        base.hp -= baseDamage;
+        createImpactEffect(state, base.position, state.players[unit.owner].color, 5);
+        
+        if (state.matchStats && unit.owner === 0) {
+          state.matchStats.damageDealtByPlayer += baseDamage;
+        }
+      }
+    });
+    
+    createEnergyPulse(state, targetPos, state.players[unit.owner].color, 5, 1.0);
+    createScreenFlash(state, state.players[unit.owner].color, 0.4, 0.3);
+  }, EXPLOSION_DELAY);
+}
+
+// Guardian - Protect Allies: Grant temporary shield to nearby allies
+function executeProtectAllies(state: GameState, unit: Unit): void {
+  const allies = state.units.filter((u) => u.owner === unit.owner);
+  
+  allies.forEach((ally) => {
+    if (distance(ally.position, unit.position) <= 5) {
+      ally.shieldActive = {
+        endTime: Date.now() + 6000,
+        radius: 3,
+      };
+      createEnergyPulse(state, ally.position, state.players[unit.owner].color, 2, 0.3);
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 5, 0.5);
+}
+
+// Reaper - Soul Strike: Drain life from enemies in direction
+function executeSoulStrike(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const dir = normalize(direction);
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  let totalDamage = 0;
+  
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const dist = distance(unit.position, enemy.position);
+    if (dist > 9) return;
+    
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x);
+    
+    if (projectedDist > 0 && perpDist < 1.5) {
+      const damage = 25 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      totalDamage += damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  // Heal for portion of damage dealt
+  unit.hp = Math.min(unit.hp + totalDamage * 0.4, unit.maxHp);
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 2.5, 0.4);
+}
+
+// Oracle - Divine Restoration: Powerful area heal for allies
+function executeDivineRestoration(state: GameState, unit: Unit): void {
+  const healAmount = 80;
+  const healRadius = 6;
+  
+  unit.healPulseActive = {
+    endTime: Date.now() + 1500,
+    radius: healRadius,
+  };
+  
+  const allies = state.units.filter((u) => u.owner === unit.owner);
+  allies.forEach((ally) => {
+    if (distance(ally.position, unit.position) <= healRadius) {
+      ally.hp = Math.min(ally.hp + healAmount, ally.maxHp);
+      createEnergyPulse(state, ally.position, state.players[unit.owner].color, 2, 0.3);
+    }
+  });
+  
+  const allyBases = state.bases.filter((b) => b.owner === unit.owner);
+  allyBases.forEach((base) => {
+    if (distance(base.position, unit.position) <= healRadius) {
+      base.hp = Math.min(base.hp + healAmount * 2, base.maxHp);
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 6, 0.6);
+}
+
+// Harbinger - Ethereal Strike: Phase through enemies dealing damage
+function executeEtherealStrike(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const dir = normalize(direction);
+  const dashDistance = 8;
+  const dashPos = {
+    x: unit.position.x + dir.x * dashDistance,
+    y: unit.position.y + dir.y * dashDistance,
+  };
+  
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  // Damage all enemies along the path
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x);
+    
+    if (projectedDist > 0 && projectedDist < dashDistance && perpDist < 1.5) {
+      const damage = 28 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 2, 0.3);
+  unit.position = dashPos;
+  createEnergyPulse(state, dashPos, state.players[unit.owner].color, 2, 0.3);
+}
+
+// Zenith - Solar Blessing: Heal and boost nearby allies
+function executeSolarBlessing(state: GameState, unit: Unit): void {
+  const healAmount = 60;
+  const healRadius = 5.5;
+  
+  unit.healPulseActive = {
+    endTime: Date.now() + 1200,
+    radius: healRadius,
+  };
+  
+  const allies = state.units.filter((u) => u.owner === unit.owner);
+  allies.forEach((ally) => {
+    if (distance(ally.position, unit.position) <= healRadius) {
+      ally.hp = Math.min(ally.hp + healAmount, ally.maxHp);
+      // Small damage boost - store original to reset correctly
+      const originalMultiplier = ally.damageMultiplier;
+      ally.damageMultiplier += 0.2;
+      createEnergyPulse(state, ally.position, state.players[unit.owner].color, 2, 0.3);
+      
+      setTimeout(() => {
+        ally.damageMultiplier = originalMultiplier;
+      }, 4000);
+    }
+  });
+  
+  const allyBases = state.bases.filter((b) => b.owner === unit.owner);
+  allyBases.forEach((base) => {
+    if (distance(base.position, unit.position) <= healRadius) {
+      base.hp = Math.min(base.hp + healAmount * 1.5, base.maxHp);
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 5.5, 0.5);
+}
+
+// Pulsar - Stellar Dive: Rapid dive attack at target location
+function executeStellarDive(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  const maxRange = 10;
+  const actualDistance = distance(unit.position, targetPos);
+  
+  if (actualDistance <= maxRange) {
+    createEnergyPulse(state, unit.position, state.players[unit.owner].color, 2, 0.3);
+    
+    // Damage enemies near target
+    const enemies = state.units.filter((u) => u.owner !== unit.owner);
+    enemies.forEach((enemy) => {
+      if (distance(enemy.position, targetPos) <= 2.5) {
+        const damage = 35 * unit.damageMultiplier;
+        enemy.hp -= damage;
+        createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+        
+        if (state.matchStats && unit.owner === 0) {
+          state.matchStats.damageDealtByPlayer += damage;
+        }
+      }
+    });
+    
+    unit.position = { ...targetPos };
+    createEnergyPulse(state, targetPos, state.players[unit.owner].color, 2.5, 0.5);
+  }
+}
+
+// Celestial - Astral Charge: Charge forward damaging enemies
+function executeAstralCharge(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  const direction = normalize(subtract(targetPos, unit.position));
+  const chargeDistance = Math.min(distance(unit.position, targetPos), 8);
+  
+  const newPos = {
+    x: unit.position.x + direction.x * chargeDistance,
+    y: unit.position.y + direction.y * chargeDistance,
+  };
+  
+  // Damage enemies along the path
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const projectedDist = toEnemy.x * direction.x + toEnemy.y * direction.y;
+    const perpDist = Math.abs(toEnemy.x * direction.y - toEnemy.y * direction.x);
+    
+    if (projectedDist > 0 && projectedDist < chargeDistance && perpDist < 1.5) {
+      const damage = 38 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 7);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 2, 0.3);
+  unit.position = newPos;
+  createEnergyPulse(state, newPos, state.players[unit.owner].color, 2, 0.4);
 }
 
 function updateCombat(state: GameState, deltaTime: number): void {
