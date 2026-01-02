@@ -196,34 +196,37 @@ export function handleTouchEnd(e: TouchEvent, state: GameState, canvas: HTMLCanv
     } else if (touchState.isDragging && dist > SWIPE_THRESHOLD_PX) {
       const selectedBase = getSelectedBase(state, playerIndex);
 
-      // Allow swipe-to-spawn anywhere when the player's base is selected
+      // Allow swipe-to-spawn anywhere when the player's base is selected (but no units selected)
       if (selectedBase && state.selectedUnits.size === 0) {
         handleBaseSwipe(state, selectedBase, { x: dx, y: dy }, playerIndex);
+      } else if (state.selectedUnits.size > 0 && !touchState.touchedBase && !touchState.touchedMovementDot) {
+        // Handle ability drag for selected units
+        const dragVectorPixels = { x: dx, y: dy };
+        let dragVectorWorld = {
+          x: dragVectorPixels.x / PIXELS_PER_METER,
+          y: dragVectorPixels.y / PIXELS_PER_METER
+        };
+        
+        // Apply mirroring if the setting is enabled (mirror both X and Y)
+        if (state.settings.mirrorAbilityCasting) {
+          dragVectorWorld = {
+            x: -dragVectorWorld.x,
+            y: -dragVectorWorld.y
+          };
+        }
+
+        if (distance({ x: 0, y: 0 }, dragVectorWorld) > 0.5) {
+          handleVectorBasedAbilityDrag(state, dragVectorWorld);
+        } else {
+          // Clear preview if drag was too short
+          delete state.abilityCastPreview;
+        }
+      } else {
+        // Clear preview if no valid action was taken in this branch
+        delete state.abilityCastPreview;
       }
     } else if (elapsed < TAP_TIME_MS && dist < 10) {
       handleTap(state, { x, y }, canvas, playerIndex);
-    } else if (touchState.isDragging && state.selectedUnits.size > 0 && !touchState.touchedBase && !touchState.touchedMovementDot) {
-      // Use vector-based ability drag: convert screen drag to world vector
-      const dragVectorPixels = { x: dx, y: dy };
-      let dragVectorWorld = {
-        x: dragVectorPixels.x / PIXELS_PER_METER,
-        y: dragVectorPixels.y / PIXELS_PER_METER
-      };
-      
-      // Apply mirroring if the setting is enabled (mirror both X and Y)
-      if (state.settings.mirrorAbilityCasting) {
-        dragVectorWorld = {
-          x: -dragVectorWorld.x,
-          y: -dragVectorWorld.y
-        };
-      }
-
-      if (distance({ x: 0, y: 0 }, dragVectorWorld) > 0.5) {
-        handleVectorBasedAbilityDrag(state, dragVectorWorld);
-      } else {
-        // Clear preview if drag was too short
-        delete state.abilityCastPreview;
-      }
     } else {
       // Clear preview if no valid action was taken
       delete state.abilityCastPreview;

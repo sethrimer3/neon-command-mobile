@@ -2594,78 +2594,97 @@ function drawSelectionRect(ctx: CanvasRenderingContext2D, rect: { x1: number; y1
 function drawAbilityCastPreview(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (!state.abilityCastPreview) return;
   
-  const { commandOrigin, dragVector } = state.abilityCastPreview;
+  const { dragVector } = state.abilityCastPreview;
   
-  // Get the selected units to determine color
-  const selectedUnit = state.units.find(unit => state.selectedUnits.has(unit.id));
-  if (!selectedUnit) return;
+  // Get all selected units
+  const selectedUnits = state.units.filter(unit => state.selectedUnits.has(unit.id));
+  if (selectedUnits.length === 0) return;
   
-  const color = state.players[selectedUnit.owner].color;
-  
-  // Convert world positions to screen positions
-  const originScreen = positionToPixels(commandOrigin);
-  const endPos = add(commandOrigin, dragVector);
-  const endScreen = positionToPixels(endPos);
-  
+  const color = state.players[selectedUnits[0].owner].color;
   const time = Date.now() / 1000;
   
   ctx.save();
   
-  // Draw the line from command origin to target
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 3;
-  ctx.globalAlpha = 0.8;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 12;
-  ctx.setLineDash([8, 4]);
-  ctx.lineDashOffset = time * 20; // Animate dashes
+  // Helper function to get command origin for a unit (last queued position or current position)
+  const getUnitCommandOrigin = (unit: Unit): Vector2 => {
+    for (let i = unit.commandQueue.length - 1; i >= 0; i--) {
+      const node = unit.commandQueue[i];
+      if (node.type === 'move' || node.type === 'attack-move') {
+        return node.position;
+      }
+    }
+    return unit.position;
+  };
   
-  ctx.beginPath();
-  ctx.moveTo(originScreen.x, originScreen.y);
-  ctx.lineTo(endScreen.x, endScreen.y);
-  ctx.stroke();
+  // Draw arrows from each selected unit
+  selectedUnits.forEach(unit => {
+    const unitOrigin = getUnitCommandOrigin(unit);
+    const originScreen = positionToPixels(unitOrigin);
+    const endPos = add(unitOrigin, dragVector);
+    const endScreen = positionToPixels(endPos);
+    
+    // Draw the line from unit's command origin to target
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.7; // Slightly more transparent since there may be multiple lines
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 12;
+    ctx.setLineDash([8, 4]);
+    ctx.lineDashOffset = time * 20; // Animate dashes
+    
+    ctx.beginPath();
+    ctx.moveTo(originScreen.x, originScreen.y);
+    ctx.lineTo(endScreen.x, endScreen.y);
+    ctx.stroke();
+    
+    ctx.setLineDash([]);
+    
+    // Draw pulsing dot at command origin
+    const originPulse = Math.sin(time * 3) * 0.3 + 0.7;
+    ctx.globalAlpha = 0.8 * originPulse;
+    ctx.shadowBlur = 15;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(originScreen.x, originScreen.y, 4 + originPulse * 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw arrow at the end
+    const dx = endScreen.x - originScreen.x;
+    const dy = endScreen.y - originScreen.y;
+    const angle = Math.atan2(dy, dx);
+    
+    ctx.globalAlpha = 0.95;
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = color;
+    
+    ctx.save();
+    ctx.translate(endScreen.x, endScreen.y);
+    ctx.rotate(angle);
+    
+    // Draw larger arrow for preview
+    const arrowLength = 16;
+    const arrowWidth = 10;
+    ctx.beginPath();
+    ctx.moveTo(arrowLength, 0);
+    ctx.lineTo(0, -arrowWidth);
+    ctx.lineTo(0, arrowWidth);
+    ctx.closePath();
+    ctx.fill();
+    
+    ctx.restore();
+  });
   
-  ctx.setLineDash([]);
+  // Draw distance indicator (only once, at the center of the first unit's arrow)
+  const firstUnit = selectedUnits[0];
+  const firstOrigin = getUnitCommandOrigin(firstUnit);
+  const firstOriginScreen = positionToPixels(firstOrigin);
+  const firstEndPos = add(firstOrigin, dragVector);
+  const firstEndScreen = positionToPixels(firstEndPos);
   
-  // Draw pulsing dot at command origin
-  const originPulse = Math.sin(time * 3) * 0.3 + 0.7;
-  ctx.globalAlpha = 0.9 * originPulse;
-  ctx.shadowBlur = 15;
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(originScreen.x, originScreen.y, 4 + originPulse * 2, 0, Math.PI * 2);
-  ctx.fill();
-  
-  // Draw arrow at the end
-  const dx = endScreen.x - originScreen.x;
-  const dy = endScreen.y - originScreen.y;
-  const angle = Math.atan2(dy, dx);
-  
-  ctx.globalAlpha = 0.95;
-  ctx.shadowBlur = 18;
-  ctx.fillStyle = color;
-  
-  ctx.save();
-  ctx.translate(endScreen.x, endScreen.y);
-  ctx.rotate(angle);
-  
-  // Draw larger arrow for preview
-  const arrowLength = 16;
-  const arrowWidth = 10;
-  ctx.beginPath();
-  ctx.moveTo(arrowLength, 0);
-  ctx.lineTo(0, -arrowWidth);
-  ctx.lineTo(0, arrowWidth);
-  ctx.closePath();
-  ctx.fill();
-  
-  ctx.restore();
-  
-  // Draw distance indicator
   const dragLen = distance({ x: 0, y: 0 }, dragVector);
   const midScreen = {
-    x: (originScreen.x + endScreen.x) / 2,
-    y: (originScreen.y + endScreen.y) / 2
+    x: (firstOriginScreen.x + firstEndScreen.x) / 2,
+    y: (firstOriginScreen.y + firstEndScreen.y) / 2
   };
   
   ctx.globalAlpha = 0.9;
