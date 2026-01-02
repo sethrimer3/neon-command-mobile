@@ -479,6 +479,188 @@ export function updateVisualEffects(state: GameState, deltaTime: number): void {
 }
 
 /**
+ * Create charging/windup particle effect for abilities
+ */
+export function createAbilityCharge(
+  state: GameState,
+  position: Vector2,
+  color: string,
+  duration: number = 0.5
+): void {
+  if (!state.explosionParticles) {
+    state.explosionParticles = [];
+  }
+
+  const particleCount = 12;
+  
+  // Check particle limit and skip if at max
+  if (state.explosionParticles.length >= MAX_EXPLOSION_PARTICLES) {
+    const toRemove = Math.max(0, state.explosionParticles.length + particleCount - MAX_EXPLOSION_PARTICLES);
+    state.explosionParticles.splice(0, toRemove);
+  }
+
+  // Create converging particles that spiral into the position
+  for (let i = 0; i < particleCount; i++) {
+    const angle = (i / particleCount) * Math.PI * 2;
+    const startDistance = 3; // Start 3 meters away
+    const startPos = {
+      x: position.x + Math.cos(angle) * startDistance,
+      y: position.y + Math.sin(angle) * startDistance,
+    };
+    
+    // Velocity points towards center with spiral
+    const spiralAngle = angle + Math.PI / 4;
+    const velocity = {
+      x: -Math.cos(spiralAngle) * (startDistance / duration),
+      y: -Math.sin(spiralAngle) * (startDistance / duration),
+    };
+
+    const particle = {
+      id: generateId(),
+      position: startPos,
+      velocity,
+      color,
+      size: 0.15,
+      lifetime: duration,
+      createdAt: Date.now(),
+      alpha: 1.0,
+      rotation: angle,
+      rotationSpeed: 10,
+    };
+
+    state.explosionParticles.push(particle);
+  }
+}
+
+/**
+ * Create trail effect for fast-moving projectiles
+ */
+export function createTrailEffect(
+  state: GameState,
+  position: Vector2,
+  velocity: Vector2,
+  color: string
+): void {
+  if (!state.explosionParticles) {
+    state.explosionParticles = [];
+  }
+
+  // Check particle limit before adding
+  if (state.explosionParticles.length >= MAX_EXPLOSION_PARTICLES) {
+    // Skip creating trail if at limit (trails are less critical than other effects)
+    return;
+  }
+
+  // Create a trail particle behind the projectile
+  const trailParticle = {
+    id: generateId(),
+    position: { ...position },
+    velocity: { x: velocity.x * -0.2, y: velocity.y * -0.2 }, // Trail particles move slowly backward
+    color,
+    size: 0.08,
+    lifetime: 0.3,
+    createdAt: Date.now(),
+    alpha: 0.6,
+    rotation: Math.random() * Math.PI * 2,
+    rotationSpeed: 0,
+  };
+
+  state.explosionParticles.push(trailParticle);
+}
+
+/**
+ * Create impact ripple effect
+ */
+export function createImpactRipple(
+  state: GameState,
+  position: Vector2,
+  color: string,
+  size: number = 2.0
+): void {
+  // Create multiple expanding rings with staggered start times
+  for (let i = 0; i < 3; i++) {
+    if (!state.energyPulses) {
+      state.energyPulses = [];
+    }
+    
+    const pulse = {
+      id: generateId(),
+      position: { ...position },
+      radius: 0,
+      color,
+      startTime: Date.now() + i * 100, // Stagger the start times
+      duration: 0.4,
+      maxRadius: size,
+    };
+    
+    state.energyPulses.push(pulse);
+  }
+  
+  // Add impact particles
+  createParticleBurst(state, position, color, 20, 8);
+}
+
+/**
+ * Create healing sparkle particles
+ */
+export function createHealSparkles(
+  state: GameState,
+  position: Vector2,
+  radius: number
+): void {
+  if (!state.explosionParticles) {
+    state.explosionParticles = [];
+  }
+
+  const sparkleCount = 15;
+  
+  // Check particle limit before adding sparkles
+  if (state.explosionParticles.length >= MAX_EXPLOSION_PARTICLES) {
+    const toRemove = Math.max(0, state.explosionParticles.length + sparkleCount - MAX_EXPLOSION_PARTICLES);
+    state.explosionParticles.splice(0, toRemove);
+  }
+  
+  const now = Date.now();
+  
+  for (let i = 0; i < sparkleCount; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.random() * radius;
+    const sparklePos = {
+      x: position.x + Math.cos(angle) * distance,
+      y: position.y + Math.sin(angle) * distance,
+    };
+    
+    // Sparkles float upward slowly
+    const velocity = {
+      x: (Math.random() - 0.5) * 0.5,
+      y: -1 - Math.random() * 1.5,
+    };
+
+    const colors = [
+      'oklch(0.80 0.20 140)', // Green
+      'oklch(0.85 0.15 160)', // Light green
+      'oklch(0.90 0.10 180)', // Cyan-green
+    ];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+
+    const sparkle = {
+      id: generateId(),
+      position: sparklePos,
+      velocity,
+      color,
+      size: 0.06 + Math.random() * 0.08,
+      lifetime: 0.8 + Math.random() * 0.4,
+      createdAt: now, // All created at same time
+      alpha: 1.0,
+      rotation: Math.random() * Math.PI * 2,
+      rotationSpeed: (Math.random() - 0.5) * 5,
+    };
+
+    state.explosionParticles.push(sparkle);
+  }
+}
+
+/**
  * Create enhanced ability effect based on unit type
  */
 export function createAbilityEffect(
@@ -493,45 +675,74 @@ export function createAbilityEffect(
 
   switch (abilityType) {
     case 'burst-fire':
-      // Create rapid fire effect
+      // Create rapid fire effect with charge-up
+      createAbilityCharge(state, unit.position, color, 0.3);
       createEnergyPulse(state, unit.position, color, 0.3, 1.5);
       break;
     
     case 'execute-dash':
-      // Create dash trail
+      // Create dash trail with enhanced particles
       createEnergyPulse(state, unit.position, color, 0.4, 2);
-      createParticleBurst(state, unit.position, color, 15, 7);
+      createParticleBurst(state, unit.position, color, 20, 10);
+      // Add delayed impact ripple by creating staggered pulses
+      createImpactRipple(state, position, color, 2.5);
       break;
     
     case 'line-jump':
-      // Create jump telegraph
+      // Create jump telegraph with charge particles
+      createAbilityCharge(state, unit.position, 'oklch(0.75 0.18 200)', 0.4);
       createEnergyPulse(state, unit.position, 'oklch(0.75 0.18 200)', 0.5, 1);
       break;
     
     case 'shield-dome':
-      // Create shield activation pulse
+      // Create shield activation with multiple pulses
       createEnergyPulse(state, unit.position, color, 0.5, 4);
+      createEnergyPulse(state, unit.position, color, 0.7, 3.5);
+      createParticleBurst(state, unit.position, color, 16, 4);
       break;
     
     case 'cloak':
-      // Create cloaking shimmer
-      createParticleBurst(state, unit.position, color, 20, 3);
+      // Create cloaking shimmer with inward particles
+      createAbilityCharge(state, unit.position, color, 0.5);
+      createParticleBurst(state, unit.position, color, 25, 3);
       break;
     
     case 'bombardment':
-      // Create targeting reticle effect
+      // Create targeting reticle effect with charge particles
+      createAbilityCharge(state, position, 'oklch(0.70 0.30 25)', 0.6);
       createEnergyPulse(state, position, 'oklch(0.70 0.30 25)', 0.8, 3);
       break;
     
     case 'heal-pulse':
-      // Create healing wave
+      // Create healing wave with sparkles
       createEnergyPulse(state, unit.position, 'oklch(0.70 0.20 140)', 0.6, 5);
+      createEnergyPulse(state, unit.position, 'oklch(0.80 0.18 150)', 0.8, 4.5);
+      createHealSparkles(state, unit.position, 3);
       break;
     
     case 'missile-barrage':
-      // Create launch effect
+      // Create launch effect with enhanced particles
       createEnergyPulse(state, unit.position, color, 0.4, 2);
-      createParticleBurst(state, unit.position, color, 12, 6);
+      createParticleBurst(state, unit.position, color, 18, 8);
+      createAbilityCharge(state, unit.position, color, 0.3);
+      break;
+      
+    case 'precision-shot':
+      // Sniper-like charging effect
+      createAbilityCharge(state, unit.position, color, 0.5);
+      createEnergyPulse(state, unit.position, color, 0.3, 1.2);
+      break;
+      
+    case 'ground-slam':
+      // Heavy impact effect
+      createEnergyPulse(state, unit.position, color, 0.5, 3);
+      createParticleBurst(state, unit.position, color, 30, 12);
+      break;
+      
+    case 'whirlwind':
+      // Spinning particle effect
+      createParticleBurst(state, unit.position, color, 25, 8);
+      createEnergyPulse(state, unit.position, color, 0.6, 2.5);
       break;
   }
 }

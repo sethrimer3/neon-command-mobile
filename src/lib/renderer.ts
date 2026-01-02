@@ -1312,6 +1312,29 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
         ctx.beginPath();
         ctx.arc(screenPos.x, screenPos.y + yOffset, 6, startAngle, endAngle);
         ctx.stroke();
+        
+        // If almost ready (last 20%), show charging particles
+        if (cooldownPercent < 0.2) {
+          const time = Date.now() / 1000;
+          const chargeIntensity = 1 - (cooldownPercent / 0.2);
+          
+          // Draw small orbiting particles
+          for (let i = 0; i < 4; i++) {
+            const orbitAngle = (time * 3 + i * Math.PI / 2) % (Math.PI * 2);
+            const orbitRadius = 10 + Math.sin(time * 4 + i) * 2;
+            const px = screenPos.x + Math.cos(orbitAngle) * orbitRadius;
+            const py = screenPos.y + yOffset + Math.sin(orbitAngle) * orbitRadius;
+            
+            ctx.globalAlpha = chargeIntensity * 0.7;
+            ctx.fillStyle = color;
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(px, py, 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        
         ctx.restore();
       } else {
         // Ability ready - draw enhanced pulsing indicator
@@ -1566,20 +1589,73 @@ function drawShieldDome(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { 
   if (!unit.shieldActive) return;
 
   const radius = metersToPixels(unit.shieldActive.radius);
+  const time = Date.now() / 1000;
+  const pulse = Math.sin(time * 3) * 0.2 + 0.8;
+  const hexRotation = time * 0.5; // Pre-calculate rotation for all hexagons
 
   ctx.save();
+  
+  // Draw outer shield circle with pulsing effect
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
-  ctx.globalAlpha = 0.4;
+  ctx.globalAlpha = 0.4 * pulse;
   ctx.setLineDash([5, 5]);
 
   ctx.beginPath();
   ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
   ctx.stroke();
 
-  ctx.globalAlpha = 0.1;
+  // Draw hexagonal pattern inside the shield
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 0.3;
+  ctx.lineWidth = 1.5;
+  
+  const hexSize = radius * 0.25;
+  const hexCols = Math.min(Math.ceil(radius * 2 / (hexSize * Math.sqrt(3))), 8); // Limit to 8 columns
+  const hexRows = Math.min(Math.ceil(radius * 2 / (hexSize * 1.5)), 8); // Limit to 8 rows
+  
+  for (let row = -hexRows; row <= hexRows; row++) {
+    for (let col = -hexCols; col <= hexCols; col++) {
+      const x = screenPos.x + col * hexSize * Math.sqrt(3) + (row % 2) * hexSize * Math.sqrt(3) / 2;
+      const y = screenPos.y + row * hexSize * 1.5;
+      
+      // Only draw hexagons within shield radius
+      const dist = Math.sqrt((x - screenPos.x) ** 2 + (y - screenPos.y) ** 2);
+      if (dist > radius - hexSize) continue;
+      
+      // Draw hexagon with pre-calculated rotation
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i + hexRotation;
+        const hx = x + Math.cos(angle) * hexSize;
+        const hy = y + Math.sin(angle) * hexSize;
+        if (i === 0) {
+          ctx.moveTo(hx, hy);
+        } else {
+          ctx.lineTo(hx, hy);
+        }
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+  }
+
+  // Draw filled shield with gradient
+  ctx.globalAlpha = 0.15;
   ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
   ctx.fill();
+
+  // Draw bright inner ring
+  ctx.globalAlpha = 0.5 * pulse;
+  ctx.lineWidth = 3;
+  ctx.setLineDash([]);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(screenPos.x, screenPos.y, radius * 0.95, 0, Math.PI * 2);
+  ctx.stroke();
 
   ctx.restore();
 }
@@ -1589,15 +1665,61 @@ function drawHealPulse(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x
 
   const progress = (Date.now() - (unit.healPulseActive.endTime - 1000)) / 1000;
   const radius = metersToPixels(unit.healPulseActive.radius * progress);
+  const alpha = Math.max(0, 1 - progress);
 
   ctx.save();
-  ctx.strokeStyle = '#00ff00';
-  ctx.lineWidth = 3;
-  ctx.globalAlpha = Math.max(0, 1 - progress);
-
+  
+  // Draw multiple expanding healing waves
+  const healColor = 'oklch(0.70 0.20 140)';
+  
+  // Outer wave
+  ctx.strokeStyle = healColor;
+  ctx.lineWidth = 4;
+  ctx.globalAlpha = alpha * 0.6;
+  ctx.shadowColor = healColor;
+  ctx.shadowBlur = 15;
   ctx.beginPath();
   ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
   ctx.stroke();
+  
+  // Inner wave (slightly delayed)
+  if (progress > 0.2) {
+    const innerProgress = (progress - 0.2) / 0.8;
+    const innerRadius = metersToPixels(unit.healPulseActive.radius * innerProgress);
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, innerRadius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  
+  // Draw plus symbols around the pulse
+  const plusCount = 8;
+  ctx.globalAlpha = alpha * 0.7;
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  
+  for (let i = 0; i < plusCount; i++) {
+    const angle = (i / plusCount) * Math.PI * 2 + progress * Math.PI;
+    const x = screenPos.x + Math.cos(angle) * radius * 0.8;
+    const y = screenPos.y + Math.sin(angle) * radius * 0.8;
+    const size = 8;
+    
+    // Draw plus
+    ctx.beginPath();
+    ctx.moveTo(x - size, y);
+    ctx.lineTo(x + size, y);
+    ctx.moveTo(x, y - size);
+    ctx.lineTo(x, y + size);
+    ctx.stroke();
+  }
+  
+  // Draw filled glow in center
+  ctx.globalAlpha = alpha * 0.2;
+  ctx.fillStyle = healColor;
+  ctx.beginPath();
+  ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.restore();
 }
@@ -1612,15 +1734,58 @@ function drawMissileBarrage(ctx: CanvasRenderingContext2D, unit: Unit, screenPos
   ctx.shadowColor = color;
   ctx.shadowBlur = 8;
 
-  unit.missileBarrageActive.missiles.forEach((missile) => {
+  unit.missileBarrageActive.missiles.forEach((missile, index) => {
     const currentPos = {
       x: missile.position.x + (missile.target.x - missile.position.x) * progress,
       y: missile.position.y + (missile.target.y - missile.position.y) * progress,
     };
     const currentScreenPos = positionToPixels(currentPos);
-
+    
+    // Draw missile trail
+    if (progress > 0.1) {
+      const trailLength = 3; // Reduced from 5 for better performance
+      const trailProgress = Math.max(0, progress - 0.1);
+      
+      // Pre-calculate direction vector and step
+      const dx = missile.target.x - missile.position.x;
+      const dy = missile.target.y - missile.position.y;
+      const stepSize = 0.03; // Increased step for fewer calculations
+      
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      
+      ctx.beginPath();
+      for (let i = 0; i < trailLength; i++) {
+        const t = trailProgress - i * stepSize;
+        const trailPos = {
+          x: missile.position.x + dx * t,
+          y: missile.position.y + dy * t,
+        };
+        const trailScreenPos = positionToPixels(trailPos);
+        
+        if (i === 0) {
+          ctx.moveTo(trailScreenPos.x, trailScreenPos.y);
+        } else {
+          ctx.lineTo(trailScreenPos.x, trailScreenPos.y);
+        }
+      }
+      ctx.stroke();
+    }
+    
+    // Draw missile head
+    ctx.globalAlpha = 1.0;
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 12;
     ctx.beginPath();
-    ctx.arc(currentScreenPos.x, currentScreenPos.y, 3, 0, Math.PI * 2);
+    ctx.arc(currentScreenPos.x, currentScreenPos.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw missile glow
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.arc(currentScreenPos.x, currentScreenPos.y, 7, 0, Math.PI * 2);
     ctx.fill();
   });
 
@@ -1632,20 +1797,104 @@ function drawBombardment(ctx: CanvasRenderingContext2D, unit: Unit, color: strin
 
   const targetScreen = positionToPixels(unit.bombardmentActive.targetPos);
   const now = Date.now();
+  const time = now / 1000;
 
   if (now < unit.bombardmentActive.impactTime) {
+    // Targeting phase with enhanced reticle
+    const timeToImpact = unit.bombardmentActive.impactTime - now;
+    const urgency = Math.max(0, 1 - timeToImpact / 1000);
+    
     ctx.save();
     ctx.strokeStyle = color;
+    
+    // Rotating outer circle
+    ctx.save();
+    ctx.translate(targetScreen.x, targetScreen.y);
+    ctx.rotate(time * 2);
+    ctx.translate(-targetScreen.x, -targetScreen.y);
+    
     ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
     ctx.globalAlpha = 0.6;
-
+    ctx.setLineDash([10, 10]);
     ctx.beginPath();
     ctx.arc(targetScreen.x, targetScreen.y, metersToPixels(3), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    
+    // Inner targeting circle
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.8;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.arc(targetScreen.x, targetScreen.y, metersToPixels(2), 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Crosshairs
+    ctx.setLineDash([]);
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.7;
+    ctx.lineCap = 'round';
+    const crossSize = metersToPixels(3.5);
+    
+    ctx.beginPath();
+    ctx.moveTo(targetScreen.x - crossSize, targetScreen.y);
+    ctx.lineTo(targetScreen.x - crossSize * 0.3, targetScreen.y);
+    ctx.moveTo(targetScreen.x + crossSize * 0.3, targetScreen.y);
+    ctx.lineTo(targetScreen.x + crossSize, targetScreen.y);
+    ctx.moveTo(targetScreen.x, targetScreen.y - crossSize);
+    ctx.lineTo(targetScreen.x, targetScreen.y - crossSize * 0.3);
+    ctx.moveTo(targetScreen.x, targetScreen.y + crossSize * 0.3);
+    ctx.lineTo(targetScreen.x, targetScreen.y + crossSize);
+    ctx.stroke();
+    
+    // Pulsing center dot
+    const pulse = Math.sin(time * 8) * 0.3 + 0.7;
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10 * urgency;
+    ctx.beginPath();
+    ctx.arc(targetScreen.x, targetScreen.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Warning corners
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.8 * urgency;
+    const cornerSize = metersToPixels(3.5);
+    const cornerLength = 15;
+    
+    // Top-left
+    ctx.beginPath();
+    ctx.moveTo(targetScreen.x - cornerSize, targetScreen.y - cornerSize + cornerLength);
+    ctx.lineTo(targetScreen.x - cornerSize, targetScreen.y - cornerSize);
+    ctx.lineTo(targetScreen.x - cornerSize + cornerLength, targetScreen.y - cornerSize);
+    ctx.stroke();
+    
+    // Top-right
+    ctx.beginPath();
+    ctx.moveTo(targetScreen.x + cornerSize - cornerLength, targetScreen.y - cornerSize);
+    ctx.lineTo(targetScreen.x + cornerSize, targetScreen.y - cornerSize);
+    ctx.lineTo(targetScreen.x + cornerSize, targetScreen.y - cornerSize + cornerLength);
+    ctx.stroke();
+    
+    // Bottom-left
+    ctx.beginPath();
+    ctx.moveTo(targetScreen.x - cornerSize, targetScreen.y + cornerSize - cornerLength);
+    ctx.lineTo(targetScreen.x - cornerSize, targetScreen.y + cornerSize);
+    ctx.lineTo(targetScreen.x - cornerSize + cornerLength, targetScreen.y + cornerSize);
+    ctx.stroke();
+    
+    // Bottom-right
+    ctx.beginPath();
+    ctx.moveTo(targetScreen.x + cornerSize - cornerLength, targetScreen.y + cornerSize);
+    ctx.lineTo(targetScreen.x + cornerSize, targetScreen.y + cornerSize);
+    ctx.lineTo(targetScreen.x + cornerSize, targetScreen.y + cornerSize - cornerLength);
     ctx.stroke();
 
     ctx.restore();
   } else {
+    // Explosion phase
     const explosionProgress = (now - unit.bombardmentActive.impactTime) / (unit.bombardmentActive.endTime - unit.bombardmentActive.impactTime);
     const radius = metersToPixels(3 * (1 + explosionProgress * 0.5));
 
