@@ -1396,7 +1396,8 @@ function updateBases(state: GameState, deltaTime: number): void {
 
         // Find closest enemy unit or base within range
         if (base.autoAttackCooldown === 0) {
-          let closestTarget: { position: Vector2; isUnit: boolean; id: string } | null = null;
+          type TargetInfo = { position: Vector2; isUnit: boolean; id: string };
+          let closestTarget: TargetInfo | null = null;
           let closestDist = Infinity;
 
           // Check enemy units
@@ -1422,7 +1423,7 @@ function updateBases(state: GameState, deltaTime: number): void {
           });
 
           // Fire at closest target
-          if (closestTarget) {
+          if (closestTarget !== null) {
             const direction = normalize(subtract(closestTarget.position, base.position));
             const projectile = projectilePool.acquire();
             projectile.position = { ...base.position };
