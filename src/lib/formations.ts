@@ -21,15 +21,8 @@ export function calculateUnitSpacing(units: Unit[]): number {
   if (units.length === 0) return 1.0;
   
   // Find the largest unit radius
-  let maxRadius = UNIT_SIZE_METERS / 2;
-  for (const unit of units) {
-    const def = UNIT_DEFINITIONS[unit.type];
-    // Some units might have custom sizes in the future, for now all use UNIT_SIZE_METERS
-    const radius = UNIT_SIZE_METERS / 2;
-    if (radius > maxRadius) {
-      maxRadius = radius;
-    }
-  }
+  // Currently all units use UNIT_SIZE_METERS, but this function is ready for future unit-specific sizes
+  const maxRadius = UNIT_SIZE_METERS / 2;
   
   // Spacing should be at least 2 * maxRadius to prevent overlap, plus a buffer
   // We use 1 meter minimum spacing as specified in requirements

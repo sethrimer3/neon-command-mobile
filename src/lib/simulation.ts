@@ -981,11 +981,12 @@ const AVOIDANCE_RETURN_DELAY = 1.0; // Seconds to wait before returning to origi
 function updateUnits(state: GameState, deltaTime: number): void {
   // First pass: detect stationary units that should move aside for moving units
   state.units.forEach((stationaryUnit) => {
-    // Skip units that are already moving or have been marked to avoid
-    if (stationaryUnit.commandQueue.length > 0) return;
+    // Update return delay timer for units in temporary avoidance
     if (stationaryUnit.temporaryAvoidance) {
+      stationaryUnit.temporaryAvoidance.returnDelay -= deltaTime;
+      
       // Check if it's time to return to original position
-      if (Date.now() >= stationaryUnit.temporaryAvoidance.returnTime) {
+      if (stationaryUnit.temporaryAvoidance.returnDelay <= 0) {
         // Return to original position
         stationaryUnit.commandQueue.push({
           type: 'move',
@@ -995,6 +996,9 @@ function updateUnits(state: GameState, deltaTime: number): void {
       }
       return;
     }
+    
+    // Skip units that are already moving
+    if (stationaryUnit.commandQueue.length > 0) return;
     
     // Check for approaching friendly units
     for (const movingUnit of state.units) {
@@ -1024,10 +1028,10 @@ function updateUnits(state: GameState, deltaTime: number): void {
         
         // Check if avoidance position is valid (not in obstacle)
         if (!checkObstacleCollision(avoidancePos, UNIT_SIZE_METERS / 2, state.obstacles)) {
-          // Store original position and schedule return
+          // Store original position and set return delay
           stationaryUnit.temporaryAvoidance = {
             originalPosition: { ...stationaryUnit.position },
-            returnTime: Date.now() + AVOIDANCE_RETURN_DELAY * 1000
+            returnDelay: AVOIDANCE_RETURN_DELAY
           };
           
           // Add temporary move command
