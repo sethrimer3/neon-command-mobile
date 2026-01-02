@@ -47,6 +47,7 @@ Defines project-wide guidelines for AI agents, including documentation expectati
 
 ## Change History
 - **2026-01-01**: Incremented build number to 7 for latest changes
+- **2026-01-01**: Updated the recorded build number to 9 for the latest agent changes.
 
 ## Watch Out For
 - Keep the build number in sync with pull requests

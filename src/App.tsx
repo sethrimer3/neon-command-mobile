@@ -34,8 +34,6 @@ import { MultiplayerSync, initializeMultiplayerSync, updateMultiplayerSync } fro
 
 // Matchmaking configuration
 const MATCHMAKING_AUTO_START_DELAY_MS = 2000; // Delay before auto-starting matchmaking game
-// Keep the visible build badge in sync with AI-driven updates and releases.
-const BUILD_NUMBER = 8;
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1002,9 +1000,6 @@ function App() {
 
       {gameState.mode === 'menu' && (
         <div className="absolute inset-0 flex items-center justify-center animate-in fade-in duration-500">
-          <div className="absolute top-4 left-4 orbitron text-sm text-muted-foreground opacity-70">
-            Build {BUILD_NUMBER}
-          </div>
           <div className="flex flex-col gap-4 w-80 max-w-[90vw]">
             <div className="flex justify-center mb-4 animate-in fade-in zoom-in-95 duration-700">
               <img 
