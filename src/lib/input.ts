@@ -645,45 +645,30 @@ function addMovementCommand(state: GameState, worldPos: { x: number; y: number }
   
   if (selectedUnitsArray.length === 0) return;
   
-  // Apply formation if enabled
-  if (state.currentFormation !== 'none' && selectedUnitsArray.length > 1) {
-    const formationPositions = applyFormation(
-      selectedUnitsArray,
-      worldPos,
-      state.currentFormation,
-      2.0 // spacing in meters
-    );
+  // Always apply formation logic to ensure proper spacing
+  // Even with 'none' formation, units will be spaced apart to prevent stacking
+  const spacing = 1.0; // 1 meter spacing as per requirements
+  const formationPositions = applyFormation(
+    selectedUnitsArray,
+    worldPos,
+    state.currentFormation || 'none',
+    spacing
+  );
+  
+  // Assign formation positions to units
+  selectedUnitsArray.forEach((unit, index) => {
+    if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
     
-    // Assign formation positions to units
-    selectedUnitsArray.forEach((unit, index) => {
-      if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
-      
-      if (isPatrol) {
-        const returnPos = getPatrolReturnPosition(unit);
-        unit.commandQueue.push({ type: 'patrol', position: formationPositions[index], returnPosition: returnPos });
-      } else {
-        unit.commandQueue.push({ type: 'move', position: formationPositions[index] });
-      }
-      
-      // Start draw animation for new command
-      startQueueDrawAnimation(unit);
-    });
-  } else {
-    // No formation or single unit - all move to same point
-    selectedUnitsArray.forEach((unit) => {
-      if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
-      
-      if (isPatrol) {
-        const returnPos = getPatrolReturnPosition(unit);
-        unit.commandQueue.push({ type: 'patrol', position: worldPos, returnPosition: returnPos });
-      } else {
-        unit.commandQueue.push({ type: 'move', position: worldPos });
-      }
-      
-      // Start draw animation for new command
-      startQueueDrawAnimation(unit);
-    });
-  }
+    if (isPatrol) {
+      const returnPos = getPatrolReturnPosition(unit);
+      unit.commandQueue.push({ type: 'patrol', position: formationPositions[index], returnPosition: returnPos });
+    } else {
+      unit.commandQueue.push({ type: 'move', position: formationPositions[index] });
+    }
+    
+    // Start draw animation for new command
+    startQueueDrawAnimation(unit);
+  });
   
   // Send command to multiplayer backend for online games
   if (state.vsMode === 'online' && state.multiplayerManager) {

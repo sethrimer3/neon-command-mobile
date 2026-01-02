@@ -973,7 +973,75 @@ function updateIncome(state: GameState, deltaTime: number): void {
   }
 }
 
+// Avoidance constants
+const AVOIDANCE_DETECTION_RANGE = 2.0; // Range to detect approaching friendly units
+const AVOIDANCE_MOVE_DISTANCE = 1.5; // Distance to temporarily move aside
+const AVOIDANCE_RETURN_DELAY = 1.0; // Seconds to wait before returning to original position
+
 function updateUnits(state: GameState, deltaTime: number): void {
+  // First pass: detect stationary units that should move aside for moving units
+  state.units.forEach((stationaryUnit) => {
+    // Skip units that are already moving or have been marked to avoid
+    if (stationaryUnit.commandQueue.length > 0) return;
+    if (stationaryUnit.temporaryAvoidance) {
+      // Check if it's time to return to original position
+      if (Date.now() >= stationaryUnit.temporaryAvoidance.returnTime) {
+        // Return to original position
+        stationaryUnit.commandQueue.push({
+          type: 'move',
+          position: stationaryUnit.temporaryAvoidance.originalPosition
+        });
+        stationaryUnit.temporaryAvoidance = undefined;
+      }
+      return;
+    }
+    
+    // Check for approaching friendly units
+    for (const movingUnit of state.units) {
+      // Skip self, different teams, or non-moving units
+      if (movingUnit.id === stationaryUnit.id) continue;
+      if (movingUnit.owner !== stationaryUnit.owner) continue;
+      if (movingUnit.commandQueue.length === 0) continue;
+      
+      // Get moving unit's target
+      const targetNode = movingUnit.commandQueue[0];
+      if (targetNode.type !== 'move' && targetNode.type !== 'attack-move' && targetNode.type !== 'patrol') continue;
+      
+      // Check if moving unit is approaching stationary unit
+      const distToStationary = distance(movingUnit.position, stationaryUnit.position);
+      if (distToStationary > AVOIDANCE_DETECTION_RANGE) continue;
+      
+      // Check if moving unit is moving towards stationary unit
+      const movementDirection = normalize(subtract(targetNode.position, movingUnit.position));
+      const toStationary = normalize(subtract(stationaryUnit.position, movingUnit.position));
+      const dotProduct = movementDirection.x * toStationary.x + movementDirection.y * toStationary.y;
+      
+      // If dot product > 0.5, moving unit is heading towards stationary unit
+      if (dotProduct > 0.5) {
+        // Move stationary unit aside perpendicular to movement direction
+        const perpendicular = { x: -movementDirection.y, y: movementDirection.x };
+        const avoidancePos = add(stationaryUnit.position, scale(perpendicular, AVOIDANCE_MOVE_DISTANCE));
+        
+        // Check if avoidance position is valid (not in obstacle)
+        if (!checkObstacleCollision(avoidancePos, UNIT_SIZE_METERS / 2, state.obstacles)) {
+          // Store original position and schedule return
+          stationaryUnit.temporaryAvoidance = {
+            originalPosition: { ...stationaryUnit.position },
+            returnTime: Date.now() + AVOIDANCE_RETURN_DELAY * 1000
+          };
+          
+          // Add temporary move command
+          stationaryUnit.commandQueue.push({
+            type: 'move',
+            position: avoidancePos
+          });
+          break; // Only avoid once per update
+        }
+      }
+    }
+  });
+  
+  // Second pass: update all units normally
   state.units.forEach((unit) => {
     // Clean up faded command queues that have been marked for cancellation
     if (unit.queueFadeStartTime) {

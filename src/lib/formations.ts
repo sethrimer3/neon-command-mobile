@@ -3,7 +3,7 @@
  * Provides tactical positioning options for groups of units
  */
 
-import { Vector2, Unit } from './types';
+import { Vector2, Unit, UNIT_SIZE_METERS, UNIT_DEFINITIONS } from './types';
 import { distance, normalize, scale, add, subtract } from './gameUtils';
 
 export type FormationType = 'none' | 'line' | 'spread' | 'cluster' | 'wedge' | 'circle';
@@ -11,6 +11,30 @@ export type FormationType = 'none' | 'line' | 'spread' | 'cluster' | 'wedge' | '
 interface FormationOffset {
   x: number;
   y: number;
+}
+
+/**
+ * Calculate the optimal spacing between units based on their sizes
+ * Returns spacing in meters that ensures units don't overlap
+ */
+export function calculateUnitSpacing(units: Unit[]): number {
+  if (units.length === 0) return 1.0;
+  
+  // Find the largest unit radius
+  let maxRadius = UNIT_SIZE_METERS / 2;
+  for (const unit of units) {
+    const def = UNIT_DEFINITIONS[unit.type];
+    // Some units might have custom sizes in the future, for now all use UNIT_SIZE_METERS
+    const radius = UNIT_SIZE_METERS / 2;
+    if (radius > maxRadius) {
+      maxRadius = radius;
+    }
+  }
+  
+  // Spacing should be at least 2 * maxRadius to prevent overlap, plus a buffer
+  // We use 1 meter minimum spacing as specified in requirements
+  const minSpacing = Math.max(1.0, maxRadius * 2 + 0.2); // 0.2m buffer
+  return minSpacing;
 }
 
 /**
@@ -94,9 +118,23 @@ export function calculateFormationOffsets(
 
     default:
     case 'none':
-      // No formation - all units at center
-      for (let i = 0; i < unitCount; i++) {
+      // Auto-spacing: create a compact grid to prevent units from stacking
+      // This ensures units have individual positions even when no formation is selected
+      if (unitCount === 1) {
         offsets.push({ x: 0, y: 0 });
+      } else {
+        const cols = Math.ceil(Math.sqrt(unitCount));
+        const rows = Math.ceil(unitCount / cols);
+        let index = 0;
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            if (index >= unitCount) break;
+            const x = (col - (cols - 1) / 2) * spacing;
+            const y = (row - (rows - 1) / 2) * spacing;
+            offsets.push({ x, y });
+            index++;
+          }
+        }
       }
       break;
   }
@@ -115,12 +153,13 @@ export function applyFormation(
   spacing: number = 2.0
 ): Vector2[] {
   if (units.length === 0) return [];
-  if (formationType === 'none' || units.length === 1) {
-    // No formation or single unit - all go to target
-    return units.map(() => ({ ...targetPosition }));
+  
+  // Single unit - just go to target
+  if (units.length === 1) {
+    return [{ ...targetPosition }];
   }
 
-  // Calculate formation offsets
+  // Calculate formation offsets (now 'none' also creates spacing)
   const offsets = calculateFormationOffsets(units.length, formationType, spacing);
 
   // Calculate average current position of units (formation center)

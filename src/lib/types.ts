@@ -103,6 +103,7 @@ export interface Unit {
   queueFadeStartTime?: number; // Timestamp when queue fade animation started (for cancelled commands)
   queueDrawStartTime?: number; // Timestamp when queue drawing animation started (for new commands)
   queueDrawReverse?: boolean; // Whether queue should un-draw in reverse (true when unit dies)
+  temporaryAvoidance?: { originalPosition: Vector2; returnTime: number }; // For friendly unit avoidance
 }
 
 export type FactionType = 'radiant' | 'aurum' | 'solari';
