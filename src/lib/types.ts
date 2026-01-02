@@ -789,6 +789,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
 
 export interface GameState {
   mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection' | 'multiplayerLobby' | 'countdown' | 'statistics' | 'levelSelection' | 'onlineMode' | 'modifierHelp' | 'unitInformation';
+  backgroundBattle?: GameState; // Background AI battle for menu
   vsMode: 'ai' | 'player' | 'online' | null;
   
   units: Unit[];

@@ -195,6 +195,34 @@ function App() {
         gameStateRef.current.lastFpsUpdate = now;
       }
 
+      // Update background battle when in menu mode
+      if (gameStateRef.current.mode === 'menu') {
+        // Initialize background battle if it doesn't exist
+        if (!gameStateRef.current.backgroundBattle) {
+          gameStateRef.current.backgroundBattle = createBackgroundBattle(canvas);
+          initializeCamera(gameStateRef.current.backgroundBattle);
+        }
+
+        // Set volume to 20% for background sounds
+        soundManager.setVolumeScale(0.2);
+
+        // Update the background battle
+        const bg = gameStateRef.current.backgroundBattle;
+        updateGame(bg, deltaTime);
+        updateAI(bg, deltaTime, true); // Both players are AI
+        updateCamera(bg, deltaTime);
+        updateVisualEffects(bg, deltaTime);
+
+        // Restart battle if one side wins
+        if (bg.winner !== null) {
+          gameStateRef.current.backgroundBattle = createBackgroundBattle(canvas);
+          initializeCamera(gameStateRef.current.backgroundBattle);
+        }
+      } else {
+        // Reset volume scale to 100% when not in menu
+        soundManager.setVolumeScale(1.0);
+      }
+
       if (gameStateRef.current.mode === 'countdown') {
         const elapsed = now - (gameStateRef.current.countdownStartTime || now);
         // Track the countdown seconds in game state so the UI re-renders reliably.
@@ -287,8 +315,13 @@ function App() {
       const updateEndTime = performance.now();
       const renderStartTime = performance.now();
 
-      const selectionRect = getActiveSelectionRect();
-      renderGame(ctx, gameStateRef.current, canvas, selectionRect);
+      // Render background battle if in menu or related mode
+      if (gameStateRef.current.mode === 'menu' && gameStateRef.current.backgroundBattle) {
+        renderGame(ctx, gameStateRef.current.backgroundBattle, canvas, null);
+      } else {
+        const selectionRect = getActiveSelectionRect();
+        renderGame(ctx, gameStateRef.current, canvas, selectionRect);
+      }
 
       const renderEndTime = performance.now();
 
@@ -1003,14 +1036,18 @@ function App() {
       )}
 
       {gameState.mode === 'menu' && (
-        <div className="absolute inset-0 flex items-center justify-center animate-in fade-in duration-500">
-          <div className="flex flex-col gap-4 w-80 max-w-[90vw]">
-            <div className="flex justify-center mb-4 animate-in fade-in zoom-in-95 duration-700">
-              <img 
-                src={`${assetBaseUrl}ASSETS/sprites/menus/mainMenuTitle.png`} 
-                alt="Speed of Light RTS"
-                className="w-full max-w-md neon-glow"
-                style={{
+        <>
+          {/* 50% transparent black overlay */}
+          <div className="absolute inset-0 bg-black opacity-50 pointer-events-none" />
+          
+          <div className="absolute inset-0 flex items-center justify-center animate-in fade-in duration-500">
+            <div className="flex flex-col gap-4 w-80 max-w-[90vw]">
+              <div className="flex justify-center mb-4 animate-in fade-in zoom-in-95 duration-700">
+                <img 
+                  src={`${assetBaseUrl}ASSETS/sprites/menus/mainMenuTitle.png`} 
+                  alt="Speed of Light RTS"
+                  className="w-full max-w-md neon-glow"
+                  style={{
                   filter: 'drop-shadow(0 0 20px currentColor)'
                 }}
               />
@@ -1100,6 +1137,7 @@ function App() {
             </Button>
           </div>
         </div>
+        </>
       )}
 
       {gameState.mode === 'settings' && (
@@ -1459,6 +1497,102 @@ function App() {
       )}
     </div>
   );
+}
+
+function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
+  const arenaWidth = window.innerWidth / 20;
+  const arenaHeight = window.innerHeight / 20;
+
+  // Randomly select factions for both players
+  const factions: FactionType[] = ['radiant', 'umbra', 'aurum'];
+  const player1Faction = factions[Math.floor(Math.random() * factions.length)];
+  const player2Faction = factions[Math.floor(Math.random() * factions.length)];
+
+  // Randomly select some units for both sides
+  const allUnits: UnitType[] = ['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor'];
+  const shuffled = [...allUnits].sort(() => Math.random() - 0.5);
+  const enabledUnits = new Set(shuffled.slice(0, Math.floor(Math.random() * 3) + 4)); // 4-6 random units
+
+  const selectedMapDef = getMapById('open')!;
+  const mapObstacles = selectedMapDef.obstacles;
+  const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
+  const obstacles = [...mapObstacles, ...boundaryObstacles];
+  
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
+  
+  const topographyLines = generateTopographyLines(canvas.width, canvas.height);
+  const stars = generateStarfield(canvas.width, canvas.height);
+  const nebulaClouds = generateNebulaClouds(canvas.width, canvas.height);
+
+  const playerBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
+
+  return {
+    mode: 'game',
+    vsMode: 'ai',
+    units: [],
+    projectiles: [],
+    obstacles: obstacles,
+    bases: [
+      {
+        id: generateId(),
+        owner: 0,
+        position: basePositions.player,
+        hp: playerBaseTypeDef.hp,
+        maxHp: playerBaseTypeDef.hp,
+        armor: playerBaseTypeDef.armor,
+        movementTarget: null,
+        isSelected: false,
+        laserCooldown: 0,
+        faction: player1Faction,
+        baseType: 'standard',
+        autoAttackCooldown: 0,
+      },
+      {
+        id: generateId(),
+        owner: 1,
+        position: basePositions.enemy,
+        hp: playerBaseTypeDef.hp,
+        maxHp: playerBaseTypeDef.hp,
+        armor: playerBaseTypeDef.armor,
+        movementTarget: null,
+        isSelected: false,
+        laserCooldown: 0,
+        faction: player2Faction,
+        baseType: 'standard',
+        autoAttackCooldown: 0,
+      },
+    ],
+    players: [
+      { photons: 200, incomeRate: 1, color: COLORS.playerDefault },
+      { photons: 200, incomeRate: 1, color: COLORS.enemyDefault },
+    ],
+    selectedUnits: new Set(),
+    controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
+    currentFormation: 'none',
+    patrolMode: false,
+    elapsedTime: 0,
+    lastIncomeTime: 0,
+    winner: null,
+    settings: {
+      playerColor: COLORS.playerDefault,
+      enemyColor: COLORS.enemyDefault,
+      enabledUnits: enabledUnits,
+      unitSlots: { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' },
+      selectedMap: 'open',
+      showNumericHP: false,
+      playerFaction: player1Faction,
+      enemyFaction: player2Faction,
+      playerBaseType: 'standard',
+      enemyBaseType: 'standard',
+    },
+    surrenderClicks: 0,
+    lastSurrenderClickTime: 0,
+    surrenderExpanded: false,
+    topographyLines,
+    nebulaClouds,
+    stars,
+    isPortrait: isPortraitOrientation(),
+  };
 }
 
 function createInitialState(): GameState {

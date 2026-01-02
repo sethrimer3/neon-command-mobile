@@ -5,19 +5,25 @@ import { distance, add } from './gameUtils';
 let lastAIAction = 0;
 const AI_ACTION_INTERVAL = 2.0;
 
-export function updateAI(state: GameState, deltaTime: number): void {
+export function updateAI(state: GameState, deltaTime: number, bothPlayersAI: boolean = false): void {
   if (state.vsMode !== 'ai') return;
 
   lastAIAction += deltaTime;
 
   if (lastAIAction >= AI_ACTION_INTERVAL) {
     lastAIAction = 0;
-    performAIActions(state);
+    if (bothPlayersAI) {
+      // In background battles, both players are AI
+      performAIActions(state, 0);
+      performAIActions(state, 1);
+    } else {
+      // Normal AI vs player mode
+      performAIActions(state, 1);
+    }
   }
 }
 
-function performAIActions(state: GameState): void {
-  const aiPlayer = 1;
+function performAIActions(state: GameState, aiPlayer: number = 1): void {
   const aiBase = state.bases.find((b) => b.owner === aiPlayer);
   if (!aiBase) return;
 
@@ -45,14 +51,15 @@ function performAIActions(state: GameState): void {
   }
 
   const aiUnits = state.units.filter((u) => u.owner === aiPlayer);
-  const playerBase = state.bases.find((b) => b.owner === 0);
+  const enemyPlayer = aiPlayer === 0 ? 1 : 0;
+  const enemyBase = state.bases.find((b) => b.owner === enemyPlayer);
 
-  if (playerBase) {
+  if (enemyBase) {
     aiUnits.forEach((unit) => {
       if (unit.commandQueue.length < 3 && Math.random() < 0.3) {
         const targetPos = {
-          x: playerBase.position.x + (Math.random() - 0.5) * 10,
-          y: playerBase.position.y + (Math.random() - 0.5) * 10,
+          x: enemyBase.position.x + (Math.random() - 0.5) * 10,
+          y: enemyBase.position.y + (Math.random() - 0.5) * 10,
         };
 
         if (unit.commandQueue.length < QUEUE_MAX_LENGTH) {
@@ -62,8 +69,8 @@ function performAIActions(state: GameState): void {
 
       if (unit.abilityCooldown === 0 && Math.random() < 0.2 && unit.commandQueue.length < QUEUE_MAX_LENGTH) {
         const direction = {
-          x: playerBase.position.x - unit.position.x,
-          y: playerBase.position.y - unit.position.y,
+          x: enemyBase.position.x - unit.position.x,
+          y: enemyBase.position.y - unit.position.y,
         };
         
         unit.commandQueue.push({ 
