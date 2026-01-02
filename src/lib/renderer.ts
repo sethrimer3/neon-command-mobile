@@ -27,15 +27,6 @@ projectileSprite.onload = () => {
   projectileSpriteLoaded = true;
 };
 
-// Load particle sprite
-const particleSprite = new Image();
-particleSprite.src = `${assetBaseUrl}ASSETS/sprites/projectiles/particles/particle1.png`;
-let particleSpriteLoaded = false;
-particleSprite.onload = () => {
-  particleSpriteLoaded = true;
-};
-
-
 // Helper function to get modifier icon emoji
 function getModifierIcon(modifier: UnitModifier): string {
   switch (modifier) {
@@ -933,9 +924,8 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
       ctx.shadowBlur = 20 * pulseIntensity;
       
       // Draw sprite rotated in the direction of travel
-      // Note: Add π/2 because the sprite is designed facing upward (not right)
       ctx.translate(screenPos.x, screenPos.y);
-      ctx.rotate(angle + Math.PI / 2);
+      ctx.rotate(angle);
       
       // Draw the sprite centered and scaled appropriately
       const spriteSize = 24; // Size in pixels
@@ -1446,50 +1436,30 @@ function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
     const sizeVariation = Math.sin(time * 3 + index * 0.5) * 0.3 + 1;
     const particleSize = 3 * sizeVariation;
     
-    // Draw particle sprite if loaded, otherwise fall back to circle
-    if (particleSpriteLoaded && particleSprite.complete) {
-      ctx.save();
-      
-      // Set glow effect for the sprite
-      ctx.shadowColor = particle.color;
-      ctx.shadowBlur = 14;
-      
-      // Translate to particle position
-      // Note: Particle sprite faces upward and does NOT rotate with movement
-      ctx.translate(screenPos.x, screenPos.y);
-      
-      // Draw the sprite centered and scaled appropriately
-      const spriteSize = particleSize * 4; // Scale sprite size based on particle size
-      ctx.drawImage(particleSprite, -spriteSize / 2, -spriteSize / 2, spriteSize, spriteSize);
-      
-      ctx.restore();
-    } else {
-      // Fallback to original circle rendering if sprite not loaded
-      // Draw particle with enhanced glow effect and color variation
-      ctx.fillStyle = particle.color;
-      ctx.shadowColor = particle.color;
-      ctx.shadowBlur = 14;
-      
-      // Outer glow layer
-      ctx.globalAlpha = 0.3;
-      ctx.beginPath();
-      ctx.arc(screenPos.x, screenPos.y, particleSize * 2, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Main particle circle
-      ctx.globalAlpha = 1.0;
-      ctx.shadowBlur = 12;
-      ctx.beginPath();
-      ctx.arc(screenPos.x, screenPos.y, particleSize, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Draw brighter inner core with stronger glow
-      ctx.shadowBlur = 22;
-      ctx.globalAlpha = 0.9;
-      ctx.beginPath();
-      ctx.arc(screenPos.x, screenPos.y, particleSize * 0.6, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // Draw particle with enhanced glow effect and color variation
+    ctx.fillStyle = particle.color;
+    ctx.shadowColor = particle.color;
+    ctx.shadowBlur = 14;
+    
+    // Outer glow layer
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, particleSize * 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Main particle circle
+    ctx.globalAlpha = 1.0;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, particleSize, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw brighter inner core with stronger glow
+    ctx.shadowBlur = 22;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, particleSize * 0.6, 0, Math.PI * 2);
+    ctx.fill();
     
     ctx.restore();
   });
