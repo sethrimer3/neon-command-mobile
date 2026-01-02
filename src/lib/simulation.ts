@@ -1411,6 +1411,42 @@ function executeAbility(state: GameState, unit: Unit, node: CommandNode): void {
   } else if (unit.type === 'interceptor') {
     createAbilityEffect(state, unit, node.position, 'missile-barrage');
     executeMissileBarrage(state, unit, node.direction);
+  } else if (unit.type === 'marksman') {
+    createAbilityEffect(state, unit, node.position, 'precision-shot');
+    executePrecisionShot(state, unit, node.direction);
+  } else if (unit.type === 'engineer') {
+    createAbilityEffect(state, unit, node.position, 'deploy-turret');
+    executeDeployTurret(state, unit, node.position);
+  } else if (unit.type === 'skirmisher') {
+    createAbilityEffect(state, unit, node.position, 'rapid-retreat');
+    executeRapidRetreat(state, unit, node.direction);
+  } else if (unit.type === 'paladin') {
+    createAbilityEffect(state, unit, node.position, 'holy-strike');
+    executeHolyStrike(state, unit, node.direction);
+  } else if (unit.type === 'gladiator') {
+    createAbilityEffect(state, unit, node.position, 'lethal-strike');
+    executeLethalStrike(state, unit, node.direction);
+  } else if (unit.type === 'ravager') {
+    createAbilityEffect(state, unit, node.position, 'blood-hunt');
+    executeBloodHunt(state, unit);
+  } else if (unit.type === 'warlord') {
+    createAbilityEffect(state, unit, node.position, 'battle-cry');
+    executeBattleCry(state, unit);
+  } else if (unit.type === 'duelist') {
+    createAbilityEffect(state, unit, node.position, 'riposte');
+    executeRiposte(state, unit);
+  } else if (unit.type === 'voidwalker') {
+    createAbilityEffect(state, unit, node.position, 'void-step');
+    executeVoidStep(state, unit, node.position);
+  } else if (unit.type === 'chronomancer') {
+    createAbilityEffect(state, unit, node.position, 'time-dilation');
+    executeTimeDilation(state, unit);
+  } else if (unit.type === 'nebula') {
+    createAbilityEffect(state, unit, node.position, 'cosmic-barrier');
+    executeCosmicBarrier(state, unit, node.position);
+  } else if (unit.type === 'quasar') {
+    createAbilityEffect(state, unit, node.position, 'stellar-convergence');
+    executeStellarConvergence(state, unit, node.position);
   }
 }
 
@@ -1658,6 +1694,291 @@ function executeMissileBarrage(state: GameState, unit: Unit, direction: { x: num
     endTime: Date.now() + 1500,
     missiles,
   };
+}
+
+// Radiant faction abilities
+function executePrecisionShot(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const dir = normalize(direction);
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
+  
+  let target: Unit | Base | null = null;
+  let maxDist = 0;
+  
+  // Find furthest target in direction
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const dist = distance(unit.position, enemy.position);
+    if (dist > 18) return;
+    
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x);
+    
+    if (projectedDist > 0 && perpDist < 1 && dist > maxDist) {
+      maxDist = dist;
+      target = enemy;
+    }
+  });
+  
+  if (target) {
+    const damage = 50 * unit.damageMultiplier;
+    (target as Unit).hp -= damage;
+    createHitSparks(state, target.position, state.players[unit.owner].color, 8);
+    createEnergyPulse(state, target.position, state.players[unit.owner].color, 1.5, 0.3);
+    
+    if (state.matchStats && unit.owner === 0) {
+      state.matchStats.damageDealtByPlayer += damage;
+    }
+  }
+}
+
+function executeDeployTurret(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  // Create a temporary stationary unit that acts as a turret
+  const turret: Unit = {
+    id: `turret-${Date.now()}-${Math.random()}`,
+    type: 'scout', // Use scout as base type for turret
+    owner: unit.owner,
+    position: { ...targetPos },
+    hp: 30,
+    maxHp: 30,
+    armor: 0,
+    commandQueue: [],
+    damageMultiplier: 0.5,
+    distanceTraveled: 0,
+    distanceCredit: 0,
+    abilityCooldown: 999, // High cooldown to prevent turret from using ability
+  };
+  
+  state.units.push(turret);
+  createSpawnEffect(state, targetPos, state.players[unit.owner].color);
+  
+  // Remove turret after 10 seconds
+  setTimeout(() => {
+    const index = state.units.findIndex(u => u.id === turret.id);
+    if (index !== -1) {
+      state.units.splice(index, 1);
+    }
+  }, 10000);
+}
+
+function executeRapidRetreat(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const retreatDistance = 8;
+  const dir = normalize(direction);
+  const retreatPos = {
+    x: unit.position.x - dir.x * retreatDistance,
+    y: unit.position.y - dir.y * retreatDistance,
+  };
+  
+  unit.position = retreatPos;
+  unit.cloaked = {
+    endTime: Date.now() + 2000,
+  };
+  createEnergyPulse(state, retreatPos, state.players[unit.owner].color, 2, 0.3);
+}
+
+function executeHolyStrike(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const dir = normalize(direction);
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const dist = distance(unit.position, enemy.position);
+    if (dist > 6) return;
+    
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x);
+    
+    if (projectedDist > 0 && perpDist < 2) {
+      const damage = 40 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+}
+
+// Aurum faction abilities
+function executeLethalStrike(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const dir = normalize(direction);
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  let target: Unit | null = null;
+  let minDist = Infinity;
+  
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const dist = distance(unit.position, enemy.position);
+    if (dist > 3) return;
+    
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    
+    if (projectedDist > 0 && dist < minDist) {
+      minDist = dist;
+      target = enemy;
+    }
+  });
+  
+  if (target) {
+    // High damage, execution-style ability
+    const damage = Math.min(target.hp * 0.5, 100) * unit.damageMultiplier;
+    target.hp -= damage;
+    createHitSparks(state, target.position, state.players[unit.owner].color, 10);
+    createEnergyPulse(state, target.position, state.players[unit.owner].color, 2, 0.5);
+    
+    if (state.matchStats && unit.owner === 0) {
+      state.matchStats.damageDealtByPlayer += damage;
+    }
+  }
+}
+
+function executeBloodHunt(state: GameState, unit: Unit): void {
+  // Life steal ability - damage nearby enemies and heal
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  let totalDamage = 0;
+  
+  enemies.forEach((enemy) => {
+    if (distance(unit.position, enemy.position) <= 3) {
+      const damage = 15 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      totalDamage += damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 4);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  // Heal for half the damage dealt
+  unit.hp = Math.min(unit.hp + totalDamage * 0.5, unit.maxHp);
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 3, 0.4);
+}
+
+function executeBattleCry(state: GameState, unit: Unit): void {
+  // Buff nearby allies
+  const allies = state.units.filter((u) => u.owner === unit.owner);
+  
+  allies.forEach((ally) => {
+    if (distance(ally.position, unit.position) <= 6) {
+      ally.damageMultiplier += 0.5;
+      createEnergyPulse(state, ally.position, state.players[unit.owner].color, 2, 0.3);
+      
+      // Reset buff after 5 seconds
+      setTimeout(() => {
+        ally.damageMultiplier = Math.max(1, ally.damageMultiplier - 0.5);
+      }, 5000);
+    }
+  });
+}
+
+function executeRiposte(state: GameState, unit: Unit): void {
+  // Counter-attack ability - briefly invulnerable and damages attackers
+  unit.shieldActive = {
+    endTime: Date.now() + 2000,
+    radius: 2,
+  };
+  
+  // Damage nearby enemies
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  enemies.forEach((enemy) => {
+    if (distance(unit.position, enemy.position) <= 2) {
+      const damage = 25 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+}
+
+// Solari faction abilities
+function executeVoidStep(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  // Teleport to location
+  const maxRange = 12;
+  const actualDistance = distance(unit.position, targetPos);
+  
+  if (actualDistance <= maxRange) {
+    createEnergyPulse(state, unit.position, state.players[unit.owner].color, 3, 0.4);
+    unit.position = { ...targetPos };
+    createEnergyPulse(state, targetPos, state.players[unit.owner].color, 3, 0.4);
+  }
+}
+
+function executeTimeDilation(state: GameState, unit: Unit): void {
+  // Slow enemies in area
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  enemies.forEach((enemy) => {
+    if (distance(unit.position, enemy.position) <= 7) {
+      const def = UNIT_DEFINITIONS[enemy.type];
+      // Temporarily reduce move speed
+      enemy.currentSpeed = def.moveSpeed * 0.3;
+      
+      createEnergyPulse(state, enemy.position, state.players[unit.owner].color, 2, 0.3);
+      
+      // Restore speed after 4 seconds
+      setTimeout(() => {
+        enemy.currentSpeed = undefined;
+      }, 4000);
+    }
+  });
+}
+
+function executeCosmicBarrier(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  // Create temporary obstacle/barrier effect
+  // This is simulated by creating a shield dome at target position
+  unit.shieldActive = {
+    endTime: Date.now() + 6000,
+    radius: 3,
+  };
+  
+  createEnergyPulse(state, targetPos, state.players[unit.owner].color, 3, 0.5);
+}
+
+function executeStellarConvergence(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  // Delayed area damage ability
+  unit.bombardmentActive = {
+    endTime: Date.now() + 3000,
+    targetPos,
+    impactTime: Date.now() + 2500,
+  };
+  
+  // Deal heavy damage at impact
+  setTimeout(() => {
+    const enemies = state.units.filter((u) => u.owner !== unit.owner);
+    const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
+    
+    enemies.forEach((enemy) => {
+      if (distance(enemy.position, targetPos) <= 4) {
+        const damage = 60 * unit.damageMultiplier;
+        enemy.hp -= damage;
+        createHitSparks(state, enemy.position, state.players[unit.owner].color, 8);
+        
+        if (state.matchStats && unit.owner === 0) {
+          state.matchStats.damageDealtByPlayer += damage;
+        }
+      }
+    });
+    
+    enemyBases.forEach((base) => {
+      if (distance(base.position, targetPos) <= 4) {
+        const baseDamage = 80 * unit.damageMultiplier;
+        base.hp -= baseDamage;
+        createImpactEffect(state, base.position, state.players[unit.owner].color, 4);
+        
+        if (state.matchStats && unit.owner === 0) {
+          state.matchStats.damageDealtByPlayer += baseDamage;
+        }
+      }
+    });
+    
+    createEnergyPulse(state, targetPos, state.players[unit.owner].color, 4, 0.8);
+  }, 2500);
 }
 
 function updateCombat(state: GameState, deltaTime: number): void {
