@@ -778,6 +778,59 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
     }
 
+    // Draw cannon indicator for defense base
+    if (base.baseType === 'defense') {
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      
+      // Draw turret on top of base
+      const turretSize = size * 0.3;
+      ctx.fillRect(screenPos.x - turretSize / 2, screenPos.y - turretSize / 2, turretSize, turretSize);
+      
+      // Draw cannon barrel pointing upwards (or towards nearest enemy if in range)
+      const barrelLength = size * 0.4;
+      const barrelWidth = 4;
+      
+      // For now, just point upwards
+      ctx.fillRect(screenPos.x - barrelWidth / 2, screenPos.y - turretSize / 2 - barrelLength, barrelWidth, barrelLength);
+      
+      ctx.restore();
+    }
+    
+    // Draw shield indicator for assault base
+    if (base.baseType === 'assault' && !base.shieldActive) {
+      // Draw small shield icon to indicate it has shield ability
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.4;
+      const shieldSize = size * 0.25;
+      ctx.beginPath();
+      ctx.arc(screenPos.x + size * 0.25, screenPos.y - size * 0.25, shieldSize, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    
+    // Draw healing cross for support base
+    if (base.baseType === 'support') {
+      ctx.save();
+      ctx.fillStyle = '#4ade80';
+      ctx.strokeStyle = '#4ade80';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.6;
+      
+      const crossSize = size * 0.2;
+      const crossThickness = 3;
+      
+      // Draw cross
+      ctx.fillRect(screenPos.x - crossThickness / 2, screenPos.y - crossSize / 2, crossThickness, crossSize);
+      ctx.fillRect(screenPos.x - crossSize / 2, screenPos.y - crossThickness / 2, crossSize, crossThickness);
+      
+      ctx.restore();
+    }
+
     if (state.mode === 'game' && (!state.matchStartAnimation || state.matchStartAnimation.phase === 'go')) {
       const doorSize = size / 3;
       const playerPhotons = state.players[base.owner].photons;
@@ -829,6 +882,28 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
     // Draw laser beam if active
     if (base.laserBeam && Date.now() < base.laserBeam.endTime) {
       drawLaserBeam(ctx, base, screenPos, color);
+    }
+    
+    // Draw regeneration pulse for support base
+    if (base.regenerationPulse && Date.now() < base.regenerationPulse.endTime) {
+      const elapsed = Date.now() - (base.regenerationPulse.endTime - 500); // 500ms duration
+      const progress = elapsed / 500;
+      const radius = metersToPixels(base.regenerationPulse.radius);
+      
+      ctx.save();
+      ctx.strokeStyle = '#4ade80'; // Green color for healing
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = (1 - progress) * 0.5; // Fade out as it expands
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, radius * progress, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Inner glow
+      ctx.globalAlpha = (1 - progress) * 0.3;
+      ctx.shadowColor = '#4ade80';
+      ctx.shadowBlur = 15;
+      ctx.stroke();
+      ctx.restore();
     }
   });
 }
