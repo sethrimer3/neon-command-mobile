@@ -1508,12 +1508,19 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
   const player1Faction = factions[Math.floor(Math.random() * factions.length)];
   const player2Faction = factions[Math.floor(Math.random() * factions.length)];
 
-  // Randomly select some units for both sides
+  // Randomly select some units for both sides using Fisher-Yates shuffle
   const allUnits: UnitType[] = ['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor'];
-  const shuffled = [...allUnits].sort(() => Math.random() - 0.5);
+  const shuffled = [...allUnits];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
   const enabledUnits = new Set(shuffled.slice(0, Math.floor(Math.random() * 3) + 4)); // 4-6 random units
 
-  const selectedMapDef = getMapById('open')!;
+  const selectedMapDef = getMapById('open');
+  if (!selectedMapDef) {
+    throw new Error('Default map "open" not found');
+  }
   const mapObstacles = selectedMapDef.obstacles;
   const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
   const obstacles = [...mapObstacles, ...boundaryObstacles];
