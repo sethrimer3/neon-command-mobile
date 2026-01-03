@@ -36,6 +36,7 @@ import { MultiplayerSync, initializeMultiplayerSync, updateMultiplayerSync } fro
 
 // Matchmaking configuration
 const MATCHMAKING_AUTO_START_DELAY_MS = 2000; // Delay before auto-starting matchmaking game
+const LAN_CONNECTION_WAIT_MS = 1000; // Wait for LAN connection to establish
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -769,11 +770,21 @@ function App() {
 
   const goToLANMode = () => {
     soundManager.playButtonClick();
+    // Disconnect any existing LAN store
+    if (lanStoreRef.current) {
+      lanStoreRef.current.disconnect();
+      lanStoreRef.current = null;
+    }
     gameStateRef.current.mode = 'lanMode';
     setRenderTrigger(prev => prev + 1);
   };
 
   const handleLANHost = async (): Promise<string> => {
+    // Disconnect any existing LAN store
+    if (lanStoreRef.current) {
+      lanStoreRef.current.disconnect();
+    }
+    
     // Create new LAN store instance
     const lanStore = new LANKVStore();
     lanStoreRef.current = lanStore;
@@ -819,6 +830,11 @@ function App() {
 
   const handleLANJoin = async (hostPeerId: string): Promise<boolean> => {
     try {
+      // Disconnect any existing LAN store
+      if (lanStoreRef.current) {
+        lanStoreRef.current.disconnect();
+      }
+      
       // Create new LAN store instance
       const lanStore = new LANKVStore();
       lanStoreRef.current = lanStore;
@@ -829,8 +845,8 @@ function App() {
       // Create multiplayer manager with LAN store
       multiplayerManagerRef.current = new MultiplayerManager(userId, lanStore);
       
-      // Wait a bit for connection to establish
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Wait for connection to establish
+      await new Promise(resolve => setTimeout(resolve, LAN_CONNECTION_WAIT_MS));
       
       // Get available lobbies (should be the host's lobby)
       const lobbies = await multiplayerManagerRef.current.getAvailableLobbies();

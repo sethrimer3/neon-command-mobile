@@ -1,6 +1,9 @@
 import Peer, { DataConnection } from 'peerjs';
 import { RealtimeKVStore } from './realtimeStore';
 
+// Timeout for peer-to-peer requests
+const P2P_REQUEST_TIMEOUT_MS = 5000;
+
 /**
  * LAN multiplayer adapter using WebRTC for direct peer-to-peer connections.
  * This allows players to play together on the same local network without requiring
@@ -163,10 +166,12 @@ export class LANKVStore implements RealtimeKVStore {
     if (!this.isHostPlayer && this.connection?.open) {
       return new Promise((resolve) => {
         const requestId = Math.random().toString(36).substring(7);
+        let timeoutId: NodeJS.Timeout;
         
         const handler = (data: any) => {
           if (data.type === 'get-response' && data.requestId === requestId) {
             this.messageHandlers.delete(handler);
+            clearTimeout(timeoutId);
             resolve(data.value as T);
           }
         };
@@ -179,11 +184,11 @@ export class LANKVStore implements RealtimeKVStore {
           requestId: requestId,
         });
 
-        // Timeout after 5 seconds
-        setTimeout(() => {
+        // Timeout after P2P_REQUEST_TIMEOUT_MS
+        timeoutId = setTimeout(() => {
           this.messageHandlers.delete(handler);
           resolve(null);
-        }, 5000);
+        }, P2P_REQUEST_TIMEOUT_MS);
       });
     }
 
@@ -226,10 +231,12 @@ export class LANKVStore implements RealtimeKVStore {
     if (!this.isHostPlayer && this.connection?.open) {
       return new Promise((resolve) => {
         const requestId = Math.random().toString(36).substring(7);
+        let timeoutId: NodeJS.Timeout;
         
         const handler = (data: any) => {
           if (data.type === 'list-response' && data.requestId === requestId) {
             this.messageHandlers.delete(handler);
+            clearTimeout(timeoutId);
             // Combine and deduplicate
             const allKeys = new Set([...localKeys, ...data.keys]);
             resolve(Array.from(allKeys));
@@ -244,11 +251,11 @@ export class LANKVStore implements RealtimeKVStore {
           requestId: requestId,
         });
 
-        // Timeout after 5 seconds
-        setTimeout(() => {
+        // Timeout after P2P_REQUEST_TIMEOUT_MS
+        timeoutId = setTimeout(() => {
           this.messageHandlers.delete(handler);
           resolve(localKeys);
-        }, 5000);
+        }, P2P_REQUEST_TIMEOUT_MS);
       });
     }
 
@@ -268,6 +275,7 @@ export class LANKVStore implements RealtimeKVStore {
       this.peer = null;
     }
     this.connected = false;
+    this.peerId = null;
     this.localData.clear();
     this.remoteData.clear();
     this.messageHandlers.clear();
