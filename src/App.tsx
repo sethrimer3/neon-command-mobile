@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useKV } from './hooks/useKV';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS, FactionType, FACTION_DEFINITIONS, BASE_TYPE_DEFINITIONS, BaseType, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS } from './lib/types';
-import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, generateFloaters, isPortraitOrientation, updateViewportScale } from './lib/gameUtils';
+import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, isPortraitOrientation, updateViewportScale } from './lib/gameUtils';
 import { updateGame } from './lib/simulation';
 import { updateAI } from './lib/ai';
 import { renderGame } from './lib/renderer';
@@ -10,6 +10,7 @@ import { handleTouchStart, handleTouchMove, handleTouchEnd, handleMouseDown, han
 import { initializeCamera, updateCamera, zoomCamera, panCamera, resetCamera } from './lib/camera';
 import { updateVisualEffects, createCelebrationParticles } from './lib/visualEffects';
 import { FormationType, getFormationName } from './lib/formations';
+import { initializeFloaters, updateFloaters } from './lib/floaters';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Label } from './components/ui/label';
@@ -219,6 +220,7 @@ function App() {
         // Update the background battle
         const bg = gameStateRef.current.backgroundBattle;
         updateGame(bg, deltaTime);
+        updateFloaters(bg, deltaTime);
         updateAI(bg, deltaTime, true); // Both players are AI
         updateCamera(bg, deltaTime);
         updateVisualEffects(bg, deltaTime);
@@ -247,6 +249,10 @@ function App() {
         if (secondsRemaining !== previousSeconds && secondsRemaining > 0) {
           soundManager.playCountdown();
         }
+        
+        // Update floaters during countdown
+        updateFloaters(gameStateRef.current, deltaTime);
+        updateVisualEffects(gameStateRef.current, deltaTime);
         
         if (elapsed >= 3000) {
           gameStateRef.current.mode = 'game';
@@ -278,6 +284,9 @@ function App() {
 
         if (!gameStateRef.current.matchStartAnimation || (gameStateRef.current.matchStartAnimation.phase === 'go')) {
           updateGame(gameStateRef.current, deltaTime);
+          
+          // Update floaters physics
+          updateFloaters(gameStateRef.current, deltaTime);
           
           // Update multiplayer synchronization for online games
           if (gameStateRef.current.vsMode === 'online' && multiplayerManagerRef.current && multiplayerSyncRef.current) {
@@ -1661,7 +1670,6 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
   const stars = generateStarfield(canvas.width, canvas.height);
   const nebulaClouds = generateNebulaClouds(canvas.width, canvas.height);
-  const floaters = generateFloaters(canvas.width, canvas.height);
 
   const playerBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
 
@@ -1730,7 +1738,7 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
     topographyLines,
     nebulaClouds,
     stars,
-    floaters,
+    floaters: initializeFloaters(),
     isPortrait: isPortraitOrientation(),
   };
 }
@@ -1789,7 +1797,6 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
   const stars = generateStarfield(canvas.width, canvas.height);
   const nebulaClouds = generateNebulaClouds(canvas.width, canvas.height);
-  const floaters = generateFloaters(canvas.width, canvas.height);
 
   const playerBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.playerBaseType || 'standard'];
   const enemyBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.enemyBaseType || 'standard'];
@@ -1861,7 +1868,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     topographyLines,
     nebulaClouds,
     stars,
-    floaters,
+    floaters: initializeFloaters(),
     isPortrait: isPortraitOrientation(),
   };
 }
@@ -1938,6 +1945,7 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
       phase: 'bases-sliding',
     },
     isPortrait: isPortraitOrientation(),
+    floaters: initializeFloaters(),
   };
 }
 
@@ -2025,6 +2033,7 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
       phase: 'bases-sliding',
     },
     isPortrait: isPortraitOrientation(),
+    floaters: initializeFloaters(),
   };
 }
 
@@ -2045,7 +2054,6 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
   const stars = generateStarfield(canvas.width, canvas.height);
   const nebulaClouds = generateNebulaClouds(canvas.width, canvas.height);
-  const floaters = generateFloaters(canvas.width, canvas.height);
 
   // For online games, use standard base type for now
   const playerBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
@@ -2129,7 +2137,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
     topographyLines,
     nebulaClouds,
     stars,
-    floaters,
+    floaters: initializeFloaters(),
     isPortrait: isPortraitOrientation(),
   };
 }
