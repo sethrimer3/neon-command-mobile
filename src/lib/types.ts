@@ -2,6 +2,10 @@ export const PIXELS_PER_METER = 20;
 export const BASE_SIZE_METERS = 3;
 export const UNIT_SIZE_METERS = 1;
 
+// Fixed arena dimensions in meters for consistent gameplay across all devices
+export const ARENA_WIDTH_METERS = 60;  // Fixed logical width in meters
+export const ARENA_HEIGHT_METERS = 90; // Fixed logical height in meters
+
 export const ABILITY_MAX_RANGE = 10;
 export const QUEUE_MAX_LENGTH = 3;
 
