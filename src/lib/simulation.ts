@@ -990,6 +990,88 @@ function executeChessModeCommands(state: GameState): void {
   });
 }
 
+// Constants for floater physics
+const FLOATER_FRICTION = 0.95; // Friction to slow down floaters over time
+const FLOATER_MAX_SPEED = 2.0; // Maximum speed of floaters in pixels per second
+const FLOATER_PUSH_RADIUS = 30; // Radius in pixels within which units push floaters
+const FLOATER_PUSH_FORCE = 50; // Force applied to push floaters
+
+// Update background floaters with physics-based movement
+function updateFloaters(state: GameState, deltaTime: number): void {
+  if (!state.floaters || state.floaters.length === 0) return;
+  
+  // Use window dimensions as fallback if canvas dimensions not stored
+  const canvasWidth = (typeof window !== 'undefined') ? window.innerWidth : 1920;
+  const canvasHeight = (typeof window !== 'undefined') ? window.innerHeight : 1080;
+  
+  state.floaters.forEach(floater => {
+    // Apply forces from units and projectiles
+    state.units.forEach(unit => {
+      const unitScreenPos = {
+        x: unit.position.x * 20, // Convert to pixels (PIXELS_PER_METER)
+        y: unit.position.y * 20,
+      };
+      
+      const dx = floater.position.x - unitScreenPos.x;
+      const dy = floater.position.y - unitScreenPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist < FLOATER_PUSH_RADIUS && dist > 0) {
+        // Calculate push force (stronger when closer)
+        const forceMagnitude = (FLOATER_PUSH_FORCE / floater.mass) * (1 - dist / FLOATER_PUSH_RADIUS);
+        const forceX = (dx / dist) * forceMagnitude;
+        const forceY = (dy / dist) * forceMagnitude;
+        
+        // Apply force to velocity
+        floater.velocity.x += forceX * deltaTime;
+        floater.velocity.y += forceY * deltaTime;
+      }
+    });
+    
+    // Apply forces from projectiles (smaller push)
+    state.projectiles.forEach(projectile => {
+      const projScreenPos = {
+        x: projectile.position.x * 20,
+        y: projectile.position.y * 20,
+      };
+      
+      const dx = floater.position.x - projScreenPos.x;
+      const dy = floater.position.y - projScreenPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist < FLOATER_PUSH_RADIUS / 2 && dist > 0) {
+        const forceMagnitude = (FLOATER_PUSH_FORCE * 0.3 / floater.mass) * (1 - dist / (FLOATER_PUSH_RADIUS / 2));
+        const forceX = (dx / dist) * forceMagnitude;
+        const forceY = (dy / dist) * forceMagnitude;
+        
+        floater.velocity.x += forceX * deltaTime;
+        floater.velocity.y += forceY * deltaTime;
+      }
+    });
+    
+    // Apply friction
+    floater.velocity.x *= FLOATER_FRICTION;
+    floater.velocity.y *= FLOATER_FRICTION;
+    
+    // Limit max speed
+    const speed = Math.sqrt(floater.velocity.x ** 2 + floater.velocity.y ** 2);
+    if (speed > FLOATER_MAX_SPEED) {
+      floater.velocity.x = (floater.velocity.x / speed) * FLOATER_MAX_SPEED;
+      floater.velocity.y = (floater.velocity.y / speed) * FLOATER_MAX_SPEED;
+    }
+    
+    // Update position
+    floater.position.x += floater.velocity.x * deltaTime * 60; // Scale by 60 for frame independence
+    floater.position.y += floater.velocity.y * deltaTime * 60;
+    
+    // Wrap around screen edges
+    if (floater.position.x < 0) floater.position.x = canvasWidth;
+    if (floater.position.x > canvasWidth) floater.position.x = 0;
+    if (floater.position.y < 0) floater.position.y = canvasHeight;
+    if (floater.position.y > canvasHeight) floater.position.y = 0;
+  });
+}
+
 export function updateGame(state: GameState, deltaTime: number): void {
   if (state.mode !== 'game') return;
 
@@ -999,6 +1081,7 @@ export function updateGame(state: GameState, deltaTime: number): void {
   updateChessMode(state, deltaTime);
 
   updateIncome(state, deltaTime);
+  updateFloaters(state, deltaTime); // Update background floaters
   updateUnits(state, deltaTime);
   updateBases(state, deltaTime);
   updateProjectiles(state, deltaTime);

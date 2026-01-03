@@ -305,30 +305,24 @@ function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement
     });
   }
 
-  ctx.strokeStyle = COLORS.pattern;
-  ctx.lineWidth = 1;
-
-  const gridSize = 40;
-  for (let x = 0; x < canvas.width; x += gridSize) {
-    for (let y = 0; y < canvas.height; y += gridSize) {
+  // Draw background floaters with water-like physics
+  if (state?.floaters && state.floaters.length > 0) {
+    state.floaters.forEach(floater => {
+      const alpha = floater.opacity;
+      
+      ctx.fillStyle = floater.color + alpha + ')';
       ctx.beginPath();
-      ctx.arc(x, y, 1, 0, Math.PI * 2);
+      ctx.arc(floater.position.x, floater.position.y, floater.size, 0, Math.PI * 2);
       ctx.fill();
-    }
-  }
-
-  const spacing = 80;
-  for (let x = 0; x < canvas.width; x += spacing) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, canvas.height);
-    ctx.stroke();
-  }
-  for (let y = 0; y < canvas.height; y += spacing) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(canvas.width, y);
-    ctx.stroke();
+      
+      // Add subtle glow if glow effects are enabled
+      if (state?.settings?.enableGlowEffects) {
+        ctx.shadowColor = floater.color + (alpha * 0.5) + ')';
+        ctx.shadowBlur = floater.size * 2;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    });
   }
 }
 
