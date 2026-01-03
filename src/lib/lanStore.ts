@@ -166,7 +166,7 @@ export class LANKVStore implements RealtimeKVStore {
     if (!this.isHostPlayer && this.connection?.open) {
       return new Promise((resolve) => {
         const requestId = Math.random().toString(36).substring(7);
-        let timeoutId: NodeJS.Timeout;
+        let timeoutId: ReturnType<typeof setTimeout>;
         
         const handler = (data: any) => {
           if (data.type === 'get-response' && data.requestId === requestId) {
@@ -231,7 +231,7 @@ export class LANKVStore implements RealtimeKVStore {
     if (!this.isHostPlayer && this.connection?.open) {
       return new Promise((resolve) => {
         const requestId = Math.random().toString(36).substring(7);
-        let timeoutId: NodeJS.Timeout;
+        let timeoutId: ReturnType<typeof setTimeout>;
         
         const handler = (data: any) => {
           if (data.type === 'list-response' && data.requestId === requestId) {
