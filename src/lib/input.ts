@@ -523,6 +523,7 @@ function handleAbilityDrag(state: GameState, dragVector: { x: number; y: number 
 
     // Use the command origin helper for consistency (last movement node)
     const startPosition = getCommandOrigin(unit);
+    const abilityPos = add(startPosition, clampedVector);
 
     const pathToAbility: CommandNode = { type: 'move', position: abilityPos };
     const abilityNode: CommandNode = { type: 'ability', position: abilityPos, direction: clampedVector };
@@ -616,6 +617,7 @@ function handleVectorBasedAbilityDrag(state: GameState, dragVector: { x: number;
 
     // Use the command origin (last movement node or current position)
     const startPosition = getCommandOrigin(unit);
+    const abilityPos = add(startPosition, clampedVector);
 
     const pathToAbility: CommandNode = { type: 'move', position: abilityPos };
     const abilityNode: CommandNode = { type: 'ability', position: abilityPos, direction: clampedVector };
