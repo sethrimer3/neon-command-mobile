@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { ArrowLeft } from '@phosphor-icons/react';
@@ -16,40 +15,8 @@ interface UnitSelectionScreenProps {
 }
 
 export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerColor, playerFaction, onFactionChange, playerBaseType, onBaseTypeChange }: UnitSelectionScreenProps) {
-  const [selectedUnit, setSelectedUnit] = useState<UnitType | null>(null);
   // Build faction logo URLs with the configured base path for GitHub Pages compatibility.
   const assetBaseUrl = import.meta.env.BASE_URL;
-
-  const handleUnitClick = (unitType: UnitType) => {
-    setSelectedUnit(unitType);
-  };
-
-  const handleSlotClick = (slot: 'left' | 'up' | 'down' | 'right') => {
-    if (selectedUnit) {
-      // Find if this unit is currently in another slot
-      const currentSlotEntry = Object.entries(unitSlots).find(([key, value]) => value === selectedUnit);
-      
-      if (currentSlotEntry && currentSlotEntry[0] !== slot) {
-        // Unit is being moved from another slot - swap the units
-        const fromSlot = currentSlotEntry[0] as 'left' | 'up' | 'down' | 'right';
-        const unitInTargetSlot = unitSlots[slot];
-        
-        // Swap: put selected unit in target slot, and put target slot's unit in the from slot
-        onSlotChange(slot, selectedUnit);
-        onSlotChange(fromSlot, unitInTargetSlot);
-      } else {
-        // Unit is not currently in any slot, or clicking the same slot - just assign it
-        onSlotChange(slot, selectedUnit);
-      }
-      
-      setSelectedUnit(null);
-    }
-  };
-
-  // Check if a unit is assigned to any slot
-  const isUnitAssigned = (unitType: UnitType): boolean => {
-    return Object.values(unitSlots).includes(unitType);
-  };
 
   const renderUnitIcon = (unitType: UnitType, size: number = 20) => {
     const color = playerColor || COLORS.playerDefault;
@@ -296,116 +263,26 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
             </div>
           </div>
 
-          {/* Lock the base layout to a predictable square so slot buttons anchor correctly. */}
-          <div className="relative w-full max-w-[400px] mx-auto" style={{ aspectRatio: '1 / 1' }}>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div
-                className="w-32 h-32 border-4 relative transition-all p-2"
-                style={{
-                  borderColor: playerColor || COLORS.playerDefault,
-                  backgroundColor: `${playerColor || COLORS.playerDefault}20`,
-                  borderRadius: FACTION_DEFINITIONS[playerFaction].baseShape === 'circle' ? '50%' : '0',
-                  clipPath: FACTION_DEFINITIONS[playerFaction].baseShape === 'star' 
-                    ? 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)' 
-                    : undefined,
-                }}
-              >
-                <img 
-                  src={`${assetBaseUrl}ASSETS/sprites/factions/${playerFaction}/${playerFaction}Logo.png`}
-                  alt={`${FACTION_DEFINITIONS[playerFaction].name} base`}
-                  className="w-full h-full object-contain"
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={() => handleSlotClick('up')}
-              className={`absolute left-1/2 top-[10%] -translate-x-1/2 w-20 h-20 border-2 rounded-lg flex flex-col items-center justify-center gap-1 transition-all hover:scale-105`}
-              style={{
-                borderColor: playerColor || COLORS.playerDefault,
-                backgroundColor: `${playerColor || COLORS.playerDefault}20`,
-              }}
-            >
-              {renderUnitIcon(unitSlots.up, 32)}
-              <span className="text-xs capitalize">{unitSlots.up}</span>
-              <span className="text-xs text-muted-foreground">{UNIT_DEFINITIONS[unitSlots.up].cost}◈</span>
-            </button>
-
-            <button
-              onClick={() => handleSlotClick('left')}
-              className={`absolute left-[10%] top-1/2 -translate-y-1/2 w-20 h-20 border-2 rounded-lg flex flex-col items-center justify-center gap-1 transition-all hover:scale-105`}
-              style={{
-                borderColor: playerColor || COLORS.playerDefault,
-                backgroundColor: `${playerColor || COLORS.playerDefault}20`,
-              }}
-            >
-              {renderUnitIcon(unitSlots.left, 32)}
-              <span className="text-xs capitalize">{unitSlots.left}</span>
-              <span className="text-xs text-muted-foreground">{UNIT_DEFINITIONS[unitSlots.left].cost}◈</span>
-            </button>
-
-            <button
-              onClick={() => handleSlotClick('down')}
-              className={`absolute left-1/2 bottom-[10%] -translate-x-1/2 w-20 h-20 border-2 rounded-lg flex flex-col items-center justify-center gap-1 transition-all hover:scale-105`}
-              style={{
-                borderColor: playerColor || COLORS.playerDefault,
-                backgroundColor: `${playerColor || COLORS.playerDefault}20`,
-              }}
-            >
-              {renderUnitIcon(unitSlots.down, 32)}
-              <span className="text-xs capitalize">{unitSlots.down}</span>
-              <span className="text-xs text-muted-foreground">{UNIT_DEFINITIONS[unitSlots.down].cost}◈</span>
-            </button>
-
-            <button
-              onClick={() => handleSlotClick('right')}
-              className={`absolute right-[10%] top-1/2 -translate-y-1/2 w-20 h-20 border-2 rounded-lg flex flex-col items-center justify-center gap-1 transition-all hover:scale-105`}
-              style={{
-                borderColor: playerColor || COLORS.playerDefault,
-                backgroundColor: `${playerColor || COLORS.playerDefault}20`,
-              }}
-            >
-              {renderUnitIcon(unitSlots.right, 32)}
-              <span className="text-xs capitalize">{unitSlots.right}</span>
-              <span className="text-xs text-muted-foreground">{UNIT_DEFINITIONS[unitSlots.right].cost}◈</span>
-            </button>
-          </div>
-
+          {/* Available Units */}
           <div className="space-y-2">
-            <p className="text-sm text-center orbitron">
-              {selectedUnit ? `Selected: ${selectedUnit} - Click a slot to assign` : 'Click a unit to select it'}
-            </p>
+            <p className="text-sm font-medium">Available Units:</p>
             <div className="grid grid-cols-4 gap-2 justify-center max-w-md mx-auto">
               {FACTION_DEFINITIONS[playerFaction].availableUnits.map((unitType) => {
-                const isAssigned = isUnitAssigned(unitType);
-                const isSelected = selectedUnit === unitType;
                 return (
-                  <button
+                  <div
                     key={unitType}
-                    onClick={() => handleUnitClick(unitType)}
-                    className={`w-20 h-20 border-2 rounded-lg flex flex-col items-center justify-center gap-1 transition-all relative ${
-                      isSelected ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
-                    }`}
+                    className="w-20 h-20 border-2 rounded-lg flex flex-col items-center justify-center gap-1"
                     style={{
                       borderColor: playerColor || COLORS.playerDefault,
-                      backgroundColor: isSelected 
-                        ? `${playerColor || COLORS.playerDefault}40` 
-                        : `${playerColor || COLORS.playerDefault}20`,
+                      backgroundColor: `${playerColor || COLORS.playerDefault}20`,
                     }}
                   >
-                    {isAssigned && (
-                      <div className="absolute top-0.5 right-0.5 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                      </div>
-                    )}
                     <div className="flex items-center justify-center h-8">
                       {renderUnitIcon(unitType, 24)}
                     </div>
                     <span className="text-xs capitalize leading-tight">{unitType}</span>
                     <span className="text-xs text-muted-foreground">{UNIT_DEFINITIONS[unitType].cost}◈</span>
-                  </button>
+                  </div>
                 );
               })}
             </div>
