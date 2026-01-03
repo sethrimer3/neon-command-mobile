@@ -183,4 +183,9 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Style for SVG unit icons to use currentColor */
+  .unit-icon {
+    filter: brightness(0) saturate(100%);
+  }
 }

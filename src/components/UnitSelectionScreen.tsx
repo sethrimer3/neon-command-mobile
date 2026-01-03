@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { ArrowLeft } from '@phosphor-icons/react';
 import { UnitType, UNIT_DEFINITIONS, COLORS, FactionType, FACTION_DEFINITIONS, BaseType, BASE_TYPE_DEFINITIONS } from '../lib/types';
+import { useState } from 'react';
 
 interface UnitSelectionScreenProps {
   unitSlots: Record<'left' | 'up' | 'down' | 'right', UnitType>;
@@ -17,160 +18,62 @@ interface UnitSelectionScreenProps {
 export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerColor, playerFaction, onFactionChange, playerBaseType, onBaseTypeChange }: UnitSelectionScreenProps) {
   // Build faction logo URLs with the configured base path for GitHub Pages compatibility.
   const assetBaseUrl = import.meta.env.BASE_URL;
+  const [selectedSlot, setSelectedSlot] = useState<'left' | 'up' | 'down' | 'right' | null>(null);
 
-  const renderUnitIcon = (unitType: UnitType, size: number = 20) => {
+  const renderUnitIcon = (unitType: UnitType, size: number = 20, color?: string) => {
+    const iconColor = color || playerColor || COLORS.playerDefault;
+  const renderUnitIcon = (unitType: UnitType, size: number = 20, color?: string) => {
+    const iconColor = color || playerColor || COLORS.playerDefault;
+    
+    return (
+      <img
+        src={`${assetBaseUrl}ASSETS/sprites/units/${unitType}.svg`}
+        alt={unitType}
+        width={size}
+        height={size}
+        style={{ color: iconColor }}
+        className="unit-icon"
+      />
+    );
+  };
+
+  const renderBaseIcon = (faction: FactionType, baseType: BaseType, size: number = 60) => {
+    const baseShape = FACTION_DEFINITIONS[faction].baseShape;
     const color = playerColor || COLORS.playerDefault;
     
-    if (unitType === 'marine') {
+    if (baseShape === 'square') {
       return (
         <svg width={size} height={size} viewBox="0 0 20 20">
-          <circle cx="10" cy="10" r="8" fill={color} opacity="0.8" />
+          <rect x="2" y="2" width="16" height="16" fill={color} opacity="0.9" stroke={color} strokeWidth="2" />
         </svg>
       );
-    } else if (unitType === 'warrior') {
-      return (
-        <svg width={size} height={size} viewBox="0 0 20 20">
-          <circle cx="10" cy="10" r="8" fill={color} opacity="0.8" />
-          <line x1="4" y1="4" x2="16" y2="16" stroke={color} strokeWidth="2" />
-          <line x1="16" y1="4" x2="4" y2="16" stroke={color} strokeWidth="2" />
-        </svg>
-      );
-    } else if (unitType === 'snaker') {
-      return (
-        <svg width={size * 2} height={size} viewBox="0 0 40 20">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <polygon
-              key={i}
-              points={`${i * 8},10 ${i * 8 + 4},5 ${i * 8 + 4},15`}
-              fill={color}
-              opacity="0.8"
-            />
-          ))}
-        </svg>
-      );
-    } else if (unitType === 'tank') {
-      return (
-        <svg width={size} height={size} viewBox="0 0 20 20">
-          <rect x="2" y="2" width="16" height="16" fill={color} opacity="0.8" stroke={color} strokeWidth="2" />
-        </svg>
-      );
-    } else if (unitType === 'scout') {
-      return (
-        <svg width={size} height={size} viewBox="0 0 20 20">
-          <polygon points="10,2 17,17 10,14 3,17" fill={color} opacity="0.8" />
-        </svg>
-      );
-    } else if (unitType === 'artillery') {
-      return (
-        <svg width={size} height={size} viewBox="0 0 20 20">
-          <rect x="3" y="8" width="14" height="6" fill={color} opacity="0.8" />
-          <line x1="10" y1="11" x2="17" y2="3" stroke={color} strokeWidth="2" />
-        </svg>
-      );
-    } else if (unitType === 'medic') {
-      return (
-        <svg width={size} height={size} viewBox="0 0 20 20">
-          <circle cx="10" cy="10" r="8" fill={color} opacity="0.8" />
-          <rect x="7" y="4" width="6" height="12" fill="white" />
-          <rect x="4" y="7" width="12" height="6" fill="white" />
-        </svg>
-      );
-    } else if (unitType === 'interceptor') {
-      return (
-        <svg width={size} height={size} viewBox="0 0 20 20">
-          <polygon points="10,2 15,10 10,16 5,10" fill={color} opacity="0.8" />
-        </svg>
-      );
-    } else if (unitType === 'berserker') {
-      return (
-        <svg width={size} height={size} viewBox="0 0 20 20">
-          <circle cx="10" cy="10" r="8" fill={color} opacity="0.8" />
-          <polygon points="10,4 13,10 10,8 7,10" fill="white" opacity="0.9" />
-          <rect x="6" y="11" width="8" height="4" fill="white" opacity="0.9" />
-        </svg>
-      );
-    } else if (unitType === 'assassin') {
-      return (
-        <svg width={size} height={size} viewBox="0 0 20 20">
-          <circle cx="10" cy="10" r="8" fill={color} opacity="0.8" />
-          <polygon points="10,3 14,10 10,9 6,10" fill="white" opacity="0.9" />
-          <line x1="7" y1="13" x2="13" y2="13" stroke="white" strokeWidth="2" opacity="0.9" />
-        </svg>
-      );
-    } else if (unitType === 'juggernaut') {
-      return (
-        <svg width={size} height={size} viewBox="0 0 20 20">
-          <circle cx="10" cy="10" r="9" fill={color} opacity="0.9" stroke={color} strokeWidth="2" />
-          <rect x="6" y="6" width="8" height="8" fill="white" opacity="0.9" />
-          <circle cx="10" cy="10" r="2" fill={color} />
-        </svg>
-      );
-    } else if (unitType === 'striker') {
-      return (
-        <svg width={size} height={size} viewBox="0 0 20 20">
-          <circle cx="10" cy="10" r="8" fill={color} opacity="0.8" />
-          <polygon points="10,4 11,9 9,9" fill="white" opacity="0.9" />
-          <polygon points="10,16 9,11 11,11" fill="white" opacity="0.9" />
-          <polygon points="4,10 9,11 9,9" fill="white" opacity="0.9" />
-          <polygon points="16,10 11,9 11,11" fill="white" opacity="0.9" />
-        </svg>
-      );
-    } else if (unitType === 'flare') {
-      return (
-        <svg width={size} height={size} viewBox="0 0 20 20">
-          <circle cx="10" cy="10" r="7" fill={color} opacity="0.8" />
-          <polygon points="10,3 11,9 10,10 9,9" fill="white" opacity="0.9" />
-          <polygon points="17,10 11,11 10,10 11,9" fill="white" opacity="0.9" />
-          <polygon points="10,17 9,11 10,10 11,11" fill="white" opacity="0.9" />
-          <polygon points="3,10 9,9 10,10 9,11" fill="white" opacity="0.9" />
-        </svg>
-      );
-    } else if (unitType === 'nova') {
-      return (
-        <svg width={size} height={size} viewBox="0 0 20 20">
-          <circle cx="10" cy="10" r="8" fill={color} opacity="0.9" />
-          <circle cx="10" cy="10" r="4" fill="white" opacity="0.9" />
-          <circle cx="10" cy="10" r="6" fill="none" stroke="white" strokeWidth="1" opacity="0.5" />
-        </svg>
-      );
-    } else if (unitType === 'eclipse') {
-      return (
-        <svg width={size} height={size} viewBox="0 0 20 20">
-          <circle cx="10" cy="10" r="7" fill={color} opacity="0.8" />
-          <circle cx="12" cy="8" r="6" fill="black" opacity="0.6" />
-          <circle cx="8" cy="12" r="3" fill="white" opacity="0.4" />
-        </svg>
-      );
-    } else if (unitType === 'corona') {
+    } else if (baseShape === 'circle') {
       return (
         <svg width={size} height={size} viewBox="0 0 20 20">
           <circle cx="10" cy="10" r="8" fill={color} opacity="0.9" stroke={color} strokeWidth="2" />
-          <circle cx="10" cy="10" r="5" fill="white" opacity="0.8" />
-          {[0, 45, 90, 135, 180, 225, 270, 315].map((angle, i) => {
-            const rad = (angle * Math.PI) / 180;
-            const x1 = 10 + Math.cos(rad) * 6;
-            const y1 = 10 + Math.sin(rad) * 6;
-            const x2 = 10 + Math.cos(rad) * 9;
-            const y2 = 10 + Math.sin(rad) * 9;
-            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="1.5" opacity="0.7" />;
-          })}
         </svg>
       );
-    } else if (unitType === 'supernova') {
+    } else if (baseShape === 'triangle') {
       return (
         <svg width={size} height={size} viewBox="0 0 20 20">
-          <circle cx="10" cy="10" r="9" fill={color} opacity="0.9" />
-          <polygon points="10,2 11,9 13,7 12,10 18,10 11,11 13,13 10,12 10,18 9,11 7,13 8,10 2,10 9,9 7,7 10,8" fill="white" opacity="0.9" />
+          <polygon points="10,2 18,18 2,18" fill={color} opacity="0.9" stroke={color} strokeWidth="2" />
+        </svg>
+      );
+    } else if (baseShape === 'star') {
+      return (
+        <svg width={size} height={size} viewBox="0 0 20 20">
+          <polygon points="10,2 12,8 18,9 13,13 15,19 10,16 5,19 7,13 2,9 8,8" fill={color} opacity="0.9" stroke={color} strokeWidth="1" />
         </svg>
       );
     }
     
     return null;
   };
+  };
 
   return (
     <div className="absolute inset-0 flex items-center justify-center p-4 overflow-auto">
-      <Card className="w-[500px] max-w-full">
+      <Card className="w-[600px] max-w-full">
         <CardHeader>
           <CardTitle className="orbitron text-2xl">Unit Selection</CardTitle>
           <p className="text-sm text-muted-foreground">Select your faction and configure unit slots</p>
@@ -263,30 +166,124 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
             </div>
           </div>
 
-          {/* Available Units */}
+          {/* Unit Slot Layout - Base in center with 4 slots around it */}
           <div className="space-y-2">
-            <p className="text-sm font-medium">Available Units:</p>
-            <div className="grid grid-cols-4 gap-2 justify-center max-w-md mx-auto">
-              {FACTION_DEFINITIONS[playerFaction].availableUnits.map((unitType) => {
-                return (
-                  <div
-                    key={unitType}
-                    className="w-20 h-20 border-2 rounded-lg flex flex-col items-center justify-center gap-1"
-                    style={{
-                      borderColor: playerColor || COLORS.playerDefault,
-                      backgroundColor: `${playerColor || COLORS.playerDefault}20`,
-                    }}
-                  >
-                    <div className="flex items-center justify-center h-8">
-                      {renderUnitIcon(unitType, 24)}
-                    </div>
-                    <span className="text-xs capitalize leading-tight">{unitType}</span>
-                    <span className="text-xs text-muted-foreground">{UNIT_DEFINITIONS[unitType].cost}◈</span>
-                  </div>
-                );
-              })}
+            <p className="text-sm font-medium">Unit Slots (Click to select, then choose unit):</p>
+            <div className="relative w-full max-w-[400px] mx-auto" style={{ height: '300px' }}>
+              {/* Center - Base */}
+              <div 
+                className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center gap-2 p-4 border-2 rounded-lg"
+                style={{
+                  borderColor: playerColor || COLORS.playerDefault,
+                  backgroundColor: `${playerColor || COLORS.playerDefault}20`,
+                  width: '100px',
+                  height: '100px',
+                }}
+              >
+                {renderBaseIcon(playerFaction, playerBaseType, 60)}
+                <span className="text-xs font-bold capitalize">{playerBaseType}</span>
+              </div>
+
+              {/* Top Slot */}
+              <button
+                onClick={() => setSelectedSlot(selectedSlot === 'up' ? null : 'up')}
+                className={`absolute left-1/2 top-0 transform -translate-x-1/2 flex flex-col items-center justify-center gap-1 p-3 border-2 rounded-lg transition-all ${
+                  selectedSlot === 'up' ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
+                }`}
+                style={{
+                  borderColor: playerColor || COLORS.playerDefault,
+                  backgroundColor: selectedSlot === 'up' ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
+                  width: '80px',
+                  height: '80px',
+                }}
+              >
+                {renderUnitIcon(unitSlots.up, 32)}
+                <span className="text-xs capitalize leading-tight">{unitSlots.up}</span>
+              </button>
+
+              {/* Bottom Slot */}
+              <button
+                onClick={() => setSelectedSlot(selectedSlot === 'down' ? null : 'down')}
+                className={`absolute left-1/2 bottom-0 transform -translate-x-1/2 flex flex-col items-center justify-center gap-1 p-3 border-2 rounded-lg transition-all ${
+                  selectedSlot === 'down' ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
+                }`}
+                style={{
+                  borderColor: playerColor || COLORS.playerDefault,
+                  backgroundColor: selectedSlot === 'down' ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
+                  width: '80px',
+                  height: '80px',
+                }}
+              >
+                {renderUnitIcon(unitSlots.down, 32)}
+                <span className="text-xs capitalize leading-tight">{unitSlots.down}</span>
+              </button>
+
+              {/* Left Slot */}
+              <button
+                onClick={() => setSelectedSlot(selectedSlot === 'left' ? null : 'left')}
+                className={`absolute left-0 top-1/2 transform -translate-y-1/2 flex flex-col items-center justify-center gap-1 p-3 border-2 rounded-lg transition-all ${
+                  selectedSlot === 'left' ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
+                }`}
+                style={{
+                  borderColor: playerColor || COLORS.playerDefault,
+                  backgroundColor: selectedSlot === 'left' ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
+                  width: '80px',
+                  height: '80px',
+                }}
+              >
+                {renderUnitIcon(unitSlots.left, 32)}
+                <span className="text-xs capitalize leading-tight">{unitSlots.left}</span>
+              </button>
+
+              {/* Right Slot */}
+              <button
+                onClick={() => setSelectedSlot(selectedSlot === 'right' ? null : 'right')}
+                className={`absolute right-0 top-1/2 transform -translate-y-1/2 flex flex-col items-center justify-center gap-1 p-3 border-2 rounded-lg transition-all ${
+                  selectedSlot === 'right' ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
+                }`}
+                style={{
+                  borderColor: playerColor || COLORS.playerDefault,
+                  backgroundColor: selectedSlot === 'right' ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
+                  width: '80px',
+                  height: '80px',
+                }}
+              >
+                {renderUnitIcon(unitSlots.right, 32)}
+                <span className="text-xs capitalize leading-tight">{unitSlots.right}</span>
+              </button>
             </div>
           </div>
+
+          {/* Available Units */}
+          {selectedSlot && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Available Units (Click to assign to {selectedSlot} slot):</p>
+              <div className="grid grid-cols-4 gap-2 justify-center max-w-md mx-auto">
+                {FACTION_DEFINITIONS[playerFaction].availableUnits.map((unitType) => {
+                  return (
+                    <button
+                      key={unitType}
+                      onClick={() => {
+                        onSlotChange(selectedSlot, unitType);
+                        setSelectedSlot(null);
+                      }}
+                      className="w-20 h-20 border-2 rounded-lg flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all"
+                      style={{
+                        borderColor: playerColor || COLORS.playerDefault,
+                        backgroundColor: `${playerColor || COLORS.playerDefault}20`,
+                      }}
+                    >
+                      <div className="flex items-center justify-center h-8">
+                        {renderUnitIcon(unitType, 24)}
+                      </div>
+                      <span className="text-xs capitalize leading-tight">{unitType}</span>
+                      <span className="text-xs text-muted-foreground">{UNIT_DEFINITIONS[unitType].cost}◈</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <Button
             onClick={onBack}

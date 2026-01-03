@@ -1,0 +1,7 @@
+<svg width="40" height="20" viewBox="0 0 40 20" xmlns="http://www.w3.org/2000/svg">
+  <polygon points="0,10 4,5 4,15" fill="currentColor" opacity="0.8" />
+  <polygon points="8,10 12,5 12,15" fill="currentColor" opacity="0.8" />
+  <polygon points="16,10 20,5 20,15" fill="currentColor" opacity="0.8" />
+  <polygon points="24,10 28,5 28,15" fill="currentColor" opacity="0.8" />
+  <polygon points="32,10 36,5 36,15" fill="currentColor" opacity="0.8" />
+</svg>
