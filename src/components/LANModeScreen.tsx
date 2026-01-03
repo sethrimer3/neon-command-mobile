@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { ArrowLeft, Copy, Check } from '@phosphor-icons/react';
+import { ArrowLeft, Copy, Check, MagnifyingGlass } from '@phosphor-icons/react';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
+import { LANKVStore, LANGameInfo } from '../lib/lanStore';
 
 interface LANModeScreenProps {
   onBack: () => void;
@@ -17,12 +18,14 @@ export function LANModeScreen({
   onHost,
   onJoin,
 }: LANModeScreenProps) {
-  const [mode, setMode] = useState<'select' | 'host' | 'join'>('select');
+  const [mode, setMode] = useState<'select' | 'host' | 'join' | 'browse'>('select');
   const [peerId, setPeerId] = useState('');
   const [hostPeerId, setHostPeerId] = useState('');
   const [joinPeerId, setJoinPeerId] = useState('');
   const [copied, setCopied] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [availableGames, setAvailableGames] = useState<LANGameInfo[]>([]);
+  const [isScanning, setIsScanning] = useState(false);
 
   const handleHost = async () => {
     setIsLoading(true);
@@ -40,15 +43,17 @@ export function LANModeScreen({
     }
   };
 
-  const handleJoin = async () => {
-    if (!joinPeerId.trim()) {
+  const handleJoin = async (peerId?: string) => {
+    const targetPeerId = peerId || joinPeerId.trim();
+    
+    if (!targetPeerId) {
       toast.error('Please enter a Peer ID');
       return;
     }
 
     setIsLoading(true);
     try {
-      const success = await onJoin(joinPeerId.trim());
+      const success = await onJoin(targetPeerId);
       if (success) {
         toast.success('Connected to host!');
         setMode('join');
@@ -61,6 +66,30 @@ export function LANModeScreen({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const scanForGames = async () => {
+    setIsScanning(true);
+    toast.info('Scanning for available games...');
+    try {
+      const games = await LANKVStore.listAvailableGames();
+      setAvailableGames(games);
+      if (games.length === 0) {
+        toast.info('No games found. Try again or host a new game.');
+      } else {
+        toast.success(`Found ${games.length} available game${games.length > 1 ? 's' : ''}!`);
+      }
+    } catch (error) {
+      console.error('Failed to scan for games:', error);
+      toast.error('Failed to scan for games. Please try again.');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const handleBrowseGames = () => {
+    setMode('browse');
+    scanForGames();
   };
 
   const copyToClipboard = async () => {
@@ -100,8 +129,25 @@ export function LANModeScreen({
               </div>
             </Button>
 
+            <Button
+              onClick={handleBrowseGames}
+              className="w-full h-20 text-lg orbitron uppercase tracking-wider"
+              variant="secondary"
+              disabled={isLoading}
+            >
+              <div className="text-left flex items-center gap-2">
+                <MagnifyingGlass size={24} />
+                <div>
+                  <div>Browse Games</div>
+                  <div className="text-xs opacity-70 normal-case font-normal tracking-normal">
+                    Discover available games on the network
+                  </div>
+                </div>
+              </div>
+            </Button>
+
             <div className="space-y-2">
-              <Label htmlFor="peerIdInput">Join Game</Label>
+              <Label htmlFor="peerIdInput">Or join with Peer ID</Label>
               <Input
                 id="peerIdInput"
                 placeholder="Enter host's Peer ID"
@@ -111,7 +157,7 @@ export function LANModeScreen({
                 disabled={isLoading}
               />
               <Button
-                onClick={handleJoin}
+                onClick={() => handleJoin()}
                 className="w-full text-lg orbitron uppercase tracking-wider"
                 variant="default"
                 disabled={isLoading || !joinPeerId.trim()}
@@ -216,6 +262,81 @@ export function LANModeScreen({
               <ArrowLeft className="mr-2" size={20} />
               Disconnect
             </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (mode === 'browse') {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="orbitron text-2xl">Available Games</CardTitle>
+            <CardDescription>
+              {isScanning ? 'Scanning for games...' : `Found ${availableGames.length} game${availableGames.length !== 1 ? 's' : ''}`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {isScanning ? (
+              <div className="p-8 text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+                <p className="mt-4 text-sm text-muted-foreground">Scanning network...</p>
+              </div>
+            ) : (
+              <>
+                {availableGames.length > 0 ? (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {availableGames.map((game) => (
+                      <div
+                        key={game.peerId}
+                        className="p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
+                        onClick={() => handleJoin(game.peerId)}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="font-semibold orbitron">{game.hostName}</h3>
+                            <p className="text-sm text-muted-foreground">Map: {game.mapId}</p>
+                          </div>
+                          <Button size="sm" variant="ghost">
+                            Join
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center border rounded-lg bg-muted">
+                    <p className="text-sm text-muted-foreground">
+                      No games found on the network.
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Make sure a host has started a game, or try scanning again.
+                    </p>
+                  </div>
+                )}
+
+                <Button
+                  onClick={scanForGames}
+                  className="w-full orbitron"
+                  variant="secondary"
+                  disabled={isScanning}
+                >
+                  <MagnifyingGlass className="mr-2" size={20} />
+                  Scan Again
+                </Button>
+
+                <Button
+                  onClick={() => setMode('select')}
+                  className="w-full orbitron"
+                  variant="outline"
+                >
+                  <ArrowLeft className="mr-2" size={20} />
+                  Back
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -789,18 +789,21 @@ function App() {
     const lanStore = new LANKVStore();
     lanStoreRef.current = lanStore;
     
-    // Initialize as host
-    const peerId = await lanStore.initAsHost();
+    // Create a lobby first to get player name and map
+    const playerName = `Host_${userId.slice(-4)}`;
+    const mapId = selectedMap || 'open';
+    
+    // Initialize as host with game info
+    const peerId = await lanStore.initAsHost(playerName, mapId);
     
     // Create multiplayer manager with LAN store
     multiplayerManagerRef.current = new MultiplayerManager(userId, lanStore);
     
     // Create a lobby
-    const playerName = `Host_${userId.slice(-4)}`;
     const gameId = await multiplayerManagerRef.current.createGame(
       playerName,
       playerColor || COLORS.playerDefault,
-      selectedMap || 'open',
+      mapId,
       enabledUnits || []
     );
     
