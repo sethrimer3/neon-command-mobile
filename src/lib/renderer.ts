@@ -91,6 +91,9 @@ const MINIMAP_OBSTACLE_MIN_SIZE = 2;
 // Culling constants
 const OFFSCREEN_CULLING_MARGIN = 50; // pixels margin for culling off-screen objects
 
+// Background floater constants
+const FLOATER_BASE_RADIUS_METERS = 0.3; // Base size in meters for floater rendering
+
 // Enhanced visual effect constants
 const SELECTION_RING_EXPANSION_SPEED = 1.5; // Speed of expanding selection ring
 const SELECTION_RING_MAX_SIZE = 1.8; // Maximum size multiplier for selection ring
@@ -351,8 +354,7 @@ function drawBackgroundFloaters(ctx: CanvasRenderingContext2D, state: GameState,
     
     // Radius scaled by floater.size and viewport (3-8 pixels typical)
     // Use metersToPixels to properly scale with viewport, with safety checks
-    const baseRadiusMeters = 0.3; // 0.3 meters base size
-    const scaledRadius = floater.size * metersToPixels(baseRadiusMeters);
+    const scaledRadius = floater.size * metersToPixels(FLOATER_BASE_RADIUS_METERS);
     const radius = Math.max(3, Math.abs(scaledRadius)); // Ensure minimum 3px and positive
     
     // Stroke width proportional to radius (~20% of radius)

@@ -53,6 +53,7 @@ export function initializeFloaters(): Floater[] {
       color: FLOATER_COLORS[Math.floor(Math.random() * FLOATER_COLORS.length)],
       opacity: 0, // Start invisible, will fade in
       mass: FLOATER_MIN_MASS + Math.random() * (FLOATER_MAX_MASS - FLOATER_MIN_MASS),
+      targetOpacity: FLOATER_TARGET_OPACITY_MIN + Math.random() * (FLOATER_TARGET_OPACITY_MAX - FLOATER_TARGET_OPACITY_MIN),
     });
   }
   
@@ -105,12 +106,9 @@ export function updateFloaters(state: GameState, deltaTime: number): void {
       floater.velocity.y *= scale;
     }
     
-    // Gradually fade in opacity
-    const targetOpacity = FLOATER_TARGET_OPACITY_MIN + 
-      Math.random() * (FLOATER_TARGET_OPACITY_MAX - FLOATER_TARGET_OPACITY_MIN);
-    
-    if (floater.opacity < targetOpacity) {
-      floater.opacity = Math.min(targetOpacity, floater.opacity + FLOATER_FADE_IN_SPEED * deltaTime);
+    // Gradually fade in opacity to target
+    if (floater.opacity < floater.targetOpacity) {
+      floater.opacity = Math.min(floater.targetOpacity, floater.opacity + FLOATER_FADE_IN_SPEED * deltaTime);
     }
   }
 }

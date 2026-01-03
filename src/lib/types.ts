@@ -803,6 +803,7 @@ export interface Floater {
   color: string;
   opacity: number;
   mass: number; // Affects how much it's pushed by forces
+  targetOpacity: number; // Target opacity for fade-in
 }
 
 export interface GameState {
