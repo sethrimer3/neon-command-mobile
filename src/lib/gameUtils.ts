@@ -1,14 +1,15 @@
-import { Vector2, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS } from './types';
-import { PIXELS_PER_METER } from './types';
+import { Vector2, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS, PIXELS_PER_METER } from './types';
 
 // Calculate viewport scale to fit the fixed arena to the viewport
 let viewportScale = 1.0;
-let canvasWidth = 0;
-let canvasHeight = 0;
 
 export function updateViewportScale(width: number, height: number): void {
-  canvasWidth = width;
-  canvasHeight = height;
+  // Validate inputs to prevent division by zero or invalid scale factors
+  if (width <= 0 || height <= 0) {
+    console.warn('Invalid viewport dimensions:', width, height);
+    viewportScale = 1.0; // Fallback to 1:1 scale
+    return;
+  }
   
   // Calculate scale factors for both dimensions
   const scaleX = width / (ARENA_WIDTH_METERS * PIXELS_PER_METER);
