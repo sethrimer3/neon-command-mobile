@@ -65,6 +65,18 @@ function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, outerRa
   ctx.closePath();
 }
 
+// Helper function to draw a triangle shape (equilateral, pointing up)
+function drawTriangle(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number) {
+  ctx.beginPath();
+  // Point 1: Top (pointing up)
+  ctx.moveTo(cx, cy - radius);
+  // Point 2: Bottom right
+  ctx.lineTo(cx + radius * Math.cos(Math.PI / 6), cy + radius * Math.sin(Math.PI / 6));
+  // Point 3: Bottom left
+  ctx.lineTo(cx - radius * Math.cos(Math.PI / 6), cy + radius * Math.sin(Math.PI / 6));
+  ctx.closePath();
+}
+
 // Minimap constants
 const MINIMAP_SIZE_RATIO = 0.2;
 const MINIMAP_PADDING = 10;
@@ -451,7 +463,7 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.7 * fadeAlpha;
+    ctx.globalAlpha = 0.2 * fadeAlpha; // Queued lines: 20% opacity
     
     // Draw each segment up to the draw length
     for (const segment of pathSegments) {
@@ -489,14 +501,14 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
         // Draw waypoint if segment is fully drawn
         if (segmentProgress >= 1.0) {
           const pulse = Math.sin(time * 2 + segment.index) * 0.3 + 0.7;
-          ctx.globalAlpha = 0.8 * pulse * fadeAlpha;
+          ctx.globalAlpha = 0.6 * pulse * fadeAlpha; // Movement nodes: 60% opacity
           ctx.shadowColor = color;
           ctx.shadowBlur = 12;
           ctx.beginPath();
           ctx.arc(fullEndScreen.x, fullEndScreen.y, 4 + pulse * 2, 0, Math.PI * 2);
           ctx.fill();
           ctx.shadowBlur = 0;
-          ctx.globalAlpha = 0.7 * fadeAlpha;
+          ctx.globalAlpha = 0.2 * fadeAlpha; // Reset to queued line opacity
         }
       } else if (segment.type === 'ability' && segmentProgress >= 1.0) {
         // Only draw ability arrow if segment is fully drawn and node is ability type
@@ -513,7 +525,7 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
         
         ctx.shadowColor = color;
         ctx.shadowBlur = 15;
-        ctx.globalAlpha = 0.9 * fadeAlpha;
+        ctx.globalAlpha = 0.4 * fadeAlpha; // Ability casts: 40% opacity
         ctx.beginPath();
         ctx.moveTo(ABILITY_ARROW_LENGTH, 0);
         ctx.lineTo(0, -6);
@@ -522,7 +534,7 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
         ctx.fill();
         
         ctx.restore();
-        ctx.globalAlpha = 0.7 * fadeAlpha;
+        ctx.globalAlpha = 0.2 * fadeAlpha; // Reset to queued line opacity
       } else if (segment.type === 'attack-move') {
         // Draw path line
         ctx.strokeStyle = color;
@@ -562,7 +574,7 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
           ctx.fill();
           ctx.shadowBlur = 0;
         }
-        ctx.globalAlpha = 0.7 * fadeAlpha;
+        ctx.globalAlpha = 0.2 * fadeAlpha; // Reset to queued line opacity
       } else if (segment.type === 'patrol' && segmentProgress >= 1.0) {
         // Only draw patrol path if segment is fully drawn and node is patrol type
         if (segment.node.type !== 'patrol') continue;
@@ -607,7 +619,7 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
         drawPatrolMarker(returnScreenPos.x, returnScreenPos.y);
         
         ctx.shadowBlur = 0;
-        ctx.globalAlpha = 0.7 * fadeAlpha;
+        ctx.globalAlpha = 0.2 * fadeAlpha; // Reset to queued line opacity
       }
       
       accumulatedLength += segmentLength;
@@ -704,6 +716,9 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
       } else if (factionDef.baseShape === 'star') {
         drawStar(ctx, screenPos.x, screenPos.y, size / 2, size / 4, 5);
         ctx.stroke();
+      } else if (factionDef.baseShape === 'triangle') {
+        drawTriangle(ctx, screenPos.x, screenPos.y, size / 2);
+        ctx.stroke();
       } else {
         ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
       }
@@ -716,6 +731,9 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
         ctx.stroke();
       } else if (factionDef.baseShape === 'star') {
         drawStar(ctx, screenPos.x, screenPos.y, size * 0.65, size * 0.33, 5);
+        ctx.stroke();
+      } else if (factionDef.baseShape === 'triangle') {
+        drawTriangle(ctx, screenPos.x, screenPos.y, size * 0.65);
         ctx.stroke();
       } else {
         const expanded = size * 1.3;
@@ -733,6 +751,9 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
         ctx.stroke();
       } else if (factionDef.baseShape === 'star') {
         drawStar(ctx, screenPos.x, screenPos.y, size / 2, size / 4, 5);
+        ctx.stroke();
+      } else if (factionDef.baseShape === 'triangle') {
+        drawTriangle(ctx, screenPos.x, screenPos.y, size / 2);
         ctx.stroke();
       } else {
         ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
@@ -763,6 +784,9 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
     } else if (factionDef.baseShape === 'star') {
       drawStar(ctx, screenPos.x, screenPos.y, size / 2, size / 4, 5);
       ctx.fill();
+    } else if (factionDef.baseShape === 'triangle') {
+      drawTriangle(ctx, screenPos.x, screenPos.y, size / 2);
+      ctx.fill();
     } else {
       ctx.fillRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
     }
@@ -773,6 +797,9 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.stroke();
     } else if (factionDef.baseShape === 'star') {
       drawStar(ctx, screenPos.x, screenPos.y, size / 2, size / 4, 5);
+      ctx.stroke();
+    } else if (factionDef.baseShape === 'triangle') {
+      drawTriangle(ctx, screenPos.x, screenPos.y, size / 2);
       ctx.stroke();
     } else {
       ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);

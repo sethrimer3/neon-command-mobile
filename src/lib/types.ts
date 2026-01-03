@@ -172,7 +172,7 @@ export const BASE_TYPE_DEFINITIONS: Record<BaseType, BaseTypeDefinition> = {
 export interface FactionDefinition {
   name: string;
   baseMoveSpeed: number;
-  baseShape: 'square' | 'circle' | 'star';
+  baseShape: 'square' | 'circle' | 'star' | 'triangle';
   ability: 'laser' | 'shield' | 'pulse';
   availableUnits: UnitType[];
   availableBaseTypes: BaseType[];
@@ -190,7 +190,7 @@ export const FACTION_DEFINITIONS: Record<FactionType, FactionDefinition> = {
   aurum: {
     name: 'Aurum',
     baseMoveSpeed: 3.0,
-    baseShape: 'circle',
+    baseShape: 'triangle',
     ability: 'shield',
     availableUnits: ['snaker', 'berserker', 'assassin', 'juggernaut', 'striker', 'reaper', 'oracle', 'harbinger', 'gladiator', 'ravager', 'warlord', 'duelist'],
     availableBaseTypes: ['standard', 'assault'],
@@ -198,7 +198,7 @@ export const FACTION_DEFINITIONS: Record<FactionType, FactionDefinition> = {
   solari: {
     name: 'Solari',
     baseMoveSpeed: 2.0,
-    baseShape: 'star',
+    baseShape: 'circle',
     ability: 'pulse',
     availableUnits: ['flare', 'nova', 'eclipse', 'corona', 'supernova', 'zenith', 'pulsar', 'celestial', 'voidwalker', 'chronomancer', 'nebula', 'quasar'],
     availableBaseTypes: ['standard', 'support'],
