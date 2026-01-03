@@ -350,13 +350,18 @@ function drawBackgroundFloaters(ctx: CanvasRenderingContext2D, state: GameState,
     const screenPos = positionToPixels(floater.position);
     
     // Radius scaled by floater.size and viewport (3-8 pixels typical)
-    const radius = floater.size * 4; // Base size in pixels
+    // Use metersToPixels to properly scale with viewport, with safety checks
+    const baseRadiusMeters = 0.3; // 0.3 meters base size
+    const scaledRadius = floater.size * metersToPixels(baseRadiusMeters);
+    const radius = Math.max(3, Math.abs(scaledRadius)); // Ensure minimum 3px and positive
     
     // Stroke width proportional to radius (~20% of radius)
-    const strokeWidth = radius * 0.2;
+    const strokeWidth = Math.max(0.5, radius * 0.2);
     
     // White stroke at low opacity
     const alpha = floater.opacity * 0.3;
+    if (alpha <= 0) return; // Skip if not visible yet
+    
     ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
     ctx.lineWidth = strokeWidth;
     
