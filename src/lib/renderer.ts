@@ -340,15 +340,10 @@ function drawPlayfieldBorder(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasEl
   // Border thickness is 1 meter
   const borderThickness = metersToPixels(1);
   
-  // Dark grey color for the border - slightly lighter to be more visible
-  const borderColor = 'oklch(0.30 0 0)'; // Dark grey
-  const borderInnerHighlight = 'oklch(0.40 0 0)'; // Inner edge highlight
-  const borderOuterShadow = 'oklch(0.20 0 0)'; // Outer edge shadow
-  
   ctx.save();
   
   // Draw the main border
-  ctx.fillStyle = borderColor;
+  ctx.fillStyle = COLORS.borderMain;
   
   // Top border
   ctx.fillRect(0, 0, playfieldWidthPixels, borderThickness);
@@ -362,15 +357,16 @@ function drawPlayfieldBorder(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasEl
   // Right border
   ctx.fillRect(playfieldWidthPixels - borderThickness, 0, borderThickness, playfieldHeightPixels);
   
-  // Add inner highlight for depth
-  ctx.strokeStyle = borderInnerHighlight;
+  // Add inner highlight for depth effect
+  // The inner rectangle is inset by borderThickness on all sides (2 * borderThickness for width/height)
+  ctx.strokeStyle = COLORS.borderHighlight;
   ctx.lineWidth = 2;
   ctx.strokeRect(borderThickness, borderThickness, 
                  playfieldWidthPixels - borderThickness * 2, 
                  playfieldHeightPixels - borderThickness * 2);
   
-  // Add subtle outer shadow for depth
-  ctx.strokeStyle = borderOuterShadow;
+  // Add subtle outer shadow for depth effect
+  ctx.strokeStyle = COLORS.borderShadow;
   ctx.lineWidth = 1;
   ctx.strokeRect(0, 0, playfieldWidthPixels, playfieldHeightPixels);
   

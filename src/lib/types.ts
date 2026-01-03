@@ -34,6 +34,9 @@ export const COLORS = {
   laser: 'oklch(0.70 0.30 320)',
   telegraph: 'oklch(0.75 0.18 200)',
   white: 'oklch(0.98 0 0)',
+  borderMain: 'oklch(0.30 0 0)',
+  borderHighlight: 'oklch(0.40 0 0)',
+  borderShadow: 'oklch(0.20 0 0)',
 };
 
 export type Vector2 = { x: number; y: number };
