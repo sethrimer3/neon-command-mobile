@@ -933,10 +933,68 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
   state.projectiles = remainingProjectiles;
 }
 
+/**
+ * Update chess mode turn timer and execute pending commands when turn ends
+ */
+function updateChessMode(state: GameState, deltaTime: number): void {
+  // Only proceed if chess mode is enabled in settings
+  if (!state.settings.chessMode) return;
+  
+  // Initialize chess mode state if not already initialized
+  if (!state.chessMode) {
+    state.chessMode = {
+      enabled: true,
+      turnDuration: 10.0, // 10 seconds per turn
+      turnStartTime: state.elapsedTime,
+      turnPhase: 'planning',
+      pendingCommands: new Map(),
+    };
+    return;
+  }
+  
+  const turnElapsed = state.elapsedTime - state.chessMode.turnStartTime;
+  
+  // Check if turn has completed
+  if (turnElapsed >= state.chessMode.turnDuration) {
+    // Execute all pending commands
+    executeChessModeCommands(state);
+    
+    // Start new turn
+    state.chessMode.turnStartTime = state.elapsedTime;
+    state.chessMode.turnPhase = 'planning';
+    state.chessMode.pendingCommands.clear();
+    
+    // Play a sound to indicate turn transition
+    soundManager.playCountdown();
+  }
+}
+
+/**
+ * Execute all pending chess mode commands by applying them to unit command queues
+ */
+function executeChessModeCommands(state: GameState): void {
+  if (!state.chessMode) return;
+  
+  // Apply pending commands to each unit
+  state.chessMode.pendingCommands.forEach((commands, unitId) => {
+    const unit = state.units.find(u => u.id === unitId);
+    if (unit && commands.length > 0) {
+      // Clear existing queue and add the pending command
+      unit.commandQueue = [commands[0]]; // Only execute 1 command per turn as specified
+      
+      // Mark the start time for queue draw animation
+      unit.queueDrawStartTime = Date.now();
+    }
+  });
+}
+
 export function updateGame(state: GameState, deltaTime: number): void {
   if (state.mode !== 'game') return;
 
   state.elapsedTime += deltaTime;
+
+  // Update chess mode turn timer if enabled
+  updateChessMode(state, deltaTime);
 
   updateIncome(state, deltaTime);
   updateUnits(state, deltaTime);

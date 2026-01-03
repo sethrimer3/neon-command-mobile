@@ -508,18 +508,9 @@ function handleAbilityDrag(state: GameState, dragVector: { x: number; y: number 
 
   state.units.forEach((unit) => {
     if (!state.selectedUnits.has(unit.id)) return;
-    if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
     
     // Check if unit's ability is on cooldown - can only queue if cooldown is 0
     if (unit.abilityCooldown > 0) return;
-
-    // Check if there's already an ability queued anywhere in the command queue
-    // This prevents the ability from jumping to new movement nodes
-    const hasQueuedAbility = unit.commandQueue.some(node => node.type === 'ability');
-    if (hasQueuedAbility) {
-      // There's already an ability queued, don't add another one
-      return;
-    }
 
     // Use the command origin helper for consistency (last movement node)
     const startPosition = getCommandOrigin(unit);
@@ -528,7 +519,22 @@ function handleAbilityDrag(state: GameState, dragVector: { x: number; y: number 
     // The direction vector already indicates where the ability aims
     const abilityNode: CommandNode = { type: 'ability', position: startPosition, direction: clampedVector };
 
-    unit.commandQueue.push(abilityNode);
+    // In chess mode, add to pending commands instead of immediate queue
+    if (state.settings.chessMode && state.chessMode) {
+      // Store only the latest command for this unit (overwrite previous)
+      state.chessMode.pendingCommands.set(unit.id, [abilityNode]);
+    } else {
+      // Normal RTS mode: add to queue immediately
+      if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
+      
+      // Check if there's already an ability queued anywhere in the command queue
+      const hasQueuedAbility = unit.commandQueue.some(node => node.type === 'ability');
+      if (hasQueuedAbility) {
+        return;
+      }
+      
+      unit.commandQueue.push(abilityNode);
+    }
   });
   
   // Clear the ability cast preview after executing the command
@@ -598,18 +604,8 @@ function handleVectorBasedAbilityDrag(state: GameState, dragVector: { x: number;
 
   // Apply ability command to all selected units
   selectedUnitsArray.forEach((unit) => {
-    if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
-    
     // Check if unit's ability is on cooldown - can only queue if cooldown is 0
     if (unit.abilityCooldown > 0) return;
-
-    // Check if there's already an ability queued anywhere in the command queue
-    // This prevents the ability from jumping to new movement nodes
-    const hasQueuedAbility = unit.commandQueue.some(node => node.type === 'ability');
-    if (hasQueuedAbility) {
-      // There's already an ability queued, don't add another one
-      return;
-    }
 
     // Use the command origin (last movement node or current position)
     const startPosition = getCommandOrigin(unit);
@@ -618,10 +614,25 @@ function handleVectorBasedAbilityDrag(state: GameState, dragVector: { x: number;
     // The direction vector already indicates where the ability aims
     const abilityNode: CommandNode = { type: 'ability', position: startPosition, direction: clampedVector };
 
-    unit.commandQueue.push(abilityNode);
-    
-    // Start draw animation for new command
-    startQueueDrawAnimation(unit);
+    // In chess mode, add to pending commands instead of immediate queue
+    if (state.settings.chessMode && state.chessMode) {
+      // Store only the latest command for this unit (overwrite previous)
+      state.chessMode.pendingCommands.set(unit.id, [abilityNode]);
+    } else {
+      // Normal RTS mode: add to queue immediately
+      if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
+      
+      // Check if there's already an ability queued anywhere in the command queue
+      const hasQueuedAbility = unit.commandQueue.some(node => node.type === 'ability');
+      if (hasQueuedAbility) {
+        return;
+      }
+      
+      unit.commandQueue.push(abilityNode);
+      
+      // Start draw animation for new command
+      startQueueDrawAnimation(unit);
+    }
   });
   
   // Send command to multiplayer backend for online games
@@ -673,17 +684,28 @@ function addMovementCommand(state: GameState, worldPos: { x: number; y: number }
   
   // Assign formation positions to units
   selectedUnitsArray.forEach((unit, index) => {
-    if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
-    
-    if (isPatrol) {
-      const returnPos = getPatrolReturnPosition(unit);
-      unit.commandQueue.push({ type: 'patrol', position: formationPositions[index], returnPosition: returnPos });
+    // In chess mode, add to pending commands instead of immediate queue
+    if (state.settings.chessMode && state.chessMode) {
+      const command: CommandNode = isPatrol 
+        ? { type: 'patrol', position: formationPositions[index], returnPosition: getPatrolReturnPosition(unit) }
+        : { type: 'move', position: formationPositions[index] };
+      
+      // Store only the latest command for this unit (overwrite previous)
+      state.chessMode.pendingCommands.set(unit.id, [command]);
     } else {
-      unit.commandQueue.push({ type: 'move', position: formationPositions[index] });
+      // Normal RTS mode: add to queue immediately
+      if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
+      
+      if (isPatrol) {
+        const returnPos = getPatrolReturnPosition(unit);
+        unit.commandQueue.push({ type: 'patrol', position: formationPositions[index], returnPosition: returnPos });
+      } else {
+        unit.commandQueue.push({ type: 'move', position: formationPositions[index] });
+      }
+      
+      // Start draw animation for new command
+      startQueueDrawAnimation(unit);
     }
-    
-    // Start draw animation for new command
-    startQueueDrawAnimation(unit);
   });
   
   // Send command to multiplayer backend for online games

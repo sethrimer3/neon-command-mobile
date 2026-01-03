@@ -74,6 +74,7 @@ function App() {
   const [enableParticleEffects, setEnableParticleEffects] = useKV<boolean>('enable-particle-effects', true);
   const [enableMotionBlur, setEnableMotionBlur] = useKV<boolean>('enable-motion-blur', true);
   const [mirrorAbilityCasting, setMirrorAbilityCasting] = useKV<boolean>('mirror-ability-casting', false);
+  const [chessMode, setChessMode] = useKV<boolean>('chess-mode', false);
 
   const gameState = gameStateRef.current;
   const lastVictoryStateRef = useRef<boolean>(false);
@@ -135,13 +136,14 @@ function App() {
       enableParticleEffects: enableParticleEffects ?? true,
       enableMotionBlur: enableMotionBlur ?? true,
       mirrorAbilityCasting: mirrorAbilityCasting ?? false,
+      chessMode: chessMode ?? false,
     };
     gameStateRef.current.showMinimap = showMinimap ?? true;
     gameStateRef.current.players = gameStateRef.current.players.map((p, i) => ({
       ...p,
       color: i === 0 ? (playerColor || COLORS.playerDefault) : (enemyColor || COLORS.enemyDefault),
     }));
-  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showMinimap, playerFaction, enemyFaction, enableGlowEffects, enableParticleEffects, enableMotionBlur, mirrorAbilityCasting]);
+  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showMinimap, playerFaction, enemyFaction, enableGlowEffects, enableParticleEffects, enableMotionBlur, mirrorAbilityCasting, chessMode]);
 
   // Cleanup interval on unmount
   useEffect(() => {
@@ -1486,6 +1488,27 @@ function App() {
                   checked={mirrorAbilityCasting ?? false}
                   onCheckedChange={(checked) => {
                     setMirrorAbilityCasting(checked);
+                    soundManager.playButtonClick();
+                  }}
+                />
+              </div>
+
+              <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
+                <p><strong>Game Mode:</strong></p>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Label htmlFor="chess-mode-toggle" className="flex flex-col gap-1">
+                  <span>Chess Mode</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    Queue 1 move per unit every 10s
+                  </span>
+                </Label>
+                <Switch
+                  id="chess-mode-toggle"
+                  checked={chessMode ?? false}
+                  onCheckedChange={(checked) => {
+                    setChessMode(checked);
                     soundManager.playButtonClick();
                   }}
                 />

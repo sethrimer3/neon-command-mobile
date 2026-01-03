@@ -637,6 +637,56 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
   if (state.dyingUnits && state.dyingUnits.length > 0) {
     state.dyingUnits.forEach(drawUnitQueue);
   }
+  
+  // Draw pending chess mode commands with different visual style
+  if (state.settings.chessMode && state.chessMode && state.chessMode.pendingCommands.size > 0) {
+    state.chessMode.pendingCommands.forEach((commands, unitId) => {
+      const unit = state.units.find(u => u.id === unitId);
+      if (!unit || commands.length === 0) return;
+      
+      const color = state.players[unit.owner].color;
+      const command = commands[0]; // Only one command per turn
+      
+      // Draw pending command with pulsing dashed line
+      const pulse = Math.sin(time * 4) * 0.3 + 0.7; // Fast pulse
+      
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.5 * pulse; // Pulsing opacity
+      ctx.setLineDash([8, 8]); // Dashed line
+      
+      const startPos = positionToPixels(unit.position);
+      const endPos = positionToPixels(command.position);
+      
+      // Draw dashed line
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.moveTo(startPos.x, startPos.y);
+      ctx.lineTo(endPos.x, endPos.y);
+      ctx.stroke();
+      
+      // Draw endpoint marker with different style
+      ctx.globalAlpha = 0.7 * pulse;
+      ctx.shadowBlur = 15;
+      ctx.beginPath();
+      ctx.arc(endPos.x, endPos.y, 6, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Draw inner dot for contrast
+      ctx.globalAlpha = 1.0;
+      ctx.fillStyle = 'white';
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.arc(endPos.x, endPos.y, 2, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.setLineDash([]); // Reset dash
+      ctx.restore();
+    });
+  }
 }
 
 function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
@@ -2293,28 +2343,58 @@ function drawHUD(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.fillStyle = COLORS.white;
   ctx.fillText(`Time: ${Math.floor(state.elapsedTime)}s`, 10, 40);
   
-  // Draw current formation indicator
-  if (state.currentFormation && state.currentFormation !== 'none') {
-    const formationName = getFormationName(state.currentFormation);
-    ctx.fillStyle = COLORS.telegraph;
-    ctx.fillText(`Formation: ${formationName}`, 10, 60);
-  } else if (state.elapsedTime < 15) {
-    // Show hint for first 15 seconds
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.font = '12px Space Grotesk, sans-serif';
-    ctx.fillText('Press F to cycle formations', 10, 60);
+  // Draw chess mode timer if enabled
+  if (state.settings.chessMode && state.chessMode) {
+    const turnElapsed = state.elapsedTime - state.chessMode.turnStartTime;
+    const turnRemaining = Math.max(0, state.chessMode.turnDuration - turnElapsed);
+    const secs = Math.floor(turnRemaining);
+    const phase = state.chessMode.turnPhase;
+    
+    // Color based on phase and time remaining
+    let timerColor = COLORS.photon;
+    if (phase === 'planning') {
+      if (secs <= 3) {
+        timerColor = 'oklch(0.62 0.28 25)'; // Red when running out
+      } else if (secs <= 5) {
+        timerColor = 'oklch(0.85 0.20 95)'; // Yellow warning
+      }
+    }
+    
+    ctx.save();
+    ctx.fillStyle = timerColor;
+    ctx.shadowColor = timerColor;
+    ctx.shadowBlur = 10;
+    ctx.font = '16px Orbitron, sans-serif';
+    ctx.fillText(`♟ ${phase.toUpperCase()}: ${secs}s`, 10, 60);
+    ctx.restore();
+    
     ctx.font = '14px Space Grotesk, sans-serif';
+  } else {
+    // Original formation display when chess mode is not active
+    // Draw current formation indicator
+    if (state.currentFormation && state.currentFormation !== 'none') {
+      const formationName = getFormationName(state.currentFormation);
+      ctx.fillStyle = COLORS.telegraph;
+      ctx.fillText(`Formation: ${formationName}`, 10, 60);
+    } else if (state.elapsedTime < 15) {
+      // Show hint for first 15 seconds
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.font = '12px Space Grotesk, sans-serif';
+      ctx.fillText('Press F to cycle formations', 10, 60);
+      ctx.font = '14px Space Grotesk, sans-serif';
+    }
   }
   
-  // Draw patrol mode indicator
+  // Draw patrol mode indicator (adjust Y position based on whether chess mode is active)
+  const patrolY = state.settings.chessMode && state.chessMode ? 80 : 80;
   if (state.patrolMode) {
     ctx.fillStyle = COLORS.photon;
-    ctx.fillText('PATROL MODE', 10, 80);
-  } else if (state.elapsedTime < 15) {
-    // Show hint for first 15 seconds
+    ctx.fillText('PATROL MODE', 10, patrolY);
+  } else if (state.elapsedTime < 15 && !state.settings.chessMode) {
+    // Show hint for first 15 seconds (only if not in chess mode)
     ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
     ctx.font = '12px Space Grotesk, sans-serif';
-    ctx.fillText('Hold P for patrol', 10, 80);
+    ctx.fillText('Hold P for patrol', 10, patrolY);
     ctx.font = '14px Space Grotesk, sans-serif';
   }
   

@@ -833,6 +833,7 @@ export interface GameState {
     enableParticleEffects?: boolean; // Enable/disable particle effects
     enableMotionBlur?: boolean; // Enable/disable motion blur trails
     mirrorAbilityCasting?: boolean; // Mirror ability casting along both X and Y axes
+    chessMode?: boolean; // Enable chess mode: queue commands, then execute all at once every 10 seconds
   };
 
   surrenderClicks: number;
@@ -1048,5 +1049,14 @@ export interface GameState {
     connected: boolean;
     lastSync: number;
     latency?: number;
+  };
+  
+  // Chess mode state - queue commands during planning phase, execute all at once
+  chessMode?: {
+    enabled: boolean; // Whether chess mode is active
+    turnDuration: number; // Duration of each turn in seconds (default 10)
+    turnStartTime: number; // When the current turn started
+    turnPhase: 'planning' | 'executing'; // Current phase of the turn
+    pendingCommands: Map<string, CommandNode[]>; // Queued commands per unit during planning phase
   };
 }
