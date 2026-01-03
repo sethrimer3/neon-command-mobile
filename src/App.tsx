@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useKV } from './hooks/useKV';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS, FactionType, FACTION_DEFINITIONS, BASE_TYPE_DEFINITIONS, BaseType, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS } from './lib/types';
-import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, isPortraitOrientation, updateViewportScale } from './lib/gameUtils';
+import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, generateFloaters, isPortraitOrientation, updateViewportScale } from './lib/gameUtils';
 import { updateGame } from './lib/simulation';
 import { updateAI } from './lib/ai';
 import { renderGame } from './lib/renderer';
@@ -1661,6 +1661,7 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
   const stars = generateStarfield(canvas.width, canvas.height);
   const nebulaClouds = generateNebulaClouds(canvas.width, canvas.height);
+  const floaters = generateFloaters(canvas.width, canvas.height);
 
   const playerBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
 
@@ -1729,6 +1730,7 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
     topographyLines,
     nebulaClouds,
     stars,
+    floaters,
     isPortrait: isPortraitOrientation(),
   };
 }
@@ -1787,6 +1789,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
   const stars = generateStarfield(canvas.width, canvas.height);
   const nebulaClouds = generateNebulaClouds(canvas.width, canvas.height);
+  const floaters = generateFloaters(canvas.width, canvas.height);
 
   const playerBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.playerBaseType || 'standard'];
   const enemyBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.enemyBaseType || 'standard'];
@@ -1858,6 +1861,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     topographyLines,
     nebulaClouds,
     stars,
+    floaters,
     isPortrait: isPortraitOrientation(),
   };
 }
@@ -2041,6 +2045,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
   const stars = generateStarfield(canvas.width, canvas.height);
   const nebulaClouds = generateNebulaClouds(canvas.width, canvas.height);
+  const floaters = generateFloaters(canvas.width, canvas.height);
 
   // For online games, use standard base type for now
   const playerBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
@@ -2124,6 +2129,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
     topographyLines,
     nebulaClouds,
     stars,
+    floaters,
     isPortrait: isPortraitOrientation(),
   };
 }

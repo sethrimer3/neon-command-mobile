@@ -794,6 +794,17 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
   },
 };
 
+// Background floaters for water-like effects
+export interface Floater {
+  id: string;
+  position: Vector2;
+  velocity: Vector2;
+  size: number;
+  color: string;
+  opacity: number;
+  mass: number; // Affects how much it's pushed by forces
+}
+
 export interface GameState {
   mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection' | 'multiplayerLobby' | 'countdown' | 'statistics' | 'levelSelection' | 'onlineMode' | 'modifierHelp' | 'unitInformation' | 'lanMode';
   backgroundBattle?: GameState; // Background AI battle for menu
@@ -900,6 +911,9 @@ export interface GameState {
     opacity: number;
     driftSpeed: number;
   }>;
+  
+  // Background floaters for water-like physics
+  floaters?: Floater[];
   
   // Impact effects for hits and explosions
   impactEffects?: Array<{

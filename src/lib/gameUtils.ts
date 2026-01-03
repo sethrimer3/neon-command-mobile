@@ -234,3 +234,38 @@ export function generateNebulaClouds(canvasWidth: number, canvasHeight: number):
   return clouds;
 }
 
+// Generate background floaters with physics-based movement
+export function generateFloaters(canvasWidth: number, canvasHeight: number): import('./types').Floater[] {
+  const floaters: import('./types').Floater[] = [];
+  const numFloaters = 30 + Math.floor(Math.random() * 20); // 30-50 floaters
+  
+  // Use muted colors that blend with the background
+  const colors = [
+    'rgba(100, 120, 150, ', // Muted blue
+    'rgba(120, 100, 130, ', // Muted purple
+    'rgba(80, 100, 120, ',  // Dark blue-gray
+    'rgba(100, 100, 110, ', // Gray-blue
+    'rgba(90, 110, 130, ',  // Steel blue
+  ];
+  
+  for (let i = 0; i < numFloaters; i++) {
+    floaters.push({
+      id: generateId(),
+      position: {
+        x: Math.random() * canvasWidth,
+        y: Math.random() * canvasHeight,
+      },
+      velocity: {
+        x: (Math.random() - 0.5) * 0.2, // Very slow initial drift
+        y: (Math.random() - 0.5) * 0.2,
+      },
+      size: 2 + Math.random() * 4, // Small particles 2-6 pixels
+      color: colors[Math.floor(Math.random() * colors.length)],
+      opacity: 0.2 + Math.random() * 0.3, // Low opacity 0.2-0.5
+      mass: 0.5 + Math.random() * 1.5, // Varies how much they're affected by forces
+    });
+  }
+  
+  return floaters;
+}
+
