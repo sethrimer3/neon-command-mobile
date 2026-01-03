@@ -1428,94 +1428,48 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.textAlign = 'center';
     ctx.fillText(`${unit.damageMultiplier.toFixed(1)}x`, screenPos.x, screenPos.y + 20);
     
-    // Draw ability cooldown indicator with enhanced visuals
+    // Draw ability cooldown bar below the unit
     if (unitDef.abilityName && unitDef.abilityCooldown > 0) {
       const cooldownPercent = unit.abilityCooldown / unitDef.abilityCooldown;
-      const radius = metersToPixels(UNIT_SIZE_METERS / 2) + 2;
-      const yOffset = -radius - 5;
+      const barWidth = 30; // Width of the cooldown bar in pixels
+      const barHeight = 4; // Height of the bar
+      const radius = metersToPixels(UNIT_SIZE_METERS / 2);
+      const yOffset = radius + 8; // Position below the unit
       
-      if (cooldownPercent > 0) {
-        // Draw cooldown arc with enhanced styling
-        ctx.save();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2.5;
-        ctx.globalAlpha = 0.4;
-        const startAngle = -Math.PI / 2;
-        const endAngle = startAngle + (Math.PI * 2 * (1 - cooldownPercent));
-        
-        // Background circle
-        ctx.globalAlpha = 0.2;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y + yOffset, 6, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        // Cooldown progress
-        ctx.globalAlpha = 0.6;
-        ctx.lineWidth = 3;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y + yOffset, 6, startAngle, endAngle);
-        ctx.stroke();
-        
-        // If almost ready (last 20%), show charging particles
-        if (cooldownPercent < 0.2) {
-          const time = Date.now() / 1000;
-          const chargeIntensity = 1 - (cooldownPercent / 0.2);
-          
-          // Draw small orbiting particles
-          for (let i = 0; i < 4; i++) {
-            const orbitAngle = (time * 3 + i * Math.PI / 2) % (Math.PI * 2);
-            const orbitRadius = 10 + Math.sin(time * 4 + i) * 2;
-            const px = screenPos.x + Math.cos(orbitAngle) * orbitRadius;
-            const py = screenPos.y + yOffset + Math.sin(orbitAngle) * orbitRadius;
-            
-            ctx.globalAlpha = chargeIntensity * 0.7;
-            ctx.fillStyle = color;
-            ctx.shadowColor = color;
-            ctx.shadowBlur = 8;
-            ctx.beginPath();
-            ctx.arc(px, py, 2, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-        
-        ctx.restore();
-      } else {
-        // Ability ready - draw enhanced pulsing indicator
-        const time = Date.now() / 1000;
-        const pulse = Math.sin(time * 5) * 0.4 + 0.6;
-        
-        ctx.save();
-        
-        // Outer glow ring
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = pulse * 0.5;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 15;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y + yOffset, 7 + pulse * 2, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        // Inner filled circle
+      ctx.save();
+      
+      // Background bar (empty/dark)
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(screenPos.x - barWidth / 2, screenPos.y + yOffset, barWidth, barHeight);
+      
+      // Filled portion showing cooldown remaining (empties as ability is used, fills as it recovers)
+      const fillWidth = barWidth * (1 - cooldownPercent); // Inverted: full when cooldown is 0, empty when cooling down
+      if (fillWidth > 0) {
         ctx.fillStyle = color;
-        ctx.globalAlpha = pulse;
-        ctx.shadowBlur = 12;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y + yOffset, 4, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Bright center
-        ctx.fillStyle = getTeamHighlightColor(unit.owner);
-        ctx.globalAlpha = 1.0;
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y + yOffset, 2, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.restore();
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 4;
+        ctx.globalAlpha = 0.9;
+        ctx.fillRect(screenPos.x - barWidth / 2, screenPos.y + yOffset, fillWidth, barHeight);
       }
+      
+      // Border around the bar
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.6;
+      ctx.strokeRect(screenPos.x - barWidth / 2, screenPos.y + yOffset, barWidth, barHeight);
+      
+      // If ability is ready, add a subtle pulse effect
+      if (cooldownPercent === 0) {
+        const time = Date.now() / 1000;
+        const pulse = Math.sin(time * 4) * 0.3 + 0.7;
+        
+        ctx.globalAlpha = pulse * 0.4;
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = color;
+        ctx.fillRect(screenPos.x - barWidth / 2, screenPos.y + yOffset, barWidth, barHeight);
+      }
+      
+      ctx.restore();
     }
   });
 }
