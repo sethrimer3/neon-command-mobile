@@ -1,7 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
 import { defineConfig, PluginOption } from "vite";
-import { copyFileSync, mkdirSync, readdirSync, statSync } from 'fs';
+import { copyFileSync, mkdirSync, readdirSync, statSync, existsSync } from 'fs';
 import { join } from 'path';
 
 import sparkPlugin from "@github/spark/spark-vite-plugin";
@@ -17,6 +17,12 @@ function copyAssetsPlugin(): PluginOption {
     closeBundle() {
       const assetsSource = resolve(projectRoot, 'ASSETS');
       const assetsDest = resolve(projectRoot, 'dist', 'ASSETS');
+      
+      // Check if source directory exists
+      if (!existsSync(assetsSource)) {
+        console.warn('⚠ ASSETS directory not found, skipping copy');
+        return;
+      }
       
       function copyRecursive(src: string, dest: string) {
         mkdirSync(dest, { recursive: true });
@@ -35,8 +41,13 @@ function copyAssetsPlugin(): PluginOption {
         }
       }
       
-      copyRecursive(assetsSource, assetsDest);
-      console.log('✓ Copied ASSETS directory to dist');
+      try {
+        copyRecursive(assetsSource, assetsDest);
+        console.log('✓ Copied ASSETS directory to dist');
+      } catch (error) {
+        console.error('✗ Failed to copy ASSETS directory:', error);
+        throw error;
+      }
     }
   };
 }
