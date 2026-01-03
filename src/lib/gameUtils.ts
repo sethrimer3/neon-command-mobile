@@ -1,5 +1,27 @@
-import { Vector2 } from './types';
-import { PIXELS_PER_METER } from './types';
+import { Vector2, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS, PIXELS_PER_METER } from './types';
+
+// Calculate viewport scale to fit the fixed arena to the viewport
+let viewportScale = 1.0;
+
+export function updateViewportScale(width: number, height: number): void {
+  // Validate inputs to prevent division by zero or invalid scale factors
+  if (width <= 0 || height <= 0) {
+    console.warn('Invalid viewport dimensions:', width, height);
+    viewportScale = 1.0; // Fallback to 1:1 scale
+    return;
+  }
+  
+  // Calculate scale factors for both dimensions
+  const scaleX = width / (ARENA_WIDTH_METERS * PIXELS_PER_METER);
+  const scaleY = height / (ARENA_HEIGHT_METERS * PIXELS_PER_METER);
+  
+  // Use the smaller scale to ensure the entire arena fits in the viewport
+  viewportScale = Math.min(scaleX, scaleY);
+}
+
+export function getViewportScale(): number {
+  return viewportScale;
+}
 
 export function distance(a: Vector2, b: Vector2): number {
   const dx = b.x - a.x;
@@ -26,24 +48,24 @@ export function subtract(a: Vector2, b: Vector2): Vector2 {
 }
 
 export function metersToPixels(meters: number): number {
-  return meters * PIXELS_PER_METER;
+  return meters * PIXELS_PER_METER * viewportScale;
 }
 
 export function pixelsToMeters(pixels: number): number {
-  return pixels / PIXELS_PER_METER;
+  return pixels / (PIXELS_PER_METER * viewportScale);
 }
 
 export function positionToPixels(pos: Vector2): Vector2 {
   return {
-    x: pos.x * PIXELS_PER_METER,
-    y: pos.y * PIXELS_PER_METER,
+    x: pos.x * PIXELS_PER_METER * viewportScale,
+    y: pos.y * PIXELS_PER_METER * viewportScale,
   };
 }
 
 export function pixelsToPosition(pixels: Vector2): Vector2 {
   return {
-    x: pixels.x / PIXELS_PER_METER,
-    y: pixels.y / PIXELS_PER_METER,
+    x: pixels.x / (PIXELS_PER_METER * viewportScale),
+    y: pixels.y / (PIXELS_PER_METER * viewportScale),
   };
 }
 

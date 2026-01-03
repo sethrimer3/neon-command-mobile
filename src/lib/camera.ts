@@ -2,7 +2,8 @@
  * Camera system for smooth zooming and panning
  */
 
-import { GameState, Vector2 } from './types';
+import { GameState, Vector2, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS, PIXELS_PER_METER } from './types';
+import { getViewportScale } from './gameUtils';
 
 // Camera constants
 const MIN_ZOOM = 0.5;
@@ -107,6 +108,8 @@ export function focusCamera(state: GameState, position: Vector2): void {
 export function applyCameraTransform(ctx: CanvasRenderingContext2D, state: GameState, canvas: HTMLCanvasElement): void {
   if (!state.camera) return;
 
+  const viewportScale = getViewportScale();
+  
   ctx.save();
   
   // Translate to center of canvas
@@ -115,8 +118,8 @@ export function applyCameraTransform(ctx: CanvasRenderingContext2D, state: GameS
   // Apply zoom
   ctx.scale(state.camera.zoom, state.camera.zoom);
   
-  // Apply camera offset
-  ctx.translate(state.camera.offset.x * 20, state.camera.offset.y * 20); // Convert to pixels
+  // Apply camera offset (convert meters to pixels with viewport scale)
+  ctx.translate(state.camera.offset.x * PIXELS_PER_METER * viewportScale, state.camera.offset.y * PIXELS_PER_METER * viewportScale);
   
   // Translate back from center
   ctx.translate(-canvas.width / 2, -canvas.height / 2);
@@ -137,12 +140,13 @@ export function screenToWorld(screenPos: Vector2, state: GameState, canvas: HTML
     return { x: screenPos.x, y: screenPos.y };
   }
 
+  const viewportScale = getViewportScale();
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
 
   // Reverse the transformations
-  const x = (screenPos.x - centerX) / state.camera.zoom - state.camera.offset.x * 20 + centerX;
-  const y = (screenPos.y - centerY) / state.camera.zoom - state.camera.offset.y * 20 + centerY;
+  const x = (screenPos.x - centerX) / state.camera.zoom - state.camera.offset.x * PIXELS_PER_METER * viewportScale + centerX;
+  const y = (screenPos.y - centerY) / state.camera.zoom - state.camera.offset.y * PIXELS_PER_METER * viewportScale + centerY;
 
   return { x, y };
 }
@@ -155,11 +159,12 @@ export function worldToScreen(worldPos: Vector2, state: GameState, canvas: HTMLC
     return { x: worldPos.x, y: worldPos.y };
   }
 
+  const viewportScale = getViewportScale();
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
 
-  const x = (worldPos.x - centerX + state.camera.offset.x * 20) * state.camera.zoom + centerX;
-  const y = (worldPos.y - centerY + state.camera.offset.y * 20) * state.camera.zoom + centerY;
+  const x = (worldPos.x - centerX + state.camera.offset.x * PIXELS_PER_METER * viewportScale) * state.camera.zoom + centerX;
+  const y = (worldPos.y - centerY + state.camera.offset.y * PIXELS_PER_METER * viewportScale) * state.camera.zoom + centerY;
 
   return { x, y };
 }

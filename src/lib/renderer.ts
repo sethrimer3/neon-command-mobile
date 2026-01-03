@@ -14,6 +14,8 @@ import {
   UnitModifier,
   Vector2,
   CommandNode,
+  ARENA_WIDTH_METERS,
+  ARENA_HEIGHT_METERS,
 } from './types';
 import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract } from './gameUtils';
 import { Obstacle } from './maps';
@@ -3131,8 +3133,8 @@ function drawMinimap(ctx: CanvasRenderingContext2D, state: GameState, canvas: HT
   const minimapY = canvas.height - minimapSize - MINIMAP_PADDING;
   
   // Calculate arena bounds
-  const arenaWidth = canvas.width / 20; // meters
-  const arenaHeight = canvas.height / 20; // meters
+  const arenaWidth = ARENA_WIDTH_METERS; // meters
+  const arenaHeight = ARENA_HEIGHT_METERS; // meters
   
   ctx.save();
   
