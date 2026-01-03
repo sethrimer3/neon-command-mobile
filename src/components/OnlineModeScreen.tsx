@@ -16,8 +16,9 @@ export function OnlineModeScreen({
   onLAN,
 }: OnlineModeScreenProps) {
   return (
-    <div className="absolute inset-0 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+    <div className="absolute inset-0 overflow-y-auto">
+      <div className="min-h-full flex items-start justify-center p-4 py-8">
+      <Card className="w-full max-w-md my-auto">
         <CardHeader>
           <CardTitle className="orbitron text-2xl">Online Multiplayer</CardTitle>
         </CardHeader>
@@ -78,6 +79,7 @@ export function OnlineModeScreen({
           </Button>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

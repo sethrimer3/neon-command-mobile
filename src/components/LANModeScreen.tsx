@@ -106,8 +106,9 @@ export function LANModeScreen({
 
   if (mode === 'select') {
     return (
-      <div className="absolute inset-0 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+      <div className="absolute inset-0 overflow-y-auto">
+        <div className="min-h-full flex items-start justify-center p-4 py-8">
+        <Card className="w-full max-w-md my-auto">
           <CardHeader>
             <CardTitle className="orbitron text-2xl">LAN Multiplayer</CardTitle>
             <CardDescription>
@@ -182,14 +183,16 @@ export function LANModeScreen({
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     );
   }
 
   if (mode === 'host') {
     return (
-      <div className="absolute inset-0 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+      <div className="absolute inset-0 overflow-y-auto">
+        <div className="min-h-full flex items-start justify-center p-4 py-8">
+        <Card className="w-full max-w-md my-auto">
           <CardHeader>
             <CardTitle className="orbitron text-2xl">Hosting LAN Game</CardTitle>
             <CardDescription>
@@ -233,14 +236,16 @@ export function LANModeScreen({
             </Button>
           </CardContent>
         </Card>
+        </div>
       </div>
     );
   }
 
   if (mode === 'join') {
     return (
-      <div className="absolute inset-0 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+      <div className="absolute inset-0 overflow-y-auto">
+        <div className="min-h-full flex items-start justify-center p-4 py-8">
+        <Card className="w-full max-w-md my-auto">
           <CardHeader>
             <CardTitle className="orbitron text-2xl">Connected!</CardTitle>
             <CardDescription>
@@ -264,14 +269,16 @@ export function LANModeScreen({
             </Button>
           </CardContent>
         </Card>
+        </div>
       </div>
     );
   }
 
   if (mode === 'browse') {
     return (
-      <div className="absolute inset-0 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+      <div className="absolute inset-0 overflow-y-auto">
+        <div className="min-h-full flex items-start justify-center p-4 py-8">
+        <Card className="w-full max-w-md my-auto">
           <CardHeader>
             <CardTitle className="orbitron text-2xl">Available Games</CardTitle>
             <CardDescription>
@@ -339,6 +346,7 @@ export function LANModeScreen({
             )}
           </CardContent>
         </Card>
+        </div>
       </div>
     );
   }

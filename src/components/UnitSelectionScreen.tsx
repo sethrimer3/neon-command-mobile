@@ -66,8 +66,9 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
   };
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center p-4 overflow-auto">
-      <Card className="w-[600px] max-w-full">
+    <div className="absolute inset-0 overflow-y-auto">
+      <div className="min-h-full flex items-start justify-center p-4 py-8">
+      <Card className="w-[600px] max-w-full my-auto">
         <CardHeader>
           <CardTitle className="orbitron text-2xl">Unit Selection</CardTitle>
           <p className="text-sm text-muted-foreground">Select your faction and configure unit slots</p>
@@ -289,6 +290,7 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
           </Button>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

@@ -17,12 +17,13 @@ export function StatisticsScreen({ statistics, onBack }: StatisticsScreenProps) 
   const avgDuration = getAverageMatchDuration(statistics);
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center p-4 overflow-auto">
-      <Card className="w-[800px] max-w-full max-h-[90vh] flex flex-col">
+    <div className="absolute inset-0 overflow-y-auto">
+      <div className="min-h-full flex items-start justify-center p-4 py-8">
+      <Card className="w-[800px] max-w-full flex flex-col my-auto">
         <CardHeader>
           <CardTitle className="orbitron text-3xl text-center text-primary">Player Statistics</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6 overflow-auto">
+        <CardContent className="space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="bg-secondary/30 p-4 rounded-lg text-center">
               <Trophy className="mx-auto mb-2 text-primary" size={32} />
@@ -241,6 +242,7 @@ export function StatisticsScreen({ statistics, onBack }: StatisticsScreenProps) 
           </Button>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

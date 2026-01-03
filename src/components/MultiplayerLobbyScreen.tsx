@@ -72,8 +72,9 @@ export function MultiplayerLobbyScreen({
 
   if (currentLobby) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+      <div className="absolute inset-0 overflow-y-auto">
+        <div className="min-h-full flex items-start justify-center p-4 py-8">
+        <Card className="w-full max-w-md my-auto">
           <CardHeader>
             <CardTitle className="orbitron text-2xl">Game Lobby</CardTitle>
           </CardHeader>
@@ -158,17 +159,19 @@ export function MultiplayerLobbyScreen({
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col">
+    <div className="absolute inset-0 overflow-y-auto">
+      <div className="min-h-full flex items-start justify-center p-4 py-8">
+      <Card className="w-full max-w-2xl flex flex-col my-auto">
         <CardHeader>
           <CardTitle className="orbitron text-2xl">Online Multiplayer</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4 flex-1 overflow-hidden flex flex-col">
+        <CardContent className="space-y-4 flex-1 flex flex-col">
           <div className="space-y-2">
             <Label>Your Name</Label>
             <Input
@@ -275,6 +278,7 @@ export function MultiplayerLobbyScreen({
           </Button>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

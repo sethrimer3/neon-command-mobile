@@ -1287,8 +1287,9 @@ function App() {
       )}
 
       {gameState.mode === 'settings' && (
-        <div className="absolute inset-0 flex items-center justify-center p-4 overflow-auto">
-          <Card className="w-96 max-w-full">
+        <div className="absolute inset-0 overflow-y-auto">
+          <div className="min-h-full flex items-start justify-center p-4 py-8">
+          <Card className="w-96 max-w-full my-auto">
             <CardHeader>
               <CardTitle className="orbitron text-2xl">Settings</CardTitle>
             </CardHeader>
@@ -1540,6 +1541,7 @@ function App() {
               </Button>
             </CardContent>
           </Card>
+          </div>
         </div>
       )}
 

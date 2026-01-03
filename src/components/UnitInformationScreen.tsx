@@ -232,8 +232,9 @@ export function UnitInformationScreen({ onBack }: UnitInformationScreenProps) {
   const playerColor = '#6495ED'; // Default color for display
   
   return (
-    <div className="absolute inset-0 flex items-center justify-center p-4 animate-in fade-in duration-300">
-      <Card className="w-full max-w-7xl max-h-[90vh] overflow-hidden">
+    <div className="absolute inset-0 overflow-y-auto animate-in fade-in duration-300">
+      <div className="min-h-full flex items-start justify-center p-4 py-8">
+        <Card className="w-full max-w-7xl overflow-hidden my-auto">
         <CardHeader className="border-b border-border">
           <div className="flex items-center gap-3">
             <Info size={32} className="text-primary" />
@@ -246,7 +247,7 @@ export function UnitInformationScreen({ onBack }: UnitInformationScreenProps) {
           </div>
         </CardHeader>
         
-        <CardContent className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+        <CardContent className="p-6">
           <div className="space-y-8">
             {factions.map((faction) => {
               const factionDef = FACTION_DEFINITIONS[faction];
@@ -310,7 +311,7 @@ export function UnitInformationScreen({ onBack }: UnitInformationScreenProps) {
           </div>
         </CardContent>
         
-        <div className="border-t border-border p-4">
+        <div className="border-t border-border p-4 bg-card">
           <Button
             onClick={onBack}
             className="w-full orbitron uppercase tracking-wider"
@@ -321,6 +322,7 @@ export function UnitInformationScreen({ onBack }: UnitInformationScreenProps) {
           </Button>
         </div>
       </Card>
+      </div>
     </div>
   );
 }

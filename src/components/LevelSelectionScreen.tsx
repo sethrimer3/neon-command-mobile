@@ -18,12 +18,13 @@ export function LevelSelectionScreen({
   const maps = getMapList();
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center p-4">
-      <Card className="w-full max-w-3xl max-h-[90vh] flex flex-col">
+    <div className="absolute inset-0 overflow-y-auto">
+      <div className="min-h-full flex items-start justify-center p-4 py-8">
+      <Card className="w-full max-w-3xl flex flex-col my-auto">
         <CardHeader>
           <CardTitle className="orbitron text-2xl">Select Level</CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 overflow-hidden flex flex-col space-y-4">
+        <CardContent className="flex-1 flex flex-col space-y-4">
           <ScrollArea className="flex-1">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1">
               {maps.map((map) => (
@@ -67,6 +68,7 @@ export function LevelSelectionScreen({
           </Button>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

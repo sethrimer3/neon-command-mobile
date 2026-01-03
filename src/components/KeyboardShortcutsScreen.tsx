@@ -48,15 +48,16 @@ export function KeyboardShortcutsScreen({ onBack }: KeyboardShortcutsScreenProps
   const categories = Array.from(new Set(SHORTCUTS.map(s => s.category)));
   
   return (
-    <div className="absolute inset-0 flex items-center justify-center p-4 animate-in fade-in duration-300">
-      <Card className="w-full max-w-3xl max-h-[90vh] overflow-hidden">
+    <div className="absolute inset-0 overflow-y-auto animate-in fade-in duration-300">
+      <div className="min-h-full flex items-start justify-center p-4 py-8">
+      <Card className="w-full max-w-3xl overflow-hidden my-auto">
         <CardHeader className="border-b border-border">
           <div className="flex items-center gap-3">
             <Keyboard size={32} className="text-primary" />
             <CardTitle className="text-2xl">Keyboard Shortcuts</CardTitle>
           </div>
         </CardHeader>
-        <CardContent className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+        <CardContent className="p-6">
           <div className="space-y-6">
             {categories.map((category) => (
               <div key={category}>
@@ -96,7 +97,7 @@ export function KeyboardShortcutsScreen({ onBack }: KeyboardShortcutsScreenProps
             </p>
           </div>
         </CardContent>
-        <div className="border-t border-border p-4">
+        <div className="border-t border-border p-4 bg-card">
           <Button
             onClick={onBack}
             className="w-full orbitron uppercase tracking-wider"
@@ -107,6 +108,7 @@ export function KeyboardShortcutsScreen({ onBack }: KeyboardShortcutsScreenProps
           </Button>
         </div>
       </Card>
+      </div>
     </div>
   );
 }
