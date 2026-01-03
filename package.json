@@ -60,6 +60,7 @@
         "marked": "^15.0.7",
         "next-themes": "^0.4.6",
         "octokit": "^5.0.5",
+        "peerjs": "^1.5.5",
         "react": "^19.0.0",
         "react-day-picker": "^9.13.0",
         "react-dom": "^19.2.3",

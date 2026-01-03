@@ -21,6 +21,7 @@ import { UnitSelectionScreen } from './components/UnitSelectionScreen';
 import { MapSelectionScreen } from './components/MapSelectionScreen';
 import { LevelSelectionScreen } from './components/LevelSelectionScreen';
 import { OnlineModeScreen } from './components/OnlineModeScreen';
+import { LANModeScreen } from './components/LANModeScreen';
 import { MultiplayerLobbyScreen } from './components/MultiplayerLobbyScreen';
 import { StatisticsScreen } from './components/StatisticsScreen';
 import { ModifierHelpScreen } from './components/ModifierHelpScreen';
@@ -28,6 +29,7 @@ import { UnitInformationScreen } from './components/UnitInformationScreen';
 import { getMapById, getValidBasePositions, createBoundaryObstacles } from './lib/maps';
 import { MultiplayerManager, LobbyData } from './lib/multiplayer';
 import { createRealtimeStore } from './lib/realtimeStore';
+import { LANKVStore } from './lib/lanStore';
 import { PlayerStatistics, MatchStats, createEmptyStatistics, updateStatistics, calculateMMRChange } from './lib/statistics';
 import { soundManager } from './lib/sound';
 import { MultiplayerSync, initializeMultiplayerSync, updateMultiplayerSync } from './lib/multiplayerGame';
@@ -43,6 +45,7 @@ function App() {
   const lastTimeRef = useRef<number>(Date.now());
   const multiplayerManagerRef = useRef<MultiplayerManager | null>(null);
   const multiplayerSyncRef = useRef<MultiplayerSync | null>(null);
+  const lanStoreRef = useRef<LANKVStore | null>(null);
   const lobbyCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [multiplayerLobbies, setMultiplayerLobbies] = useState<LobbyData[]>([]);
   const [currentLobby, setCurrentLobby] = useState<LobbyData | null>(null);
@@ -764,6 +767,115 @@ function App() {
     setRenderTrigger(prev => prev + 1);
   };
 
+  const goToLANMode = () => {
+    soundManager.playButtonClick();
+    gameStateRef.current.mode = 'lanMode';
+    setRenderTrigger(prev => prev + 1);
+  };
+
+  const handleLANHost = async (): Promise<string> => {
+    // Create new LAN store instance
+    const lanStore = new LANKVStore();
+    lanStoreRef.current = lanStore;
+    
+    // Initialize as host
+    const peerId = await lanStore.initAsHost();
+    
+    // Create multiplayer manager with LAN store
+    multiplayerManagerRef.current = new MultiplayerManager(userId, lanStore);
+    
+    // Create a lobby
+    const playerName = `Host_${userId.slice(-4)}`;
+    const gameId = await multiplayerManagerRef.current.createGame(
+      playerName,
+      playerColor || COLORS.playerDefault,
+      selectedMap || 'open',
+      enabledUnits || []
+    );
+    
+    const lobby = await multiplayerManagerRef.current.getLobby(gameId);
+    setCurrentLobby(lobby);
+    
+    // Navigate to lobby
+    gameStateRef.current.mode = 'multiplayerLobby';
+    setRenderTrigger(prev => prev + 1);
+    
+    // Start checking for guest joining
+    lobbyCheckIntervalRef.current = setInterval(async () => {
+      const updatedLobby = await multiplayerManagerRef.current?.getLobby(gameId);
+      if (updatedLobby) {
+        setCurrentLobby(updatedLobby);
+        if (updatedLobby.status === 'playing') {
+          if (lobbyCheckIntervalRef.current) {
+            clearInterval(lobbyCheckIntervalRef.current);
+            lobbyCheckIntervalRef.current = null;
+          }
+        }
+      }
+    }, 1000);
+    
+    return peerId;
+  };
+
+  const handleLANJoin = async (hostPeerId: string): Promise<boolean> => {
+    try {
+      // Create new LAN store instance
+      const lanStore = new LANKVStore();
+      lanStoreRef.current = lanStore;
+      
+      // Initialize as guest
+      await lanStore.initAsGuest(hostPeerId);
+      
+      // Create multiplayer manager with LAN store
+      multiplayerManagerRef.current = new MultiplayerManager(userId, lanStore);
+      
+      // Wait a bit for connection to establish
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Get available lobbies (should be the host's lobby)
+      const lobbies = await multiplayerManagerRef.current.getAvailableLobbies();
+      
+      if (lobbies.length > 0) {
+        const lobby = lobbies[0];
+        const playerName = `Guest_${userId.slice(-4)}`;
+        
+        const success = await multiplayerManagerRef.current.joinGame(
+          lobby.gameId,
+          playerName,
+          enemyColor || COLORS.enemyDefault
+        );
+        
+        if (success) {
+          const updatedLobby = await multiplayerManagerRef.current.getLobby(lobby.gameId);
+          setCurrentLobby(updatedLobby);
+          gameStateRef.current.mode = 'multiplayerLobby';
+          setRenderTrigger(prev => prev + 1);
+          
+          // Start checking for game start
+          lobbyCheckIntervalRef.current = setInterval(async () => {
+            const updatedLobby = await multiplayerManagerRef.current?.getLobby(lobby.gameId);
+            if (updatedLobby) {
+              setCurrentLobby(updatedLobby);
+              if (updatedLobby.status === 'playing') {
+                if (lobbyCheckIntervalRef.current) {
+                  clearInterval(lobbyCheckIntervalRef.current);
+                  lobbyCheckIntervalRef.current = null;
+                }
+              }
+            }
+          }, 1000);
+          
+          return true;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Failed to join LAN game:', error);
+      return false;
+    }
+  };
+
   const handleMapSelect = (mapId: string) => {
     setSelectedMap(mapId);
     toast.success(`Map changed to ${getMapById(mapId)?.name || mapId}`);
@@ -1410,6 +1522,15 @@ function App() {
           onBack={backToMenu}
           onMatchmaking={goToMatchmaking}
           onCustomGame={goToMultiplayer}
+          onLAN={goToLANMode}
+        />
+      )}
+
+      {gameState.mode === 'lanMode' && (
+        <LANModeScreen
+          onBack={backToMenu}
+          onHost={handleLANHost}
+          onJoin={handleLANJoin}
         />
       )}
 
