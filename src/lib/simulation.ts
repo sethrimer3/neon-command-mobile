@@ -347,7 +347,6 @@ function updateStuckDetection(unit: Unit, deltaTime: number): void {
 const PATHFINDING_LOOKAHEAD_DISTANCE = 2.0; // How far ahead to check for obstacles
 const PATHFINDING_ANGLE_STEP = Math.PI / 6; // 30 degrees - angle increment for trying alternative paths
 const PATHFINDING_MAX_ANGLES = 3; // Try up to 3 angles on each side (30, 60, 90 degrees)
-const PATHFINDING_SIDE_OFFSET = 1.5; // Distance to offset when navigating around obstacles
 
 /**
  * Finds an alternative path around obstacles using simple angle-based pathfinding.
@@ -355,14 +354,12 @@ const PATHFINDING_SIDE_OFFSET = 1.5; // Distance to offset when navigating aroun
  * @param unit - The unit trying to move
  * @param target - The target position
  * @param obstacles - Array of obstacles to avoid
- * @param allUnits - All units for collision checking
  * @returns Alternative direction to move, or null if no path found
  */
 function findPathAroundObstacle(
   unit: Unit,
   target: Vector2,
-  obstacles: import('./maps').Obstacle[],
-  allUnits: Unit[]
+  obstacles: import('./maps').Obstacle[]
 ): Vector2 | null {
   const directDirection = normalize(subtract(target, unit.position));
   const unitRadius = UNIT_SIZE_METERS / 2;
@@ -372,6 +369,9 @@ function findPathAroundObstacle(
   if (!checkObstacleCollision(lookaheadPos, unitRadius, obstacles)) {
     return null; // Direct path is clear, no need for pathfinding
   }
+  
+  // Calculate direction to target once for reuse
+  const toTarget = subtract(target, unit.position);
   
   // Try alternative angles to find a clear path
   // Alternate between left and right to find the shortest path around
@@ -385,7 +385,6 @@ function findPathAroundObstacle(
     
     if (!checkObstacleCollision(rightPos, unitRadius, obstacles)) {
       // Check that this direction generally moves toward target
-      const toTarget = subtract(target, unit.position);
       const dotProduct = rightDir.x * toTarget.x + rightDir.y * toTarget.y;
       if (dotProduct > 0) {
         return rightDir;
@@ -399,7 +398,6 @@ function findPathAroundObstacle(
     
     if (!checkObstacleCollision(leftPos, unitRadius, obstacles)) {
       // Check that this direction generally moves toward target
-      const toTarget = subtract(target, unit.position);
       const dotProduct = leftDir.x * toTarget.x + leftDir.y * toTarget.y;
       if (dotProduct > 0) {
         return leftDir;
@@ -1334,7 +1332,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
       let direction = normalize(subtract(currentNode.position, unit.position));
       
       // Try pathfinding if direct path might be blocked
-      const alternativePath = findPathAroundObstacle(unit, currentNode.position, state.obstacles, state.units);
+      const alternativePath = findPathAroundObstacle(unit, currentNode.position, state.obstacles);
       if (alternativePath) {
         direction = alternativePath;
       }
@@ -1419,7 +1417,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
       let direction = normalize(subtract(currentNode.position, unit.position));
 
       // Try pathfinding if direct path might be blocked
-      const alternativePath = findPathAroundObstacle(unit, currentNode.position, state.obstacles, state.units);
+      const alternativePath = findPathAroundObstacle(unit, currentNode.position, state.obstacles);
       if (alternativePath) {
         direction = alternativePath;
       }
@@ -1510,7 +1508,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
       let direction = normalize(subtract(currentNode.position, unit.position));
       
       // Try pathfinding if direct path might be blocked
-      const alternativePath = findPathAroundObstacle(unit, currentNode.position, state.obstacles, state.units);
+      const alternativePath = findPathAroundObstacle(unit, currentNode.position, state.obstacles);
       if (alternativePath) {
         direction = alternativePath;
       }
