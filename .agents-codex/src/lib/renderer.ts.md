@@ -7,6 +7,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 ### Imports
 - `./types` - All game types, colors, and constants
 - `./gameUtils` - Coordinate conversions and vector math
+- `./camera` - Camera transforms for zoomed/panned rendering
 - `./maps` - Obstacle type
 
 ### Used By
@@ -64,7 +65,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 #### drawParticles(ctx, unit): void
 - **Purpose:** Renders particle physics effects for units
 - **Notes:**
-  - Small glowing circles (2px radius)
+  - Uses meter-based sizing to scale particle glow/trails with unit size
   - Uses unit's color with shadow blur for glow effect
   - Currently used only for marines (10 particles per marine)
 
@@ -102,6 +103,12 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - Ability effects have distinct visual styles
 - Selection pulses using sine wave animation
 - All positions must be converted from meters to pixels before drawing
+- Playfield borders align to the letterboxed arena viewport offset
+- LOD distance calculations use the arena viewport center, not the full canvas
+- Mining depots render a dashed preview line when `state.miningDragPreview` targets that depot
+- Resource deposits adjust glow/brightness based on 0/1/2 assigned worker drones
+- Camera transforms are applied to world layers and removed before drawing screen-space UI
+- Off-screen indicators render at arena viewport edges when zoomed in to keep units/bases visible
 
 ### Rendering Optimizations
 - Clears only once per frame
@@ -115,8 +122,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - Clear visual hierarchy (important elements stand out)
 
 ### Known Issues
-- No culling for off-screen entities (draws everything)
-- Large unit counts may impact performance
+- Large unit counts may impact performance, especially when many effects are enabled
 
 ## Future Changes
 
@@ -124,12 +130,11 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - None currently scheduled
 
 ### Needed
-- Viewport culling to skip off-screen rendering
+- Expand viewport culling to additional entity types beyond units/projectiles
 - Unit death animations
 - Better attack visualizations
 - Minimap rendering
 - Fog of war implementation
-- Camera zoom/pan support
 - Performance profiling and optimization
 
 ## Change History
@@ -140,6 +145,13 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - Added match statistics to HUD
 - **2025-12-31**: Added particle physics rendering for marines with glowing effect
 - **2026-01-01**: Strengthened base selection glow with a thicker outline and secondary ring
+- **2026-01-03**: Adjusted playfield borders to render with the arena viewport offset
+- **2026-01-03**: Anchored unit LOD calculations to the arena viewport center
+- **2026-01-06**: Sized playfield borders using viewport dimensions to match rotated desktop bounds
+- **2025-03-10**: Scaled projectile and unit-attached particle rendering using meter-based sizing tied to unit size constants
+- **2025-03-17**: Added mining drag preview lines and updated deposit colors for two-worker occupancy states
+- **2025-03-18**: Scaled mining depots, deposits, and mining drone rendering to match the larger resource loop visuals
+- **2026-01-04**: Applied camera transforms to world rendering and added off-screen zoom indicators for units and bases
 
 ## Watch Out For
 - Always convert game positions to pixels before drawing

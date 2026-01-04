@@ -94,9 +94,23 @@ export function calculateFormationOffsets(
 
     default:
     case 'none':
-      // No formation - all units at center
-      for (let i = 0; i < unitCount; i++) {
+      // Auto-spacing: create a compact grid to prevent units from stacking
+      // This ensures units have individual positions even when no formation is selected
+      if (unitCount === 1) {
         offsets.push({ x: 0, y: 0 });
+      } else {
+        const cols = Math.ceil(Math.sqrt(unitCount));
+        const rows = Math.ceil(unitCount / cols);
+        let index = 0;
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            if (index >= unitCount) break;
+            const x = (col - (cols - 1) / 2) * spacing;
+            const y = (row - (rows - 1) / 2) * spacing;
+            offsets.push({ x, y });
+            index++;
+          }
+        }
       }
       break;
   }
@@ -115,12 +129,13 @@ export function applyFormation(
   spacing: number = 2.0
 ): Vector2[] {
   if (units.length === 0) return [];
-  if (formationType === 'none' || units.length === 1) {
-    // No formation or single unit - all go to target
-    return units.map(() => ({ ...targetPosition }));
+  
+  // Single unit - just go to target
+  if (units.length === 1) {
+    return [{ ...targetPosition }];
   }
 
-  // Calculate formation offsets
+  // Calculate formation offsets (now 'none' also creates spacing)
   const offsets = calculateFormationOffsets(units.length, formationType, spacing);
 
   // Calculate average current position of units (formation center)
@@ -180,6 +195,6 @@ export function getFormationDescription(formation: FormationType): string {
     case 'wedge': return 'V-shaped assault formation. Strong frontal attack.';
     case 'circle': return 'Circular defensive formation. 360° coverage.';
     case 'none':
-    default: return 'Units move to the same point without formation.';
+    default: return 'Units automatically space out in a grid. Prevents stacking.';
   }
 }

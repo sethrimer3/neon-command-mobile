@@ -3,6 +3,7 @@ export class SoundManager {
   private sfxVolume = 0.7;
   private musicVolume = 0.5;
   private enabled = true;
+  private volumeScale = 1.0; // Additional volume multiplier (for background battles)
   private audioFiles: Map<string, HTMLAudioElement> = new Map();
 
   constructor() {
@@ -26,6 +27,10 @@ export class SoundManager {
         audio.volume = this.musicVolume;
       }
     });
+  }
+
+  setVolumeScale(scale: number) {
+    this.volumeScale = Math.max(0, Math.min(1, scale));
   }
 
   getSfxVolume(): number {
@@ -59,7 +64,7 @@ export class SoundManager {
       oscillator.type = type;
       oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
       
-      const finalVolume = volume * this.sfxVolume;
+      const finalVolume = volume * this.sfxVolume * this.volumeScale;
       gainNode.gain.setValueAtTime(finalVolume, this.audioContext.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
       
@@ -89,7 +94,7 @@ export class SoundManager {
       source.connect(gainNode);
       gainNode.connect(this.audioContext.destination);
       
-      gainNode.gain.setValueAtTime(volume * this.sfxVolume, this.audioContext.currentTime);
+      gainNode.gain.setValueAtTime(volume * this.sfxVolume * this.volumeScale, this.audioContext.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
       
       source.start(this.audioContext.currentTime);
@@ -142,7 +147,7 @@ export class SoundManager {
       oscillator.frequency.setValueAtTime(1000, this.audioContext!.currentTime);
       oscillator.frequency.exponentialRampToValueAtTime(200, this.audioContext!.currentTime + 0.3);
       
-      gainNode.gain.setValueAtTime(0.3 * this.sfxVolume, this.audioContext!.currentTime);
+      gainNode.gain.setValueAtTime(0.3 * this.sfxVolume * this.volumeScale, this.audioContext!.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext!.currentTime + 0.3);
       
       oscillator.start(this.audioContext!.currentTime);
@@ -207,7 +212,7 @@ export class SoundManager {
     if (audio) {
       audio.currentTime = 0;
       const isMusic = name.startsWith('music_');
-      audio.volume = isMusic ? this.musicVolume : this.sfxVolume;
+      audio.volume = (isMusic ? this.musicVolume : this.sfxVolume) * this.volumeScale;
       audio.play().catch(() => {});
     }
   }

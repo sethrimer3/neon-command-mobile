@@ -1,6 +1,20 @@
 export const PIXELS_PER_METER = 20;
-export const BASE_SIZE_METERS = 3;
-export const UNIT_SIZE_METERS = 1;
+// Double the base footprint so structures read larger in-world.
+export const BASE_SIZE_METERS = 6;
+// Double the unit footprint so all unit rendering/collision scales up.
+export const UNIT_SIZE_METERS = 2;
+// Scale mining depots to read as large structures in the resource loop.
+export const MINING_DEPOT_SIZE_METERS = 3;
+// Scale resource deposits so their hex tiles feel substantial on the map.
+export const RESOURCE_DEPOSIT_SIZE_METERS = 1.2;
+// Expand the deposit ring radius to keep doubled deposits from overlapping the depot.
+export const RESOURCE_DEPOSIT_RING_RADIUS_METERS = 5;
+// Make mining drones render and select at a larger footprint than standard units.
+export const MINING_DRONE_SIZE_MULTIPLIER = 2;
+
+// Fixed arena dimensions in meters for consistent gameplay across all devices
+export const ARENA_WIDTH_METERS = 60;  // Fixed logical width in meters
+export const ARENA_HEIGHT_METERS = 90; // Fixed logical height in meters
 
 export const ABILITY_MAX_RANGE = 10;
 export const QUEUE_MAX_LENGTH = 3;
@@ -30,6 +44,9 @@ export const COLORS = {
   laser: 'oklch(0.70 0.30 320)',
   telegraph: 'oklch(0.75 0.18 200)',
   white: 'oklch(0.98 0 0)',
+  borderMain: 'oklch(0.30 0 0)',
+  borderHighlight: 'oklch(0.40 0 0)',
+  borderShadow: 'oklch(0.20 0 0)',
 };
 
 export type Vector2 = { x: number; y: number };
@@ -82,7 +99,6 @@ export interface Unit {
   distanceTraveled: number;
   distanceCredit: number;
   abilityCooldown: number;
-  dashExecuting?: boolean;
   lineJumpTelegraph?: { startTime: number; endPos: Vector2; direction: Vector2 };
   shieldActive?: { endTime: number; radius: number };
   cloaked?: { endTime: number };
@@ -100,17 +116,90 @@ export interface Unit {
   currentSpeed?: number; // Current movement speed for acceleration/deceleration
   stuckTimer?: number; // Time in seconds that unit has been stuck (unable to move with commands queued)
   lastPosition?: Vector2; // Last recorded position for stuck detection
+  jitterOffset?: number; // Offset for jitter/wiggle movement when stuck
   queueFadeStartTime?: number; // Timestamp when queue fade animation started (for cancelled commands)
+  queueDrawStartTime?: number; // Timestamp when queue drawing animation started (for new commands)
+  queueDrawReverse?: boolean; // Whether queue should un-draw in reverse (true when unit dies)
+  temporaryAvoidance?: { originalPosition: Vector2; returnDelay: number }; // For friendly unit avoidance - returnDelay is time remaining in seconds
+  previousFlockingForce?: Vector2; // Previous flocking force for smoothing to prevent oscillations
+  miningState?: { // Mining drone specific state
+    depotId: string; // ID of the mining depot
+    depositId: string; // ID of the resource deposit being mined
+    atDepot: boolean; // true when at depot, false when at deposit
+    cadenceDelay?: number; // Optional delay to keep drones alternating when sharing a deposit
+  };
 }
 
 export type FactionType = 'radiant' | 'aurum' | 'solari';
 
+export type BaseType = 'standard' | 'defense' | 'assault' | 'support';
+
+export interface BaseTypeDefinition {
+  name: string;
+  description: string;
+  hp: number;
+  armor: number;
+  moveSpeed: number; // 0 for stationary
+  ability: 'laser' | 'shield' | 'pulse' | 'auto-cannon' | 'regeneration';
+  canMove: boolean;
+  autoAttack?: {
+    range: number;
+    damage: number;
+    attackRate: number; // attacks per second
+  };
+}
+
+export const BASE_TYPE_DEFINITIONS: Record<BaseType, BaseTypeDefinition> = {
+  standard: {
+    name: 'Standard Base',
+    description: 'Mobile base with faction ability',
+    hp: 1000,
+    armor: 15,
+    moveSpeed: 0, // Will use faction baseMoveSpeed
+    ability: 'laser', // Will use faction ability
+    canMove: true,
+  },
+  defense: {
+    name: 'Defense Fortress',
+    description: 'Stationary base with auto-targeting cannon',
+    hp: 1500,
+    armor: 25,
+    moveSpeed: 0,
+    ability: 'auto-cannon',
+    canMove: false,
+    autoAttack: {
+      range: 15,
+      damage: 6, // Similar to marine damage
+      attackRate: 2, // 2 attacks per second
+    },
+  },
+  assault: {
+    name: 'Assault Base',
+    description: 'Fast mobile base with enhanced shield',
+    hp: 800,
+    armor: 10,
+    moveSpeed: 4.5, // Faster than standard
+    ability: 'shield',
+    canMove: true,
+  },
+  support: {
+    name: 'Support Nexus',
+    description: 'Slow base with regeneration aura',
+    hp: 1200,
+    armor: 20,
+    moveSpeed: 1.0,
+    ability: 'regeneration',
+    canMove: true,
+  },
+};
+
 export interface FactionDefinition {
   name: string;
   baseMoveSpeed: number;
-  baseShape: 'square' | 'circle' | 'star';
+  baseShape: 'square' | 'circle' | 'star' | 'triangle';
   ability: 'laser' | 'shield' | 'pulse';
   availableUnits: UnitType[];
+  availableBaseTypes: BaseType[];
 }
 
 export const FACTION_DEFINITIONS: Record<FactionType, FactionDefinition> = {
@@ -119,21 +208,24 @@ export const FACTION_DEFINITIONS: Record<FactionType, FactionDefinition> = {
     baseMoveSpeed: 1.5,
     baseShape: 'square',
     ability: 'laser',
-    availableUnits: ['marine', 'warrior', 'tank', 'scout', 'artillery', 'medic', 'interceptor'],
+    availableUnits: ['marine', 'warrior', 'tank', 'scout', 'artillery', 'medic', 'interceptor', 'guardian', 'marksman', 'engineer', 'skirmisher', 'paladin'],
+    availableBaseTypes: ['standard', 'defense'],
   },
   aurum: {
     name: 'Aurum',
     baseMoveSpeed: 3.0,
-    baseShape: 'circle',
+    baseShape: 'triangle',
     ability: 'shield',
-    availableUnits: ['snaker', 'berserker', 'assassin', 'juggernaut', 'striker'],
+    availableUnits: ['snaker', 'berserker', 'assassin', 'juggernaut', 'striker', 'reaper', 'oracle', 'harbinger', 'gladiator', 'ravager', 'warlord', 'duelist'],
+    availableBaseTypes: ['standard', 'assault'],
   },
   solari: {
     name: 'Solari',
     baseMoveSpeed: 2.0,
-    baseShape: 'star',
+    baseShape: 'circle',
     ability: 'pulse',
-    availableUnits: ['flare', 'nova', 'eclipse', 'corona', 'supernova'],
+    availableUnits: ['flare', 'nova', 'eclipse', 'corona', 'supernova', 'zenith', 'pulsar', 'celestial', 'voidwalker', 'chronomancer', 'nebula', 'quasar'],
+    availableBaseTypes: ['standard', 'support'],
   },
 };
 
@@ -145,14 +237,33 @@ export interface Base {
   maxHp: number;
   armor: number; // Reduces damage from ranged attacks
   movementTarget: Vector2 | null;
+  rallyPoint: Vector2; // Rally point where spawned units will go
   isSelected: boolean;
   laserCooldown: number;
   laserBeam?: { endTime: number; direction: Vector2 }; // Visual effect for laser
   faction: FactionType;
+  baseType: BaseType;
   shieldActive?: { endTime: number }; // Shield ability for aurum faction
+  autoAttackCooldown?: number; // Cooldown for auto-attack (defense base)
+  regenerationPulse?: { endTime: number; radius: number }; // Visual effect for regeneration pulse
 }
 
-export type UnitType = 'marine' | 'warrior' | 'snaker' | 'tank' | 'scout' | 'artillery' | 'medic' | 'interceptor' | 'berserker' | 'assassin' | 'juggernaut' | 'striker' | 'flare' | 'nova' | 'eclipse' | 'corona' | 'supernova';
+// Mining depot for resource gathering
+export interface ResourceDeposit {
+  id: string;
+  position: Vector2;
+  depotId: string; // ID of the mining depot this deposit belongs to
+  workerIds?: string[]; // IDs of the mining drones working this deposit (max 2)
+}
+
+export interface MiningDepot {
+  id: string;
+  position: Vector2;
+  owner: number; // 0 for player side, 1 for enemy side
+  deposits: ResourceDeposit[]; // 8 resource deposits around the depot
+}
+
+export type UnitType = 'marine' | 'warrior' | 'snaker' | 'tank' | 'scout' | 'artillery' | 'medic' | 'interceptor' | 'berserker' | 'assassin' | 'juggernaut' | 'striker' | 'flare' | 'nova' | 'eclipse' | 'corona' | 'supernova' | 'guardian' | 'reaper' | 'oracle' | 'harbinger' | 'zenith' | 'pulsar' | 'celestial' | 'marksman' | 'engineer' | 'skirmisher' | 'paladin' | 'gladiator' | 'ravager' | 'warlord' | 'duelist' | 'voidwalker' | 'chronomancer' | 'nebula' | 'quasar' | 'miningDrone';
 
 export interface UnitDefinition {
   name: string;
@@ -178,8 +289,8 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     moveSpeed: 4,
     attackType: 'ranged',
     attackRange: 8,
-    attackDamage: 6,
-    attackRate: 2,
+    attackDamage: 2,
+    attackRate: 6,
     cost: 25,
     abilityName: 'Burst Fire',
     abilityCooldown: 5,
@@ -196,8 +307,8 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackDamage: 18,
     attackRate: 1,
     cost: 40,
-    abilityName: 'Execute Dash',
-    abilityCooldown: 8,
+    abilityName: 'Laser Beam',
+    abilityCooldown: 5,
     canDamageStructures: true,
     modifiers: ['melee'],
   },
@@ -212,7 +323,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 0,
     cost: 30,
     abilityName: 'Line Jump',
-    abilityCooldown: 6,
+    abilityCooldown: 5,
     canDamageStructures: false,
     modifiers: ['small'],
   },
@@ -227,7 +338,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 0.8,
     cost: 60,
     abilityName: 'Shield Dome',
-    abilityCooldown: 12,
+    abilityCooldown: 5,
     canDamageStructures: true,
     modifiers: ['ranged'],
   },
@@ -242,7 +353,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 3,
     cost: 20,
     abilityName: 'Cloak',
-    abilityCooldown: 15,
+    abilityCooldown: 5,
     canDamageStructures: false,
     modifiers: ['ranged', 'small'],
   },
@@ -257,7 +368,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 0.5,
     cost: 50,
     abilityName: 'Bombardment',
-    abilityCooldown: 10,
+    abilityCooldown: 5,
     canDamageStructures: true,
     modifiers: ['ranged'],
   },
@@ -272,7 +383,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 0,
     cost: 35,
     abilityName: 'Heal Pulse',
-    abilityCooldown: 7,
+    abilityCooldown: 5,
     canDamageStructures: false,
     modifiers: ['healing'],
   },
@@ -287,7 +398,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 2.5,
     cost: 45,
     abilityName: 'Missile Barrage',
-    abilityCooldown: 8,
+    abilityCooldown: 5,
     canDamageStructures: true,
     modifiers: ['ranged', 'flying'],
   },
@@ -302,7 +413,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 0.8,
     cost: 50,
     abilityName: 'Rage',
-    abilityCooldown: 10,
+    abilityCooldown: 5,
     canDamageStructures: true,
     modifiers: ['melee'],
   },
@@ -317,7 +428,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 2,
     cost: 35,
     abilityName: 'Shadow Strike',
-    abilityCooldown: 7,
+    abilityCooldown: 5,
     canDamageStructures: false,
     modifiers: ['melee'],
   },
@@ -332,7 +443,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 0.6,
     cost: 70,
     abilityName: 'Ground Slam',
-    abilityCooldown: 12,
+    abilityCooldown: 5,
     canDamageStructures: true,
     modifiers: ['melee'],
   },
@@ -347,7 +458,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 1.2,
     cost: 45,
     abilityName: 'Whirlwind',
-    abilityCooldown: 8,
+    abilityCooldown: 5,
     canDamageStructures: true,
     modifiers: ['melee'],
   },
@@ -362,7 +473,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 2.5,
     cost: 30,
     abilityName: 'Solar Beam',
-    abilityCooldown: 6,
+    abilityCooldown: 5,
     canDamageStructures: true,
     modifiers: ['ranged', 'small'],
   },
@@ -377,7 +488,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 1,
     cost: 45,
     abilityName: 'Stellar Burst',
-    abilityCooldown: 7,
+    abilityCooldown: 5,
     canDamageStructures: true,
     modifiers: ['melee'],
   },
@@ -392,7 +503,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 3,
     cost: 35,
     abilityName: 'Shadow Veil',
-    abilityCooldown: 10,
+    abilityCooldown: 5,
     canDamageStructures: false,
     modifiers: ['ranged'],
   },
@@ -407,7 +518,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 1,
     cost: 55,
     abilityName: 'Radiation Wave',
-    abilityCooldown: 9,
+    abilityCooldown: 5,
     canDamageStructures: true,
     modifiers: ['ranged'],
   },
@@ -422,18 +533,336 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackRate: 0.7,
     cost: 65,
     abilityName: 'Cosmic Explosion',
-    abilityCooldown: 12,
+    abilityCooldown: 5,
     canDamageStructures: true,
     modifiers: ['ranged'],
   },
+  guardian: {
+    name: 'Guardian',
+    hp: 160,
+    armor: 7,
+    moveSpeed: 2.5,
+    attackType: 'melee',
+    attackRange: 1.3,
+    attackDamage: 16,
+    attackRate: 1,
+    cost: 55,
+    abilityName: 'Protect Allies',
+    abilityCooldown: 5,
+    canDamageStructures: true,
+    modifiers: ['melee'],
+  },
+  reaper: {
+    name: 'Reaper',
+    hp: 65,
+    armor: 2,
+    moveSpeed: 4.5,
+    attackType: 'ranged',
+    attackRange: 9,
+    attackDamage: 8,
+    attackRate: 2,
+    cost: 40,
+    abilityName: 'Soul Strike',
+    abilityCooldown: 5,
+    canDamageStructures: true,
+    modifiers: ['ranged'],
+  },
+  oracle: {
+    name: 'Oracle',
+    hp: 70,
+    armor: 2,
+    moveSpeed: 3,
+    attackType: 'none',
+    attackRange: 0,
+    attackDamage: 0,
+    attackRate: 0,
+    cost: 40,
+    abilityName: 'Divine Restoration',
+    abilityCooldown: 5,
+    canDamageStructures: false,
+    modifiers: ['healing'],
+  },
+  harbinger: {
+    name: 'Harbinger',
+    hp: 75,
+    armor: 2,
+    moveSpeed: 5,
+    attackType: 'ranged',
+    attackRange: 8,
+    attackDamage: 6,
+    attackRate: 2.5,
+    cost: 50,
+    abilityName: 'Ethereal Strike',
+    abilityCooldown: 5,
+    canDamageStructures: true,
+    modifiers: ['ranged', 'flying'],
+  },
+  zenith: {
+    name: 'Zenith',
+    hp: 65,
+    armor: 2,
+    moveSpeed: 3.5,
+    attackType: 'none',
+    attackRange: 0,
+    attackDamage: 0,
+    attackRate: 0,
+    cost: 40,
+    abilityName: 'Solar Blessing',
+    abilityCooldown: 5,
+    canDamageStructures: false,
+    modifiers: ['healing'],
+  },
+  pulsar: {
+    name: 'Pulsar',
+    hp: 70,
+    armor: 2,
+    moveSpeed: 5.5,
+    attackType: 'ranged',
+    attackRange: 7,
+    attackDamage: 7,
+    attackRate: 2.5,
+    cost: 48,
+    abilityName: 'Stellar Dive',
+    abilityCooldown: 5,
+    canDamageStructures: false,
+    modifiers: ['ranged', 'flying', 'small'],
+  },
+  celestial: {
+    name: 'Celestial',
+    hp: 130,
+    armor: 5,
+    moveSpeed: 3,
+    attackType: 'melee',
+    attackRange: 1.2,
+    attackDamage: 20,
+    attackRate: 1.1,
+    cost: 50,
+    abilityName: 'Astral Charge',
+    abilityCooldown: 5,
+    canDamageStructures: true,
+    modifiers: ['melee'],
+  },
+  // Radiant faction - 4 new units (balanced/ranged focus)
+  marksman: {
+    name: 'Marksman',
+    hp: 45,
+    armor: 1,
+    moveSpeed: 3,
+    attackType: 'ranged',
+    attackRange: 18,
+    attackDamage: 12,
+    attackRate: 0.6,
+    cost: 55,
+    abilityName: 'Precision Shot',
+    abilityCooldown: 5,
+    canDamageStructures: true,
+    modifiers: ['ranged'],
+  },
+  engineer: {
+    name: 'Engineer',
+    hp: 70,
+    armor: 3,
+    moveSpeed: 3,
+    attackType: 'ranged',
+    attackRange: 6,
+    attackDamage: 5,
+    attackRate: 1.5,
+    cost: 45,
+    abilityName: 'Deploy Turret',
+    abilityCooldown: 5,
+    canDamageStructures: true,
+    modifiers: ['ranged'],
+  },
+  skirmisher: {
+    name: 'Skirmisher',
+    hp: 55,
+    armor: 2,
+    moveSpeed: 5,
+    attackType: 'ranged',
+    attackRange: 7,
+    attackDamage: 6,
+    attackRate: 2,
+    cost: 35,
+    abilityName: 'Rapid Retreat',
+    abilityCooldown: 5,
+    canDamageStructures: false,
+    modifiers: ['ranged', 'small'],
+  },
+  paladin: {
+    name: 'Paladin',
+    hp: 140,
+    armor: 6,
+    moveSpeed: 3,
+    attackType: 'ranged',
+    attackRange: 5,
+    attackDamage: 10,
+    attackRate: 1,
+    cost: 60,
+    abilityName: 'Holy Strike',
+    abilityCooldown: 5,
+    canDamageStructures: true,
+    modifiers: ['ranged', 'melee'],
+  },
+  // Aurum faction - 4 new units (melee focus)
+  gladiator: {
+    name: 'Gladiator',
+    hp: 130,
+    armor: 5,
+    moveSpeed: 3.5,
+    attackType: 'melee',
+    attackRange: 1.2,
+    attackDamage: 28,
+    attackRate: 0.9,
+    cost: 55,
+    abilityName: 'Lethal Strike',
+    abilityCooldown: 5,
+    canDamageStructures: true,
+    modifiers: ['melee'],
+  },
+  ravager: {
+    name: 'Ravager',
+    hp: 100,
+    armor: 3,
+    moveSpeed: 4.5,
+    attackType: 'melee',
+    attackRange: 1,
+    attackDamage: 18,
+    attackRate: 1.5,
+    cost: 45,
+    abilityName: 'Blood Hunt',
+    abilityCooldown: 5,
+    canDamageStructures: true,
+    modifiers: ['melee'],
+  },
+  warlord: {
+    name: 'Warlord',
+    hp: 280,
+    armor: 12,
+    moveSpeed: 2,
+    attackType: 'melee',
+    attackRange: 1.5,
+    attackDamage: 35,
+    attackRate: 0.5,
+    cost: 80,
+    abilityName: 'Battle Cry',
+    abilityCooldown: 5,
+    canDamageStructures: true,
+    modifiers: ['melee'],
+  },
+  duelist: {
+    name: 'Duelist',
+    hp: 90,
+    armor: 4,
+    moveSpeed: 4,
+    attackType: 'melee',
+    attackRange: 1.2,
+    attackDamage: 16,
+    attackRate: 1.8,
+    cost: 40,
+    abilityName: 'Riposte',
+    abilityCooldown: 5,
+    canDamageStructures: false,
+    modifiers: ['melee'],
+  },
+  // Solari faction - 4 new units (complex/unique abilities)
+  voidwalker: {
+    name: 'Voidwalker',
+    hp: 75,
+    armor: 2,
+    moveSpeed: 3.5,
+    attackType: 'ranged',
+    attackRange: 7,
+    attackDamage: 8,
+    attackRate: 2,
+    cost: 50,
+    abilityName: 'Void Step',
+    abilityCooldown: 5,
+    canDamageStructures: false,
+    modifiers: ['ranged'],
+  },
+  chronomancer: {
+    name: 'Chronomancer',
+    hp: 60,
+    armor: 2,
+    moveSpeed: 3,
+    attackType: 'ranged',
+    attackRange: 8,
+    attackDamage: 6,
+    attackRate: 1.5,
+    cost: 55,
+    abilityName: 'Time Dilation',
+    abilityCooldown: 5,
+    canDamageStructures: false,
+    modifiers: ['ranged'],
+  },
+  nebula: {
+    name: 'Nebula',
+    hp: 80,
+    armor: 3,
+    moveSpeed: 2.5,
+    attackType: 'ranged',
+    attackRange: 6,
+    attackDamage: 7,
+    attackRate: 1.2,
+    cost: 50,
+    abilityName: 'Cosmic Barrier',
+    abilityCooldown: 5,
+    canDamageStructures: false,
+    modifiers: ['ranged'],
+  },
+  quasar: {
+    name: 'Quasar',
+    hp: 70,
+    armor: 2,
+    moveSpeed: 3,
+    attackType: 'ranged',
+    attackRange: 10,
+    attackDamage: 9,
+    attackRate: 1,
+    cost: 60,
+    abilityName: 'Stellar Convergence',
+    abilityCooldown: 5,
+    canDamageStructures: true,
+    modifiers: ['ranged'],
+  },
+  miningDrone: {
+    name: 'Mining Drone',
+    hp: 20,
+    armor: 0,
+    moveSpeed: 3,
+    attackType: 'none',
+    attackRange: 0,
+    attackDamage: 0,
+    attackRate: 0,
+    cost: 10,
+    abilityName: 'Mine Resources',
+    abilityCooldown: 0,
+    canDamageStructures: false,
+    modifiers: ['small', 'flying'],
+  },
 };
 
+// Background floaters for water-like effects
+export interface Floater {
+  id: string;
+  position: Vector2;
+  velocity: Vector2;
+  size: number;
+  color: string;
+  opacity: number;
+  mass: number; // Affects how much it's pushed by forces
+  targetOpacity: number; // Target opacity for fade-in
+}
+
 export interface GameState {
-  mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection' | 'multiplayerLobby' | 'countdown' | 'statistics' | 'levelSelection' | 'onlineMode' | 'modifierHelp';
+  mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection' | 'multiplayerLobby' | 'countdown' | 'statistics' | 'levelSelection' | 'onlineMode' | 'modifierHelp' | 'unitInformation' | 'lanMode';
+  backgroundBattle?: GameState; // Background AI battle for menu
   vsMode: 'ai' | 'player' | 'online' | null;
   
   units: Unit[];
+  dyingUnits?: Unit[]; // Units that have died but are still showing queue un-draw animation
   bases: Base[];
+  miningDepots: MiningDepot[]; // Mining depots for resource gathering
   obstacles: import('./maps').Obstacle[];
   projectiles: Projectile[]; // Active projectiles in the game
   
@@ -462,10 +891,13 @@ export interface GameState {
     showNumericHP: boolean;
     playerFaction: FactionType;
     enemyFaction: FactionType;
+    playerBaseType: BaseType;
+    enemyBaseType: BaseType;
     enableGlowEffects?: boolean; // Enable/disable glow/shadow effects
     enableParticleEffects?: boolean; // Enable/disable particle effects
     enableMotionBlur?: boolean; // Enable/disable motion blur trails
     mirrorAbilityCasting?: boolean; // Mirror ability casting along both X and Y axes
+    chessMode?: boolean; // Enable chess mode: queue commands, then execute all at once every 10 seconds
   };
 
   surrenderClicks: number;
@@ -505,6 +937,12 @@ export interface GameState {
     startTime: number;
     endPosition?: Vector2;
   }>;
+
+  // Mining drag preview for snap-to-deposit feedback
+  miningDragPreview?: {
+    depotId: string;
+    depositId: string;
+  };
   
   // Double-tap tracking
   lastTapTime?: number;
@@ -529,6 +967,9 @@ export interface GameState {
     opacity: number;
     driftSpeed: number;
   }>;
+  
+  // Background floaters for water-like physics
+  floaters?: Floater[];
   
   // Impact effects for hits and explosions
   impactEffects?: Array<{
@@ -646,6 +1087,17 @@ export interface GameState {
     createdAt: number;
   }>;
   
+  // Bounce particles for armored units
+  bounceParticles?: Array<{
+    id: string;
+    position: Vector2;
+    velocity: Vector2;
+    color: string;
+    size: number;
+    lifetime: number;
+    createdAt: number;
+  }>;
+  
   // Motion trails for fast units
   motionTrails?: Array<{
     unitId: string;
@@ -673,6 +1125,19 @@ export interface GameState {
     screenStartPos: Vector2; // Screen position where drag started (for display purposes)
   };
   
+  // Rally point preview for bases
+  rallyPointPreview?: {
+    baseId: string; // ID of the base being dragged from
+    rallyPoint: Vector2; // Current rally point position being previewed
+  };
+  
+  // Base ability (laser) cast preview
+  baseAbilityPreview?: {
+    baseId: string; // ID of the base casting the ability
+    basePosition: Vector2; // Position of the base
+    direction: Vector2; // Direction vector of the laser
+  };
+  
   // Multiplayer manager for online games (typed as any to avoid circular dependency with multiplayer.ts)
   multiplayerManager?: import('./multiplayer').MultiplayerManager;
   
@@ -681,5 +1146,14 @@ export interface GameState {
     connected: boolean;
     lastSync: number;
     latency?: number;
+  };
+  
+  // Chess mode state - queue commands during planning phase, execute all at once
+  chessMode?: {
+    enabled: boolean; // Whether chess mode is active
+    turnDuration: number; // Duration of each turn in seconds (default 10)
+    turnStartTime: number; // When the current turn started
+    turnPhase: 'planning' | 'executing'; // Current phase of the turn
+    pendingCommands: Map<string, CommandNode[]>; // Queued commands per unit during planning phase
   };
 }

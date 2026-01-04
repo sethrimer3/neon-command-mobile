@@ -14,8 +14,9 @@ export function MapSelectionScreen({ selectedMap, onMapSelect, onBack }: MapSele
   const maps = getMapList();
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center p-4 overflow-auto">
-      <Card className="w-full max-w-2xl">
+    <div className="absolute inset-0 overflow-y-auto">
+      <div className="min-h-full flex items-start justify-center p-4 py-8">
+      <Card className="w-full max-w-2xl my-auto">
         <CardHeader>
           <CardTitle className="orbitron text-2xl flex items-center gap-2">
             <MapPin size={28} />
@@ -61,6 +62,7 @@ export function MapSelectionScreen({ selectedMap, onMapSelect, onBack }: MapSele
           </Button>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

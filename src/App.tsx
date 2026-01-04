@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useKV } from './hooks/useKV';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
-import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS, FactionType, FACTION_DEFINITIONS } from './lib/types';
-import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, isPortraitOrientation } from './lib/gameUtils';
+import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS, FactionType, FACTION_DEFINITIONS, BASE_TYPE_DEFINITIONS, BaseType, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS } from './lib/types';
+import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, shouldUsePortraitCoordinates, updateViewportScale, calculateDefaultRallyPoint, createMiningDepots } from './lib/gameUtils';
 import { updateGame } from './lib/simulation';
 import { updateAI } from './lib/ai';
 import { renderGame } from './lib/renderer';
@@ -10,31 +10,36 @@ import { handleTouchStart, handleTouchMove, handleTouchEnd, handleMouseDown, han
 import { initializeCamera, updateCamera, zoomCamera, panCamera, resetCamera } from './lib/camera';
 import { updateVisualEffects, createCelebrationParticles } from './lib/visualEffects';
 import { FormationType, getFormationName } from './lib/formations';
+import { initializeFloaters, updateFloaters } from './lib/floaters';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Label } from './components/ui/label';
 import { Switch } from './components/ui/switch';
 import { Slider } from './components/ui/slider';
-import { GameController, Robot, ListChecks, GearSix, ArrowLeft, Flag, MapPin, WifiHigh, ChartBar, SpeakerHigh, SpeakerSlash, Info } from '@phosphor-icons/react';
+import { GameController, Robot, ListChecks, GearSix, ArrowLeft, Flag, MapPin, WifiHigh, ChartBar, SpeakerHigh, SpeakerSlash, Info, Book } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { UnitSelectionScreen } from './components/UnitSelectionScreen';
 import { MapSelectionScreen } from './components/MapSelectionScreen';
 import { LevelSelectionScreen } from './components/LevelSelectionScreen';
 import { OnlineModeScreen } from './components/OnlineModeScreen';
+import { LANModeScreen } from './components/LANModeScreen';
 import { MultiplayerLobbyScreen } from './components/MultiplayerLobbyScreen';
 import { StatisticsScreen } from './components/StatisticsScreen';
 import { ModifierHelpScreen } from './components/ModifierHelpScreen';
+import { UnitInformationScreen } from './components/UnitInformationScreen';
+import { VictoryScreen } from './components/VictoryScreen';
+import { AnimatedBackground } from './components/AnimatedBackground';
 import { getMapById, getValidBasePositions, createBoundaryObstacles } from './lib/maps';
 import { MultiplayerManager, LobbyData } from './lib/multiplayer';
 import { createRealtimeStore } from './lib/realtimeStore';
+import { LANKVStore } from './lib/lanStore';
 import { PlayerStatistics, MatchStats, createEmptyStatistics, updateStatistics, calculateMMRChange } from './lib/statistics';
 import { soundManager } from './lib/sound';
 import { MultiplayerSync, initializeMultiplayerSync, updateMultiplayerSync } from './lib/multiplayerGame';
 
 // Matchmaking configuration
 const MATCHMAKING_AUTO_START_DELAY_MS = 2000; // Delay before auto-starting matchmaking game
-// Keep the visible build badge in sync with AI-driven updates and releases.
-const BUILD_NUMBER = 6;
+const LAN_CONNECTION_WAIT_MS = 1000; // Wait for LAN connection to establish
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -44,6 +49,7 @@ function App() {
   const lastTimeRef = useRef<number>(Date.now());
   const multiplayerManagerRef = useRef<MultiplayerManager | null>(null);
   const multiplayerSyncRef = useRef<MultiplayerSync | null>(null);
+  const lanStoreRef = useRef<LANKVStore | null>(null);
   const lobbyCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [multiplayerLobbies, setMultiplayerLobbies] = useState<LobbyData[]>([]);
   const [currentLobby, setCurrentLobby] = useState<LobbyData | null>(null);
@@ -64,10 +70,13 @@ function App() {
   const [enableCameraControls, setEnableCameraControls] = useKV<boolean>('enable-camera-controls', true);
   const [playerFaction, setPlayerFaction] = useKV<FactionType>('player-faction', 'radiant');
   const [enemyFaction, setEnemyFaction] = useKV<FactionType>('enemy-faction', 'radiant');
+  const [playerBaseType, setPlayerBaseType] = useKV<import('./lib/types').BaseType>('player-base-type', 'standard');
+  const [enemyBaseType, setEnemyBaseType] = useKV<import('./lib/types').BaseType>('enemy-base-type', 'standard');
   const [enableGlowEffects, setEnableGlowEffects] = useKV<boolean>('enable-glow-effects', true);
   const [enableParticleEffects, setEnableParticleEffects] = useKV<boolean>('enable-particle-effects', true);
   const [enableMotionBlur, setEnableMotionBlur] = useKV<boolean>('enable-motion-blur', true);
   const [mirrorAbilityCasting, setMirrorAbilityCasting] = useKV<boolean>('mirror-ability-casting', false);
+  const [chessMode, setChessMode] = useKV<boolean>('chess-mode', false);
 
   const gameState = gameStateRef.current;
   const lastVictoryStateRef = useRef<boolean>(false);
@@ -123,17 +132,20 @@ function App() {
       showNumericHP: showNumericHP ?? true,
       playerFaction: playerFaction || 'radiant',
       enemyFaction: enemyFaction || 'radiant',
+      playerBaseType: playerBaseType || 'standard',
+      enemyBaseType: enemyBaseType || 'standard',
       enableGlowEffects: enableGlowEffects ?? true,
       enableParticleEffects: enableParticleEffects ?? true,
       enableMotionBlur: enableMotionBlur ?? true,
       mirrorAbilityCasting: mirrorAbilityCasting ?? false,
+      chessMode: chessMode ?? false,
     };
     gameStateRef.current.showMinimap = showMinimap ?? true;
     gameStateRef.current.players = gameStateRef.current.players.map((p, i) => ({
       ...p,
       color: i === 0 ? (playerColor || COLORS.playerDefault) : (enemyColor || COLORS.enemyDefault),
     }));
-  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showMinimap, playerFaction, enemyFaction, enableGlowEffects, enableParticleEffects, enableMotionBlur, mirrorAbilityCasting]);
+  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showMinimap, playerFaction, enemyFaction, enableGlowEffects, enableParticleEffects, enableMotionBlur, mirrorAbilityCasting, chessMode]);
 
   // Cleanup interval on unmount
   useEffect(() => {
@@ -157,14 +169,19 @@ function App() {
                         ('ontouchstart' in window) || 
                         (window.innerWidth < 768);
       
+      // Store device context for gameplay and rendering logic
       gameStateRef.current.isMobile = isMobile;
-      gameStateRef.current.isPortrait = isPortraitOrientation();
+      // Keep gameplay coordinates portrait-based even when the desktop view rotates
+      gameStateRef.current.isPortrait = shouldUsePortraitCoordinates();
     };
 
     const resizeCanvas = () => {
       detectOrientation();
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
+      
+      // Update viewport scale for consistent arena size across devices
+      updateViewportScale(canvas.width, canvas.height);
     };
 
     resizeCanvas();
@@ -192,6 +209,35 @@ function App() {
         gameStateRef.current.lastFpsUpdate = now;
       }
 
+      // Update background battle when in menu mode
+      if (gameStateRef.current.mode === 'menu') {
+        // Initialize background battle if it doesn't exist
+        if (!gameStateRef.current.backgroundBattle) {
+          gameStateRef.current.backgroundBattle = createBackgroundBattle(canvas);
+          initializeCamera(gameStateRef.current.backgroundBattle);
+        }
+
+        // Set volume to 20% for background sounds
+        soundManager.setVolumeScale(0.2);
+
+        // Update the background battle
+        const bg = gameStateRef.current.backgroundBattle;
+        updateGame(bg, deltaTime);
+        updateFloaters(bg, deltaTime);
+        updateAI(bg, deltaTime, true); // Both players are AI
+        updateCamera(bg, deltaTime);
+        updateVisualEffects(bg, deltaTime);
+
+        // Restart battle if one side wins
+        if (bg.winner !== null) {
+          gameStateRef.current.backgroundBattle = createBackgroundBattle(canvas);
+          initializeCamera(gameStateRef.current.backgroundBattle);
+        }
+      } else {
+        // Reset volume scale to 100% when not in menu
+        soundManager.setVolumeScale(1.0);
+      }
+
       if (gameStateRef.current.mode === 'countdown') {
         const elapsed = now - (gameStateRef.current.countdownStartTime || now);
         // Track the countdown seconds in game state so the UI re-renders reliably.
@@ -206,6 +252,10 @@ function App() {
         if (secondsRemaining !== previousSeconds && secondsRemaining > 0) {
           soundManager.playCountdown();
         }
+        
+        // Update floaters during countdown
+        updateFloaters(gameStateRef.current, deltaTime);
+        updateVisualEffects(gameStateRef.current, deltaTime);
         
         if (elapsed >= 3000) {
           gameStateRef.current.mode = 'game';
@@ -237,6 +287,9 @@ function App() {
 
         if (!gameStateRef.current.matchStartAnimation || (gameStateRef.current.matchStartAnimation.phase === 'go')) {
           updateGame(gameStateRef.current, deltaTime);
+          
+          // Update floaters physics
+          updateFloaters(gameStateRef.current, deltaTime);
           
           // Update multiplayer synchronization for online games
           if (gameStateRef.current.vsMode === 'online' && multiplayerManagerRef.current && multiplayerSyncRef.current) {
@@ -284,8 +337,13 @@ function App() {
       const updateEndTime = performance.now();
       const renderStartTime = performance.now();
 
-      const selectionRect = getActiveSelectionRect();
-      renderGame(ctx, gameStateRef.current, canvas, selectionRect);
+      // Render background battle if in menu or related mode
+      if (gameStateRef.current.mode === 'menu' && gameStateRef.current.backgroundBattle) {
+        renderGame(ctx, gameStateRef.current.backgroundBattle, canvas, null);
+      } else {
+        const selectionRect = getActiveSelectionRect();
+        renderGame(ctx, gameStateRef.current, canvas, selectionRect);
+      }
 
       const renderEndTime = performance.now();
 
@@ -722,6 +780,139 @@ function App() {
     setRenderTrigger(prev => prev + 1);
   };
 
+  const goToUnitInformation = () => {
+    soundManager.playButtonClick();
+    gameStateRef.current.mode = 'unitInformation';
+    setRenderTrigger(prev => prev + 1);
+  };
+
+  const goToLANMode = () => {
+    soundManager.playButtonClick();
+    // Disconnect any existing LAN store
+    if (lanStoreRef.current) {
+      lanStoreRef.current.disconnect();
+      lanStoreRef.current = null;
+    }
+    gameStateRef.current.mode = 'lanMode';
+    setRenderTrigger(prev => prev + 1);
+  };
+
+  const handleLANHost = async (): Promise<string> => {
+    // Disconnect any existing LAN store
+    if (lanStoreRef.current) {
+      lanStoreRef.current.disconnect();
+    }
+    
+    // Create new LAN store instance
+    const lanStore = new LANKVStore();
+    lanStoreRef.current = lanStore;
+    
+    // Create a lobby first to get player name and map
+    const playerName = `Host_${userId.slice(-4)}`;
+    const mapId = selectedMap || 'open';
+    
+    // Initialize as host with game info
+    const peerId = await lanStore.initAsHost(playerName, mapId);
+    
+    // Create multiplayer manager with LAN store
+    multiplayerManagerRef.current = new MultiplayerManager(userId, lanStore);
+    
+    // Create a lobby
+    const gameId = await multiplayerManagerRef.current.createGame(
+      playerName,
+      playerColor || COLORS.playerDefault,
+      mapId,
+      enabledUnits || []
+    );
+    
+    const lobby = await multiplayerManagerRef.current.getLobby(gameId);
+    setCurrentLobby(lobby);
+    
+    // Navigate to lobby
+    gameStateRef.current.mode = 'multiplayerLobby';
+    setRenderTrigger(prev => prev + 1);
+    
+    // Start checking for guest joining
+    lobbyCheckIntervalRef.current = setInterval(async () => {
+      const updatedLobby = await multiplayerManagerRef.current?.getLobby(gameId);
+      if (updatedLobby) {
+        setCurrentLobby(updatedLobby);
+        if (updatedLobby.status === 'playing') {
+          if (lobbyCheckIntervalRef.current) {
+            clearInterval(lobbyCheckIntervalRef.current);
+            lobbyCheckIntervalRef.current = null;
+          }
+        }
+      }
+    }, 1000);
+    
+    return peerId;
+  };
+
+  const handleLANJoin = async (hostPeerId: string): Promise<boolean> => {
+    try {
+      // Disconnect any existing LAN store
+      if (lanStoreRef.current) {
+        lanStoreRef.current.disconnect();
+      }
+      
+      // Create new LAN store instance
+      const lanStore = new LANKVStore();
+      lanStoreRef.current = lanStore;
+      
+      // Initialize as guest
+      await lanStore.initAsGuest(hostPeerId);
+      
+      // Create multiplayer manager with LAN store
+      multiplayerManagerRef.current = new MultiplayerManager(userId, lanStore);
+      
+      // Wait for connection to establish
+      await new Promise(resolve => setTimeout(resolve, LAN_CONNECTION_WAIT_MS));
+      
+      // Get available lobbies (should be the host's lobby)
+      const lobbies = await multiplayerManagerRef.current.getAvailableLobbies();
+      
+      if (lobbies.length > 0) {
+        const lobby = lobbies[0];
+        const playerName = `Guest_${userId.slice(-4)}`;
+        
+        const success = await multiplayerManagerRef.current.joinGame(
+          lobby.gameId,
+          playerName,
+          enemyColor || COLORS.enemyDefault
+        );
+        
+        if (success) {
+          const updatedLobby = await multiplayerManagerRef.current.getLobby(lobby.gameId);
+          setCurrentLobby(updatedLobby);
+          gameStateRef.current.mode = 'multiplayerLobby';
+          setRenderTrigger(prev => prev + 1);
+          
+          // Start checking for game start
+          lobbyCheckIntervalRef.current = setInterval(async () => {
+            const updatedLobby = await multiplayerManagerRef.current?.getLobby(lobby.gameId);
+            if (updatedLobby) {
+              setCurrentLobby(updatedLobby);
+              if (updatedLobby.status === 'playing') {
+                if (lobbyCheckIntervalRef.current) {
+                  clearInterval(lobbyCheckIntervalRef.current);
+                  lobbyCheckIntervalRef.current = null;
+                }
+              }
+            }
+          }, 1000);
+          
+          return true;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Failed to join LAN game:', error);
+      return false;
+    }
+  };
+
   const handleMapSelect = (mapId: string) => {
     setSelectedMap(mapId);
     toast.success(`Map changed to ${getMapById(mapId)?.name || mapId}`);
@@ -945,6 +1136,15 @@ function App() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-background" onClick={handleCanvasSurrenderReset}>
+      {/* Animated background for menu screens */}
+      {gameState.mode !== 'game' && gameState.mode !== 'countdown' && (
+        <AnimatedBackground 
+          particleCount={60} 
+          color={playerColor || COLORS.playerDefault}
+          galaxyCount={3}
+        />
+      )}
+      
       <canvas 
         ref={canvasRef} 
         className="absolute inset-0 transition-opacity duration-300"
@@ -994,17 +1194,18 @@ function App() {
       )}
 
       {gameState.mode === 'menu' && (
-        <div className="absolute inset-0 flex items-center justify-center animate-in fade-in duration-500">
-          <div className="absolute top-4 left-4 orbitron text-sm text-muted-foreground opacity-70">
-            Build {BUILD_NUMBER}
-          </div>
-          <div className="flex flex-col gap-4 w-80 max-w-[90vw]">
-            <div className="flex justify-center mb-4 animate-in fade-in zoom-in-95 duration-700">
-              <img 
-                src={`${assetBaseUrl}ASSETS/sprites/menus/mainMenuTitle.png`} 
-                alt="Speed of Light RTS"
-                className="w-full max-w-md neon-glow"
-                style={{
+        <>
+          {/* 50% transparent black overlay */}
+          <div className="absolute inset-0 bg-black opacity-50 pointer-events-none" />
+          
+          <div className="absolute inset-0 flex items-center justify-center animate-in fade-in duration-500">
+            <div className="flex flex-col gap-4 w-80 max-w-[90vw]">
+              <div className="flex justify-center mb-4 animate-in fade-in zoom-in-95 duration-700">
+                <img 
+                  src={`${assetBaseUrl}ASSETS/sprites/menus/mainMenuTitle.png`} 
+                  alt="Speed of Light RTS"
+                  className="w-full max-w-md neon-glow"
+                  style={{
                   filter: 'drop-shadow(0 0 20px currentColor)'
                 }}
               />
@@ -1083,13 +1284,24 @@ function App() {
               <Info className="mr-2" size={24} />
               Unit Guide
             </Button>
+
+            <Button
+              onClick={goToUnitInformation}
+              className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
+              variant="outline"
+            >
+              <Book className="mr-2" size={24} />
+              Unit Information
+            </Button>
           </div>
         </div>
+        </>
       )}
 
       {gameState.mode === 'settings' && (
-        <div className="absolute inset-0 flex items-center justify-center p-4 overflow-auto">
-          <Card className="w-96 max-w-full">
+        <div className="absolute inset-0 overflow-y-auto">
+          <div className="min-h-full flex items-start justify-center p-4 py-8">
+          <Card className="w-96 max-w-full my-auto">
             <CardHeader>
               <CardTitle className="orbitron text-2xl">Settings</CardTitle>
             </CardHeader>
@@ -1304,6 +1516,27 @@ function App() {
               </div>
 
               <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
+                <p><strong>Game Mode:</strong></p>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Label htmlFor="chess-mode-toggle" className="flex flex-col gap-1">
+                  <span>Chess Mode</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    Queue 1 move per unit every 10s
+                  </span>
+                </Label>
+                <Switch
+                  id="chess-mode-toggle"
+                  checked={chessMode ?? false}
+                  onCheckedChange={(checked) => {
+                    setChessMode(checked);
+                    soundManager.playButtonClick();
+                  }}
+                />
+              </div>
+
+              <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
                 <p><strong>Camera Controls:</strong></p>
                 <p>• Mouse Wheel: Zoom in/out</p>
                 <p>• WASD or Arrow Keys: Pan camera</p>
@@ -1320,6 +1553,7 @@ function App() {
               </Button>
             </CardContent>
           </Card>
+          </div>
         </div>
       )}
 
@@ -1331,6 +1565,8 @@ function App() {
           playerColor={playerColor || COLORS.playerDefault}
           playerFaction={playerFaction || 'radiant'}
           onFactionChange={setPlayerFaction}
+          playerBaseType={playerBaseType || 'standard'}
+          onBaseTypeChange={setPlayerBaseType}
         />
       )}
 
@@ -1355,6 +1591,15 @@ function App() {
           onBack={backToMenu}
           onMatchmaking={goToMatchmaking}
           onCustomGame={goToMultiplayer}
+          onLAN={goToLANMode}
+        />
+      )}
+
+      {gameState.mode === 'lanMode' && (
+        <LANModeScreen
+          onBack={backToMenu}
+          onHost={handleLANHost}
+          onJoin={handleLANJoin}
         />
       )}
 
@@ -1385,57 +1630,139 @@ function App() {
         />
       )}
 
+      {gameState.mode === 'unitInformation' && (
+        <UnitInformationScreen
+          onBack={backToMenu}
+        />
+      )}
+
       {gameState.mode === 'victory' && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-500">
-          <Card className="w-96 max-w-full animate-in zoom-in-95 slide-in-from-bottom-4 duration-700">
-            <CardHeader>
-              <CardTitle className="orbitron text-3xl text-center animate-in slide-in-from-top-2 duration-500 delay-300">
-                {gameState.winner === -1 ? 'Draw!' : gameState.winner === 0 ? 'Victory!' : 'Defeat'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-center animate-in fade-in slide-in-from-bottom-2 duration-500 delay-500">
-                {gameState.winner === -1 
-                  ? 'Time limit reached! Both players dealt equal damage.' 
-                  : gameState.winner === 0 
-                    ? gameState.elapsedTime >= (gameState.matchTimeLimit || 300) 
-                      ? 'Time limit reached! Your base took less damage.'
-                      : 'You destroyed the enemy base!' 
-                    : gameState.elapsedTime >= (gameState.matchTimeLimit || 300)
-                      ? 'Time limit reached! Your base took more damage.'
-                      : 'Your base was destroyed.'}
-              </p>
-              <div className="flex gap-2">
-                {gameState.vsMode === 'ai' && (
-                  <Button 
-                    onClick={() => {
-                      returnToMenu(true, gameState.winner === -1 ? 'draw' : gameState.winner === 0 ? 'victory' : 'defeat');
-                      // Start a new game after a brief delay
-                      setTimeout(() => startGame('ai', gameState.settings.selectedMap), 100);
-                    }} 
-                    className="flex-1 orbitron animate-in fade-in slide-in-from-bottom-2 duration-500 delay-700" 
-                    variant="default"
-                  >
-                    Quick Rematch
-                  </Button>
-                )}
-                <Button 
-                  onClick={() => returnToMenu(
-                    true, 
-                    gameState.winner === -1 ? 'draw' : gameState.winner === 0 ? 'victory' : 'defeat'
-                  )} 
-                  className="flex-1 orbitron animate-in fade-in slide-in-from-bottom-2 duration-500 delay-700" 
-                  variant={gameState.vsMode === 'ai' ? 'outline' : 'default'}
-                >
-                  Return to Menu
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <VictoryScreen
+          gameState={gameState}
+          onContinue={() => returnToMenu(
+            true, 
+            gameState.winner === -1 ? 'draw' : gameState.winner === 0 ? 'victory' : 'defeat'
+          )}
+          onRematch={gameState.vsMode === 'ai' ? () => {
+            returnToMenu(true, gameState.winner === -1 ? 'draw' : gameState.winner === 0 ? 'victory' : 'defeat');
+            setTimeout(() => startGame('ai', gameState.settings.selectedMap), 100);
+          } : undefined}
+        />
       )}
     </div>
   );
+}
+
+function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
+  const arenaWidth = ARENA_WIDTH_METERS;
+  const arenaHeight = ARENA_HEIGHT_METERS;
+
+  // Randomly select factions for both players
+  const factions: FactionType[] = ['radiant', 'solari', 'aurum'];
+  const player1Faction = factions[Math.floor(Math.random() * factions.length)];
+  const player2Faction = factions[Math.floor(Math.random() * factions.length)];
+
+  // Randomly select some units for both sides using Fisher-Yates shuffle
+  const allUnits: UnitType[] = ['marine', 'warrior', 'snaker', 'tank', 'scout', 'artillery', 'medic', 'interceptor'];
+  const shuffled = [...allUnits];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  const enabledUnits = new Set(shuffled.slice(0, Math.floor(Math.random() * 3) + 4)); // 4-6 random units
+
+  const selectedMapDef = getMapById('open');
+  if (!selectedMapDef) {
+    throw new Error('Default map "open" not found');
+  }
+  const mapObstacles = selectedMapDef.obstacles;
+  const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
+  const obstacles = [...mapObstacles, ...boundaryObstacles];
+  
+  // Keep base placement aligned to the shared portrait coordinate system
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, shouldUsePortraitCoordinates());
+  
+  const topographyLines = generateTopographyLines(canvas.width, canvas.height);
+  const stars = generateStarfield(canvas.width, canvas.height);
+  const nebulaClouds = generateNebulaClouds(canvas.width, canvas.height);
+  
+  // Create mining depots in corners
+  const miningDepots = createMiningDepots(arenaWidth, arenaHeight);
+
+  const playerBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
+
+  return {
+    mode: 'game',
+    vsMode: 'ai',
+    units: [],
+    projectiles: [],
+    obstacles: obstacles,
+    miningDepots: miningDepots,
+    bases: [
+      {
+        id: generateId(),
+        owner: 0,
+        position: basePositions.player,
+        hp: playerBaseTypeDef.hp,
+        maxHp: playerBaseTypeDef.hp,
+        armor: playerBaseTypeDef.armor,
+        movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.player, basePositions.enemy),
+        isSelected: false,
+        laserCooldown: 0,
+        faction: player1Faction,
+        baseType: 'standard',
+        autoAttackCooldown: 0,
+      },
+      {
+        id: generateId(),
+        owner: 1,
+        position: basePositions.enemy,
+        hp: playerBaseTypeDef.hp,
+        maxHp: playerBaseTypeDef.hp,
+        armor: playerBaseTypeDef.armor,
+        movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.enemy, basePositions.player),
+        isSelected: false,
+        laserCooldown: 0,
+        faction: player2Faction,
+        baseType: 'standard',
+        autoAttackCooldown: 0,
+      },
+    ],
+    players: [
+      { photons: 200, incomeRate: 1, color: COLORS.playerDefault },
+      { photons: 200, incomeRate: 1, color: COLORS.enemyDefault },
+    ],
+    selectedUnits: new Set(),
+    controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
+    currentFormation: 'none',
+    patrolMode: false,
+    elapsedTime: 0,
+    lastIncomeTime: 0,
+    winner: null,
+    settings: {
+      playerColor: COLORS.playerDefault,
+      enemyColor: COLORS.enemyDefault,
+      enabledUnits: enabledUnits,
+      unitSlots: { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' },
+      selectedMap: 'open',
+      showNumericHP: false,
+      playerFaction: player1Faction,
+      enemyFaction: player2Faction,
+      playerBaseType: 'standard',
+      enemyBaseType: 'standard',
+    },
+    surrenderClicks: 0,
+    lastSurrenderClickTime: 0,
+    surrenderExpanded: false,
+    topographyLines,
+    nebulaClouds,
+    stars,
+    floaters: initializeFloaters(),
+    // Keep gameplay coordinates consistent across devices
+    isPortrait: shouldUsePortraitCoordinates(),
+  };
 }
 
 function createInitialState(): GameState {
@@ -1445,6 +1772,7 @@ function createInitialState(): GameState {
     units: [],
     projectiles: [],
     bases: [],
+    miningDepots: [],
     obstacles: [],
     players: [
       { photons: 0, incomeRate: 1, color: COLORS.playerDefault },
@@ -1466,6 +1794,8 @@ function createInitialState(): GameState {
       showNumericHP: true,
       playerFaction: 'radiant',
       enemyFaction: 'radiant',
+      playerBaseType: 'standard',
+      enemyBaseType: 'standard',
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
@@ -1474,8 +1804,8 @@ function createInitialState(): GameState {
 }
 
 function createCountdownState(mode: 'ai' | 'player', settings: GameState['settings'], canvas: HTMLCanvasElement): GameState {
-  const arenaWidth = window.innerWidth / 20;
-  const arenaHeight = window.innerHeight / 20;
+  const arenaWidth = ARENA_WIDTH_METERS;
+  const arenaHeight = ARENA_HEIGHT_METERS;
 
   const selectedMapDef = getMapById(settings.selectedMap) || getMapById('open')!;
   const mapObstacles = selectedMapDef.obstacles;
@@ -1484,12 +1814,19 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
   const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
   const obstacles = [...mapObstacles, ...boundaryObstacles];
   
-  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
+  // Keep base placement aligned to the shared portrait coordinate system
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, shouldUsePortraitCoordinates());
   
   // Generate topography lines and starfield for this level
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
   const stars = generateStarfield(canvas.width, canvas.height);
   const nebulaClouds = generateNebulaClouds(canvas.width, canvas.height);
+  
+  // Create mining depots in corners
+  const miningDepots = createMiningDepots(arenaWidth, arenaHeight);
+
+  const playerBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.playerBaseType || 'standard'];
+  const enemyBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.enemyBaseType || 'standard'];
 
   return {
     mode: 'countdown',
@@ -1497,30 +1834,37 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     units: [],
     projectiles: [],
     obstacles: obstacles,
+    miningDepots: miningDepots,
     bases: [
       {
         id: generateId(),
         owner: 0,
         position: basePositions.player,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: playerBaseTypeDef.hp,
+        maxHp: playerBaseTypeDef.hp,
+        armor: playerBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.player, basePositions.enemy),
         isSelected: false,
         laserCooldown: 0,
         faction: settings.playerFaction || 'radiant',
+        baseType: settings.playerBaseType || 'standard',
+        autoAttackCooldown: 0,
       },
       {
         id: generateId(),
         owner: 1,
         position: basePositions.enemy,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: enemyBaseTypeDef.hp,
+        maxHp: enemyBaseTypeDef.hp,
+        armor: enemyBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.enemy, basePositions.player),
         isSelected: false,
         laserCooldown: 0,
         faction: settings.enemyFaction || 'radiant',
+        baseType: settings.enemyBaseType || 'standard',
+        autoAttackCooldown: 0,
       },
     ],
     players: [
@@ -1554,13 +1898,15 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     topographyLines,
     nebulaClouds,
     stars,
-    isPortrait: isPortraitOrientation(),
+    floaters: initializeFloaters(),
+    // Keep gameplay coordinates consistent across devices
+    isPortrait: shouldUsePortraitCoordinates(),
   };
 }
 
 function createGameState(mode: 'ai' | 'player', settings: GameState['settings']): GameState {
-  const arenaWidth = window.innerWidth / 20;
-  const arenaHeight = window.innerHeight / 20;
+  const arenaWidth = ARENA_WIDTH_METERS;
+  const arenaHeight = ARENA_HEIGHT_METERS;
 
   const selectedMapDef = getMapById(settings.selectedMap) || getMapById('open')!;
   const mapObstacles = selectedMapDef.obstacles;
@@ -1569,7 +1915,14 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
   const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
   const obstacles = [...mapObstacles, ...boundaryObstacles];
   
-  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
+  // Keep base placement aligned to the shared portrait coordinate system
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, shouldUsePortraitCoordinates());
+  
+  // Create mining depots in corners
+  const miningDepots = createMiningDepots(arenaWidth, arenaHeight);
+
+  const playerBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.playerBaseType || 'standard'];
+  const enemyBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.enemyBaseType || 'standard'];
 
   return {
     mode: 'game',
@@ -1577,30 +1930,37 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
     units: [],
     projectiles: [],
     obstacles: obstacles,
+    miningDepots: miningDepots,
     bases: [
       {
         id: generateId(),
         owner: 0,
         position: basePositions.player,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: playerBaseTypeDef.hp,
+        maxHp: playerBaseTypeDef.hp,
+        armor: playerBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.player, basePositions.enemy),
         isSelected: false,
         laserCooldown: 0,
         faction: settings.playerFaction || 'radiant',
+        baseType: settings.playerBaseType || 'standard',
+        autoAttackCooldown: 0,
       },
       {
         id: generateId(),
         owner: 1,
         position: basePositions.enemy,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: enemyBaseTypeDef.hp,
+        maxHp: enemyBaseTypeDef.hp,
+        armor: enemyBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.enemy, basePositions.player),
         isSelected: false,
         laserCooldown: 0,
         faction: settings.enemyFaction || 'radiant',
+        baseType: settings.enemyBaseType || 'standard',
+        autoAttackCooldown: 0,
       },
     ],
     players: [
@@ -1622,13 +1982,15 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
       startTime: Date.now(),
       phase: 'bases-sliding',
     },
-    isPortrait: isPortraitOrientation(),
+    // Keep gameplay coordinates consistent across devices
+    isPortrait: shouldUsePortraitCoordinates(),
+    floaters: initializeFloaters(),
   };
 }
 
 function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
-  const arenaWidth = window.innerWidth / 20;
-  const arenaHeight = window.innerHeight / 20;
+  const arenaWidth = ARENA_WIDTH_METERS;
+  const arenaHeight = ARENA_HEIGHT_METERS;
 
   const selectedMapDef = getMapById(lobby.mapId) || getMapById('open')!;
   const mapObstacles = selectedMapDef.obstacles;
@@ -1637,7 +1999,15 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
   const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
   const obstacles = [...mapObstacles, ...boundaryObstacles];
   
-  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
+  // Keep base placement aligned to the shared portrait coordinate system
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, shouldUsePortraitCoordinates());
+  
+  // Create mining depots in corners
+  const miningDepots = createMiningDepots(arenaWidth, arenaHeight);
+
+  // For online games, use standard base type for now
+  const playerBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
+  const enemyBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
 
   return {
     mode: 'game',
@@ -1645,30 +2015,37 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
     units: [],
     projectiles: [],
     obstacles: obstacles,
+    miningDepots: miningDepots,
     bases: [
       {
         id: generateId(),
         owner: 0,
         position: basePositions.player,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: playerBaseTypeDef.hp,
+        maxHp: playerBaseTypeDef.hp,
+        armor: playerBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.player, basePositions.enemy),
         isSelected: false,
         laserCooldown: 0,
         faction: 'radiant',
+        baseType: 'standard',
+        autoAttackCooldown: 0,
       },
       {
         id: generateId(),
         owner: 1,
         position: basePositions.enemy,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: enemyBaseTypeDef.hp,
+        maxHp: enemyBaseTypeDef.hp,
+        armor: enemyBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.enemy, basePositions.player),
         isSelected: false,
         laserCooldown: 0,
         faction: 'radiant',
+        baseType: 'standard',
+        autoAttackCooldown: 0,
       },
     ],
     players: [
@@ -1691,6 +2068,8 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
       showNumericHP: true,
       playerFaction: 'radiant',
       enemyFaction: 'radiant',
+      playerBaseType: 'standard',
+      enemyBaseType: 'standard',
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
@@ -1699,13 +2078,15 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
       startTime: Date.now(),
       phase: 'bases-sliding',
     },
-    isPortrait: isPortraitOrientation(),
+    // Keep gameplay coordinates consistent across devices
+    isPortrait: shouldUsePortraitCoordinates(),
+    floaters: initializeFloaters(),
   };
 }
 
 function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: HTMLCanvasElement): GameState {
-  const arenaWidth = window.innerWidth / 20;
-  const arenaHeight = window.innerHeight / 20;
+  const arenaWidth = ARENA_WIDTH_METERS;
+  const arenaHeight = ARENA_HEIGHT_METERS;
 
   const selectedMapDef = getMapById(lobby.mapId) || getMapById('open')!;
   const mapObstacles = selectedMapDef.obstacles;
@@ -1714,12 +2095,20 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
   const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
   const obstacles = [...mapObstacles, ...boundaryObstacles];
   
-  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
+  // Keep base placement aligned to the shared portrait coordinate system
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, shouldUsePortraitCoordinates());
   
   // Generate topography lines and starfield for this level
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
   const stars = generateStarfield(canvas.width, canvas.height);
   const nebulaClouds = generateNebulaClouds(canvas.width, canvas.height);
+  
+  // Create mining depots in corners
+  const miningDepots = createMiningDepots(arenaWidth, arenaHeight);
+
+  // For online games, use standard base type for now
+  const playerBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
+  const enemyBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
 
   return {
     mode: 'countdown',
@@ -1727,30 +2116,37 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
     units: [],
     projectiles: [],
     obstacles: obstacles,
+    miningDepots: miningDepots,
     bases: [
       {
         id: generateId(),
         owner: 0,
         position: basePositions.player,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: playerBaseTypeDef.hp,
+        maxHp: playerBaseTypeDef.hp,
+        armor: playerBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.player, basePositions.enemy),
         isSelected: false,
         laserCooldown: 0,
         faction: 'radiant',
+        baseType: 'standard',
+        autoAttackCooldown: 0,
       },
       {
         id: generateId(),
         owner: 1,
         position: basePositions.enemy,
-        hp: 1000,
-        maxHp: 1000,
-        armor: 15,
+        hp: enemyBaseTypeDef.hp,
+        maxHp: enemyBaseTypeDef.hp,
+        armor: enemyBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.enemy, basePositions.player),
         isSelected: false,
         laserCooldown: 0,
         faction: 'radiant',
+        baseType: 'standard',
+        autoAttackCooldown: 0,
       },
     ],
     players: [
@@ -1773,6 +2169,8 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
       showNumericHP: true,
       playerFaction: 'radiant',
       enemyFaction: 'radiant',
+      playerBaseType: 'standard',
+      enemyBaseType: 'standard',
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
@@ -1793,7 +2191,9 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
     topographyLines,
     nebulaClouds,
     stars,
-    isPortrait: isPortraitOrientation(),
+    floaters: initializeFloaters(),
+    // Keep gameplay coordinates consistent across devices
+    isPortrait: shouldUsePortraitCoordinates(),
   };
 }
 

@@ -58,15 +58,16 @@ interface ModifierHelpScreenProps {
 
 export function ModifierHelpScreen({ onBack }: ModifierHelpScreenProps) {
   return (
-    <div className="absolute inset-0 flex items-center justify-center p-4 animate-in fade-in duration-300">
-      <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden">
+    <div className="absolute inset-0 overflow-y-auto animate-in fade-in duration-300">
+      <div className="min-h-full flex items-start justify-center p-4 py-8">
+      <Card className="w-full max-w-4xl overflow-hidden my-auto">
         <CardHeader className="border-b border-border">
           <div className="flex items-center gap-3">
             <Info size={32} className="text-primary" />
             <CardTitle className="text-2xl">Unit Modifiers Guide</CardTitle>
           </div>
         </CardHeader>
-        <CardContent className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+        <CardContent className="p-6">
           <div className="space-y-6">
             <div className="p-4 bg-primary/10 border border-primary/30 rounded-lg">
               <h3 className="text-lg font-bold mb-2">Armor System</h3>
@@ -135,7 +136,7 @@ export function ModifierHelpScreen({ onBack }: ModifierHelpScreenProps) {
             </div>
           </div>
         </CardContent>
-        <div className="border-t border-border p-4">
+        <div className="border-t border-border p-4 bg-card">
           <Button
             onClick={onBack}
             className="w-full sm:w-auto"
@@ -146,6 +147,7 @@ export function ModifierHelpScreen({ onBack }: ModifierHelpScreenProps) {
           </Button>
         </div>
       </Card>
+      </div>
     </div>
   );
 }

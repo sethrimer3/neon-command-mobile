@@ -7,6 +7,7 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 ### Imports
 - `./types` - Game types and constants
 - `./gameUtils` - Coordinate conversions and vector math
+- `./camera` - Camera transforms for screen/world conversion and zooming
 - `./simulation` - spawnUnit() function
 - `./sound` - Sound effect playback
 
@@ -19,6 +20,7 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - **TouchState Interface**: Tracks individual touch/mouse interactions
 - **touchStates Map**: Stores state for multi-touch support
 - **mouseState**: Stores single mouse pointer state
+- **pinchState**: Tracks last pinch distance for zoom gestures
 
 ### Constants
 - **SWIPE_THRESHOLD_PX**: `30` - Minimum distance to register as swipe
@@ -42,6 +44,7 @@ Handles all user input for the game including touch, mouse, and keyboard events.
   - This allows swiping anywhere to spawn units once the base is selected
   - Updates base movement target
   - Handles movement dot dragging
+  - Applies pinch zoom when two touches are active
 
 #### handleTouchEnd/handleMouseUp
 - **Purpose:** Completes interaction and executes commands
@@ -89,15 +92,20 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 
 ### Critical Details
 - Multi-touch support via Map of touch identifiers
-- Split-screen: left half for player 0, right half for player 1
-- Player ownership determined by screen position in two-player mode
+- Pinch zoom uses the distance between two touches to drive camera zoom
+- Split-screen: left half for player 0, right half for player 1 within the arena viewport
+- Player ownership determined by screen position relative to the arena viewport center in two-player mode
+- Falls back to window width for split detection if viewport dimensions are not initialized
 - Selection is shift-additive with modifier key
 - Base dragging only works for own bases
 - Unit spawning shows menu on hold (200ms+)
 - Swipe distance and direction determines command type
 - Command queue respects QUEUE_MAX_LENGTH
-- Coordinates converted from pixels to game meters
+- Ability command queue nodes clone their origin/direction vectors to avoid later mutation
+- Coordinates converted from screen pixels to game meters via camera-aware transforms
 - Touch events prevented to avoid browser scrolling
+- Mining depot drags snap toward the closest available deposit by drag angle, with a preview line stored in `state.miningDragPreview`
+- Mining drone creation can be canceled by releasing near the depot, and deposits cap at two drones with cadence delays for staggering
 
 ### Input Modes
 1. **Tap**: Select units/bases
@@ -106,12 +114,20 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 4. **Drag**: Box select or move base
 
 ### Two-Player Split Screen
-- Screen divided vertically at center
+- Screen divided vertically at the arena viewport center
 - Each player controls only their side
 - Input position determines player ownership
 
 ### Known Issues
 - None currently identified
+
+## Potential Issues
+
+### Unused Code
+- **Location:** `src/lib/input.ts` (handleAbilityDrag)
+- **Description:** Vector-based ability drag helper is defined but not referenced
+- **Reason:** No call sites found in touch/mouse handlers
+- **Recommendation:** Remove if obsolete or wire it into input handling
 
 ## Future Changes
 
@@ -121,7 +137,6 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 ### Needed
 - Keyboard shortcuts for unit spawning
 - Hotkey groups for unit selection
-- Camera controls (pan, zoom)
 - Minimap input
 - Better unit spawn UI (not just hold)
 - Right-click for alternative commands
@@ -136,6 +151,12 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - Added unit spawn hold mechanic
 - **2025-12-31**: Fixed mobile selection box to create immediately when no units are selected (removed hold time requirement for empty selection)
 - **2026-01-01**: Allowed swipe-to-spawn anywhere when the base is selected and prioritized units over base selection in box select
+- **2026-01-03**: Anchored split-screen input detection to the letterboxed arena viewport center
+- **2026-01-05**: Cloned ability command origin/direction vectors to keep queued ability anchors stable
+- **2026-01-06**: Derived ability drag vectors from world-space positions to respect rotated desktop input
+- **2025-03-17**: Added mining depot snap-to-deposit drag logic, preview state updates, and cancellation behavior near depots
+- **2025-03-18**: Disabled box selection when dragging from mining depots and scaled mining drone selection to match larger render size
+- **2026-01-04**: Added camera-aware screen/world conversions and pinch-to-zoom handling for touch input
 
 ## Watch Out For
 - Always prevent default on touch events to avoid scrolling

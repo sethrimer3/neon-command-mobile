@@ -20,11 +20,13 @@ import {
   Projectile,
   FACTION_DEFINITIONS,
   UnitModifier,
+  QUEUE_MAX_LENGTH,
+  BASE_TYPE_DEFINITIONS,
 } from './types';
 import { distance, normalize, scale, add, subtract, generateId } from './gameUtils';
 import { checkObstacleCollision } from './maps';
 import { soundManager } from './sound';
-import { createSpawnEffect, createHitSparks, createAbilityEffect, createEnhancedDeathExplosion, createScreenFlash, createLaserParticles } from './visualEffects';
+import { createSpawnEffect, createHitSparks, createAbilityEffect, createEnhancedDeathExplosion, createScreenFlash, createLaserParticles, createBounceParticles } from './visualEffects';
 import { ObjectPool } from './objectPool';
 
 // Projectile constants - must be declared before object pool
@@ -77,16 +79,37 @@ const projectilePool = new ObjectPool<Projectile>(
 
 // Unit collision constants
 const UNIT_COLLISION_RADIUS = UNIT_SIZE_METERS / 2; // Minimum distance between unit centers
-const UNIT_COLLISION_SQUEEZE_FACTOR = 0.8; // Allow units to squeeze past each other (80% of full diameter)
+const UNIT_COLLISION_SQUEEZE_FACTOR = 0.75; // Allow units to squeeze past each other (75% of full diameter - more permissive for smoother flow)
 const FRIENDLY_SLIDE_DISTANCE = 0.3; // Distance to slide perpendicular when avoiding friendly units
+
+// Flocking/Boids constants for smooth group movement (StarCraft-like)
+const SEPARATION_RADIUS = 1.5; // Distance to maintain from nearby units
+const SEPARATION_FORCE = 3.0; // Strength of separation force (reduced from 8.0 to prevent violent oscillations)
+const SEPARATION_DEAD_ZONE = 0.3; // Minimum distance before separation force applies (prevents jitter at very close range)
+const COHESION_RADIUS = 4.0; // Distance to check for group cohesion
+const COHESION_FORCE = 1.0; // Strength of cohesion force (reduced from 2.0 for gentler grouping)
+const ALIGNMENT_RADIUS = 3.0; // Distance to check for velocity alignment
+const ALIGNMENT_FORCE = 0.8; // Strength of alignment force (reduced from 1.5 for smoother alignment)
+const FLOCKING_MAX_FORCE = 3.0; // Maximum magnitude of flocking forces (reduced from 5.0 to prevent extreme forces)
+const MIN_FORCE_THRESHOLD = 0.01; // Minimum force magnitude to apply
+const FLOCKING_FORCE_SMOOTHING = 0.7; // Smoothing factor for force changes (0=instant, 1=no change) - prevents violent oscillations
+
+// Jitter/wiggle constants for stuck unit recovery
+const JITTER_ACTIVATION_RATIO = 0.5; // Activate jitter at 50% of stuck timeout
+const JITTER_RADIUS = 0.2; // Size of jitter wiggle circle in meters
+const JITTER_INCREMENT = 0.1; // Speed of jitter cycle (radians per frame)
+const JITTER_MOVEMENT_DISTANCE = 0.1; // Distance to move per jitter attempt
 
 // Particle physics constants
 const PARTICLE_ATTRACTION_STRENGTH = 6.0; // How strongly particles are attracted to their unit
 const PARTICLE_DAMPING = 0.92; // Velocity damping factor - reduces velocity to prevent excessive speeds
-const PARTICLE_ORBIT_DISTANCE = 0.8; // Desired orbit distance from unit center
-const PARTICLE_MIN_VELOCITY = 2.5; // Minimum velocity to keep particles moving
+// Scale orbit distance with unit size so particles stay proportionate to unit silhouettes.
+const PARTICLE_ORBIT_DISTANCE = UNIT_SIZE_METERS * 0.8; // Desired orbit distance from unit center
+// Scale minimum velocity to keep particles moving proportionally around larger units.
+const PARTICLE_MIN_VELOCITY = 2.5 * UNIT_SIZE_METERS; // Minimum velocity to keep particles moving
 const PARTICLE_ORBITAL_SPEED = 2.0; // Speed of orbital rotation around unit
-const PARTICLE_ORBITAL_FORCE = 1.2; // Force applied for orbital motion
+// Scale orbital force with unit size to maintain similar orbital tension at larger radii.
+const PARTICLE_ORBITAL_FORCE = 1.2 * UNIT_SIZE_METERS; // Force applied for orbital motion
 const PARTICLE_ORBITAL_VELOCITY_SCALE = 0.5; // Scale factor for orbital velocity contribution
 const PARTICLE_TRAIL_LENGTH = 6; // Number of trail positions to keep
 const PARTICLE_MIN_SPEED_THRESHOLD = 0.01; // Threshold for detecting nearly stationary particles
@@ -121,6 +144,8 @@ export const MOTION_TRAIL_DURATION = 0.5; // seconds for motion trail fade
 const STUCK_DETECTION_THRESHOLD = 0.1; // Minimum distance unit must move to not be considered stuck
 const STUCK_TIMEOUT = 2.5; // Seconds before a stuck unit cancels its command queue
 export const QUEUE_FADE_DURATION = 1.0; // Seconds for command queue fade animation
+export const QUEUE_DRAW_DURATION = 0.5; // Seconds for command queue draw-in animation
+export const QUEUE_UNDRAW_DURATION = 0.5; // Seconds for command queue reverse un-draw animation
 
 /**
  * Derives the playable arena bounds from boundary obstacles.
@@ -281,22 +306,36 @@ function checkUnitCollisionWithSliding(
   if (hasFriendlyCollision) {
     const movementDirection = normalize(subtract(desiredPosition, unit.position));
     
-    // Try sliding perpendicular to movement direction
-    const perpendicular1 = { x: -movementDirection.y, y: movementDirection.x };
-    const perpendicular2 = { x: movementDirection.y, y: -movementDirection.x };
+    // Calculate perpendicular directions for sliding
+    const rightPerpendicular = { x: -movementDirection.y, y: movementDirection.x };
+    const leftPerpendicular = { x: movementDirection.y, y: -movementDirection.x };
     
-    // Try sliding to the right
-    const slidePos1 = add(desiredPosition, scale(perpendicular1, FRIENDLY_SLIDE_DISTANCE));
-    if (!checkObstacleCollision(slidePos1, UNIT_SIZE_METERS / 2, obstacles) &&
-        !checkUnitCollision(slidePos1, unit.id, allUnits)) {
-      return { blocked: false, alternativePosition: slidePos1 };
-    }
+    // Calculate diagonal directions (45-degree rotations)
+    // Diagonal right: rotate movement direction 45° clockwise
+    const sqrt2 = Math.sqrt(2);
+    const diagonalRight = { 
+      x: (-movementDirection.y + movementDirection.x) / sqrt2, 
+      y: (movementDirection.x + movementDirection.y) / sqrt2 
+    };
+    // Diagonal left: rotate movement direction 45° counter-clockwise
+    const diagonalLeft = { 
+      x: (movementDirection.y + movementDirection.x) / sqrt2, 
+      y: (-movementDirection.x + movementDirection.y) / sqrt2 
+    };
     
-    // Try sliding to the left
-    const slidePos2 = add(desiredPosition, scale(perpendicular2, FRIENDLY_SLIDE_DISTANCE));
-    if (!checkObstacleCollision(slidePos2, UNIT_SIZE_METERS / 2, obstacles) &&
-        !checkUnitCollision(slidePos2, unit.id, allUnits)) {
-      return { blocked: false, alternativePosition: slidePos2 };
+    // Try multiple slide distances and angles for better pathfinding
+    const slideDistances = [FRIENDLY_SLIDE_DISTANCE, FRIENDLY_SLIDE_DISTANCE * 1.5, FRIENDLY_SLIDE_DISTANCE * 0.5];
+    const slideAngles = [rightPerpendicular, leftPerpendicular, diagonalRight, diagonalLeft];
+    
+    // Try each combination of slide distance and angle
+    for (const slideDistance of slideDistances) {
+      for (const slideAngle of slideAngles) {
+        const slidePos = add(desiredPosition, scale(slideAngle, slideDistance));
+        if (!checkObstacleCollision(slidePos, UNIT_SIZE_METERS / 2, obstacles) &&
+            !checkUnitCollision(slidePos, unit.id, allUnits)) {
+          return { blocked: false, alternativePosition: slidePos };
+        }
+      }
     }
     
     // If no slide path found, return blocked but still friendly collision
@@ -327,16 +366,311 @@ function updateStuckDetection(unit: Unit, deltaTime: number): void {
       // Unit hasn't moved much - increment stuck timer
       unit.stuckTimer = (unit.stuckTimer || 0) + deltaTime;
       
-      // If stuck for too long, cancel command queue
+      // If stuck for too long, try to wiggle out before canceling
+      if (unit.stuckTimer >= STUCK_TIMEOUT * JITTER_ACTIVATION_RATIO && unit.stuckTimer < STUCK_TIMEOUT) {
+        // Apply jitter to help unstick (activation at 50% of timeout period)
+        if (!unit.jitterOffset) {
+          unit.jitterOffset = 0;
+        }
+      }
+      
+      // If stuck for too long after trying jitter, cancel command queue
       if (unit.stuckTimer >= STUCK_TIMEOUT) {
         markQueueForCancellation(unit);
       }
     } else {
-      // Unit moved enough - reset stuck timer
+      // Unit moved enough - reset stuck timer and jitter
       unit.stuckTimer = 0;
       unit.lastPosition = { ...unit.position };
+      unit.jitterOffset = undefined;
     }
   }
+}
+
+/**
+ * Apply jitter movement to help stuck units find a way out
+ * @param unit - The unit that's stuck
+ * @param baseDirection - The direction unit is trying to move
+ * @param allUnits - All units for collision checking
+ * @param obstacles - All obstacles for collision checking
+ * @returns Modified direction with jitter applied, or null if no valid jitter found
+ */
+function applyJitterMovement(
+  unit: Unit,
+  baseDirection: Vector2,
+  allUnits: Unit[],
+  obstacles: import('./maps').Obstacle[]
+): Vector2 | null {
+  if (!unit.jitterOffset) {
+    unit.jitterOffset = 0;
+  }
+  
+  // Increment jitter offset for cycling through positions
+  unit.jitterOffset += JITTER_INCREMENT;
+  
+  // Try circular jitter pattern around the stuck position
+  const jitterAngle = unit.jitterOffset * Math.PI * 2;
+  const jitterOffset = {
+    x: Math.cos(jitterAngle) * JITTER_RADIUS,
+    y: Math.sin(jitterAngle) * JITTER_RADIUS
+  };
+  
+  // Apply jitter to base direction
+  const jitteredDirection = normalize(add(baseDirection, jitterOffset));
+  const jitteredPosition = add(unit.position, scale(jitteredDirection, JITTER_MOVEMENT_DISTANCE));
+  
+  // Check if jittered position is valid
+  if (!checkObstacleCollision(jitteredPosition, UNIT_SIZE_METERS / 2, obstacles) &&
+      !checkUnitCollision(jitteredPosition, unit.id, allUnits)) {
+    return jitteredDirection;
+  }
+  
+  return null;
+}
+
+// Pathfinding constants
+const PATHFINDING_LOOKAHEAD_DISTANCE = 2.0; // How far ahead to check for obstacles
+const PATHFINDING_ANGLE_STEP = Math.PI / 8; // 22.5 degrees - smaller angle increments for smoother paths
+const PATHFINDING_MAX_ANGLES = 6; // Try up to 6 angles on each side (more attempts to find paths)
+
+/**
+ * Calculate separation force to avoid crowding nearby units (boids algorithm)
+ * @param unit - The unit calculating separation
+ * @param allUnits - All units in the game
+ * @returns Separation force vector
+ */
+function calculateSeparation(unit: Unit, allUnits: Unit[]): Vector2 {
+  let separationForce = { x: 0, y: 0 };
+  let count = 0;
+  
+  for (const other of allUnits) {
+    // Skip self and enemy units
+    if (other.id === unit.id || other.owner !== unit.owner) continue;
+    
+    const dist = distance(unit.position, other.position);
+    // Apply dead zone to prevent jitter when units are very close
+    if (dist > SEPARATION_DEAD_ZONE && dist < SEPARATION_RADIUS) {
+      // Calculate vector away from other unit
+      const away = subtract(unit.position, other.position);
+      // Weight by inverse distance (closer = stronger force), but smoothed
+      // Use quadratic falloff for smoother force curve
+      const normalizedDist = (dist - SEPARATION_DEAD_ZONE) / (SEPARATION_RADIUS - SEPARATION_DEAD_ZONE);
+      const weight = (1 - normalizedDist) * (1 - normalizedDist); // Quadratic falloff
+      const weightedAway = scale(normalize(away), weight);
+      separationForce = add(separationForce, weightedAway);
+      count++;
+    }
+  }
+  
+  if (count > 0) {
+    // Average the forces
+    separationForce = scale(separationForce, 1 / count);
+    // Normalize and apply force strength
+    if (distance({ x: 0, y: 0 }, separationForce) > MIN_FORCE_THRESHOLD) {
+      separationForce = scale(normalize(separationForce), SEPARATION_FORCE);
+    }
+  }
+  
+  return separationForce;
+}
+
+/**
+ * Calculate cohesion force to stay near group center (boids algorithm)
+ * @param unit - The unit calculating cohesion
+ * @param allUnits - All units in the game
+ * @returns Cohesion force vector
+ */
+function calculateCohesion(unit: Unit, allUnits: Unit[]): Vector2 {
+  let centerOfMass = { x: 0, y: 0 };
+  let count = 0;
+  
+  for (const other of allUnits) {
+    // Skip self and enemy units
+    if (other.id === unit.id || other.owner !== unit.owner) continue;
+    // Only consider units with same command (moving together)
+    if (other.commandQueue.length === 0) continue;
+    
+    const dist = distance(unit.position, other.position);
+    if (dist < COHESION_RADIUS) {
+      centerOfMass = add(centerOfMass, other.position);
+      count++;
+    }
+  }
+  
+  if (count > 0) {
+    // Calculate average position
+    centerOfMass = scale(centerOfMass, 1 / count);
+    // Create force toward center
+    const cohesionForce = subtract(centerOfMass, unit.position);
+    const cohesionMagnitude = distance({ x: 0, y: 0 }, cohesionForce);
+    if (cohesionMagnitude > MIN_FORCE_THRESHOLD) {
+      // Apply weaker force at longer distances for gentler cohesion
+      const normalizedDist = Math.min(cohesionMagnitude / COHESION_RADIUS, 1.0);
+      const strength = COHESION_FORCE * normalizedDist; // Linear falloff
+      return scale(normalize(cohesionForce), strength);
+    }
+  }
+  
+  return { x: 0, y: 0 };
+}
+
+/**
+ * Calculate alignment force to match velocity of nearby units (boids algorithm)
+ * @param unit - The unit calculating alignment
+ * @param allUnits - All units in the game
+ * @param currentDirection - Current movement direction
+ * @returns Alignment force vector
+ */
+function calculateAlignment(unit: Unit, allUnits: Unit[], currentDirection: Vector2): Vector2 {
+  let averageDirection = { x: 0, y: 0 };
+  let count = 0;
+  
+  for (const other of allUnits) {
+    // Skip self and enemy units
+    if (other.id === unit.id || other.owner !== unit.owner) continue;
+    // Only consider units that are moving
+    if (other.commandQueue.length === 0) continue;
+    
+    const dist = distance(unit.position, other.position);
+    if (dist < ALIGNMENT_RADIUS && other.commandQueue.length > 0) {
+      const otherTarget = other.commandQueue[0];
+      if (otherTarget.type === 'move' || otherTarget.type === 'attack-move') {
+        const otherDirection = normalize(subtract(otherTarget.position, other.position));
+        averageDirection = add(averageDirection, otherDirection);
+        count++;
+      }
+    }
+  }
+  
+  if (count > 0) {
+    // Calculate average direction
+    averageDirection = scale(averageDirection, 1 / count);
+    const avgMagnitude = distance({ x: 0, y: 0 }, averageDirection);
+    if (avgMagnitude > MIN_FORCE_THRESHOLD) {
+      averageDirection = normalize(averageDirection);
+      // Create steering force toward average direction
+      const alignmentForce = subtract(averageDirection, currentDirection);
+      const alignmentMagnitude = distance({ x: 0, y: 0 }, alignmentForce);
+      if (alignmentMagnitude > MIN_FORCE_THRESHOLD) {
+        // Weaker alignment force for gentler direction changes
+        return scale(normalize(alignmentForce), ALIGNMENT_FORCE * Math.min(alignmentMagnitude, 1.0));
+      }
+    }
+  }
+  
+  return { x: 0, y: 0 };
+}
+
+/**
+ * Apply flocking forces to a movement direction for smooth group movement
+ * @param unit - The unit to apply flocking to
+ * @param baseDirection - The base movement direction (toward target)
+ * @param allUnits - All units in the game
+ * @returns Modified direction with flocking applied
+ */
+function applyFlockingBehavior(unit: Unit, baseDirection: Vector2, allUnits: Unit[]): Vector2 {
+  // Calculate all three flocking forces
+  const separation = calculateSeparation(unit, allUnits);
+  const cohesion = calculateCohesion(unit, allUnits);
+  const alignment = calculateAlignment(unit, allUnits, baseDirection);
+  
+  // Combine flocking forces
+  let flockingForce = { x: 0, y: 0 };
+  flockingForce = add(flockingForce, separation);
+  flockingForce = add(flockingForce, cohesion);
+  flockingForce = add(flockingForce, alignment);
+  
+  // Clamp flocking force to max magnitude before smoothing
+  const forceMagnitude = distance({ x: 0, y: 0 }, flockingForce);
+  if (forceMagnitude > FLOCKING_MAX_FORCE) {
+    flockingForce = scale(normalize(flockingForce), FLOCKING_MAX_FORCE);
+  }
+  
+  // Apply force smoothing to prevent oscillations
+  if (unit.previousFlockingForce) {
+    // Blend previous force with current force for smooth transitions
+    flockingForce = {
+      x: unit.previousFlockingForce.x * FLOCKING_FORCE_SMOOTHING + flockingForce.x * (1 - FLOCKING_FORCE_SMOOTHING),
+      y: unit.previousFlockingForce.y * FLOCKING_FORCE_SMOOTHING + flockingForce.y * (1 - FLOCKING_FORCE_SMOOTHING)
+    };
+  }
+  
+  // Store clamped and smoothed force for next frame
+  unit.previousFlockingForce = { ...flockingForce };
+  
+  // Combine forces with base direction
+  // Base direction should have stronger weight to ensure units still move toward their goal
+  // Scale base direction by a factor to make it the dominant force
+  const BASE_DIRECTION_WEIGHT = 10.0; // Make base direction 10x stronger than flocking forces
+  let finalDirection = scale(baseDirection, BASE_DIRECTION_WEIGHT);
+  finalDirection = add(finalDirection, flockingForce);
+  
+  // Normalize to maintain consistent speed
+  if (distance({ x: 0, y: 0 }, finalDirection) > MIN_FORCE_THRESHOLD) {
+    return normalize(finalDirection);
+  }
+  
+  return baseDirection;
+}
+
+/**
+ * Finds an alternative path around obstacles using enhanced angle-based pathfinding.
+ * Tries more angles with smaller increments for smoother pathfinding.
+ * @param unit - The unit trying to move
+ * @param target - The target position
+ * @param obstacles - Array of obstacles to avoid
+ * @returns Alternative direction to move, or null if no path found
+ */
+function findPathAroundObstacle(
+  unit: Unit,
+  target: Vector2,
+  obstacles: import('./maps').Obstacle[]
+): Vector2 | null {
+  const directDirection = normalize(subtract(target, unit.position));
+  const unitRadius = UNIT_SIZE_METERS / 2;
+  
+  // Check if direct path is clear
+  const lookaheadPos = add(unit.position, scale(directDirection, PATHFINDING_LOOKAHEAD_DISTANCE));
+  if (!checkObstacleCollision(lookaheadPos, unitRadius, obstacles)) {
+    return null; // Direct path is clear, no need for pathfinding
+  }
+  
+  // Calculate direction to target once for reuse
+  const toTarget = subtract(target, unit.position);
+  
+  // Try alternative angles to find a clear path
+  // Alternate between left and right to find the shortest path around
+  for (let i = 1; i <= PATHFINDING_MAX_ANGLES; i++) {
+    const angle = PATHFINDING_ANGLE_STEP * i;
+    
+    // Try right side first
+    const rightAngle = Math.atan2(directDirection.y, directDirection.x) + angle;
+    const rightDir = { x: Math.cos(rightAngle), y: Math.sin(rightAngle) };
+    const rightPos = add(unit.position, scale(rightDir, PATHFINDING_LOOKAHEAD_DISTANCE));
+    
+    if (!checkObstacleCollision(rightPos, unitRadius, obstacles)) {
+      // Check that this direction generally moves toward target
+      const dotProduct = rightDir.x * toTarget.x + rightDir.y * toTarget.y;
+      if (dotProduct > 0) {
+        return rightDir;
+      }
+    }
+    
+    // Try left side
+    const leftAngle = Math.atan2(directDirection.y, directDirection.x) - angle;
+    const leftDir = { x: Math.cos(leftAngle), y: Math.sin(leftAngle) };
+    const leftPos = add(unit.position, scale(leftDir, PATHFINDING_LOOKAHEAD_DISTANCE));
+    
+    if (!checkObstacleCollision(leftPos, unitRadius, obstacles)) {
+      // Check that this direction generally moves toward target
+      const dotProduct = leftDir.x * toTarget.x + leftDir.y * toTarget.y;
+      if (dotProduct > 0) {
+        return leftDir;
+      }
+    }
+  }
+  
+  return null; // No clear path found
 }
 
 // Create particles for a unit
@@ -850,6 +1184,12 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
             createDamageNumber(state, projectile.position, finalDamage, projectile.color);
             createHitSparks(state, projectile.position, projectile.color, 6);
             
+            // Create bounce particles if target has armor
+            if (target.armor > 0) {
+              const incomingDirection = normalize(projectile.velocity);
+              createBounceParticles(state, projectile.position, incomingDirection, projectile.color, 3);
+            }
+            
             if (state.matchStats && projectile.owner === 0) {
               state.matchStats.damageDealtByPlayer += finalDamage;
             }
@@ -866,6 +1206,12 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
               enemy.hp -= finalDamage;
               createDamageNumber(state, projectile.position, finalDamage, projectile.color);
               createHitSparks(state, projectile.position, projectile.color, 6);
+              
+              // Create bounce particles if enemy has armor
+              if (enemy.armor > 0) {
+                const incomingDirection = normalize(projectile.velocity);
+                createBounceParticles(state, projectile.position, incomingDirection, projectile.color, 3);
+              }
               
               if (state.matchStats && projectile.owner === 0) {
                 state.matchStats.damageDealtByPlayer += finalDamage;
@@ -929,17 +1275,161 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
   state.projectiles = remainingProjectiles;
 }
 
+/**
+ * Update chess mode turn timer and execute pending commands when turn ends
+ */
+function updateChessMode(state: GameState, deltaTime: number): void {
+  // Only proceed if chess mode is enabled in settings
+  if (!state.settings.chessMode) return;
+  
+  // Initialize chess mode state if not already initialized
+  if (!state.chessMode) {
+    state.chessMode = {
+      enabled: true,
+      turnDuration: 10.0, // 10 seconds per turn
+      turnStartTime: state.elapsedTime,
+      turnPhase: 'planning',
+      pendingCommands: new Map(),
+    };
+    return;
+  }
+  
+  const turnElapsed = state.elapsedTime - state.chessMode.turnStartTime;
+  
+  // Check if turn has completed
+  if (turnElapsed >= state.chessMode.turnDuration) {
+    // Execute all pending commands
+    executeChessModeCommands(state);
+    
+    // Start new turn
+    state.chessMode.turnStartTime = state.elapsedTime;
+    state.chessMode.turnPhase = 'planning';
+    state.chessMode.pendingCommands.clear();
+    
+    // Play a sound to indicate turn transition
+    soundManager.playCountdown();
+  }
+}
+
+/**
+ * Execute all pending chess mode commands by applying them to unit command queues
+ */
+function executeChessModeCommands(state: GameState): void {
+  if (!state.chessMode) return;
+  
+  // Apply pending commands to each unit
+  state.chessMode.pendingCommands.forEach((commands, unitId) => {
+    const unit = state.units.find(u => u.id === unitId);
+    if (unit && commands.length > 0) {
+      // In chess mode, replace the entire queue with the new command
+      // This is intentional: each turn executes exactly 1 new command per unit
+      // Previous commands should be completed during the turn execution phase
+      unit.commandQueue = [commands[0]]; // Only execute 1 command per turn as specified
+      
+      // Mark the start time for queue draw animation
+      unit.queueDrawStartTime = Date.now();
+    }
+  });
+}
+
+// Constants for floater physics
+const FLOATER_FRICTION = 0.95; // Friction to slow down floaters over time
+const FLOATER_MAX_SPEED = 2.0; // Maximum speed of floaters in pixels per second
+const FLOATER_PUSH_RADIUS = 30; // Radius in pixels within which units push floaters
+const FLOATER_PUSH_FORCE = 50; // Force applied to push floaters
+
+// Update background floaters with physics-based movement
+function updateFloaters(state: GameState, deltaTime: number): void {
+  if (!state.floaters || state.floaters.length === 0) return;
+  
+  // Use window dimensions as fallback if canvas dimensions not stored
+  const canvasWidth = (typeof window !== 'undefined') ? window.innerWidth : 1920;
+  const canvasHeight = (typeof window !== 'undefined') ? window.innerHeight : 1080;
+  
+  state.floaters.forEach(floater => {
+    // Apply forces from units and projectiles
+    state.units.forEach(unit => {
+      const unitScreenPos = {
+        x: unit.position.x * 20, // Convert to pixels (PIXELS_PER_METER)
+        y: unit.position.y * 20,
+      };
+      
+      const dx = floater.position.x - unitScreenPos.x;
+      const dy = floater.position.y - unitScreenPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist < FLOATER_PUSH_RADIUS && dist > 0) {
+        // Calculate push force (stronger when closer)
+        const forceMagnitude = (FLOATER_PUSH_FORCE / floater.mass) * (1 - dist / FLOATER_PUSH_RADIUS);
+        const forceX = (dx / dist) * forceMagnitude;
+        const forceY = (dy / dist) * forceMagnitude;
+        
+        // Apply force to velocity
+        floater.velocity.x += forceX * deltaTime;
+        floater.velocity.y += forceY * deltaTime;
+      }
+    });
+    
+    // Apply forces from projectiles (smaller push)
+    state.projectiles.forEach(projectile => {
+      const projScreenPos = {
+        x: projectile.position.x * 20,
+        y: projectile.position.y * 20,
+      };
+      
+      const dx = floater.position.x - projScreenPos.x;
+      const dy = floater.position.y - projScreenPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist < FLOATER_PUSH_RADIUS / 2 && dist > 0) {
+        const forceMagnitude = (FLOATER_PUSH_FORCE * 0.3 / floater.mass) * (1 - dist / (FLOATER_PUSH_RADIUS / 2));
+        const forceX = (dx / dist) * forceMagnitude;
+        const forceY = (dy / dist) * forceMagnitude;
+        
+        floater.velocity.x += forceX * deltaTime;
+        floater.velocity.y += forceY * deltaTime;
+      }
+    });
+    
+    // Apply friction
+    floater.velocity.x *= FLOATER_FRICTION;
+    floater.velocity.y *= FLOATER_FRICTION;
+    
+    // Limit max speed
+    const speed = Math.sqrt(floater.velocity.x ** 2 + floater.velocity.y ** 2);
+    if (speed > FLOATER_MAX_SPEED) {
+      floater.velocity.x = (floater.velocity.x / speed) * FLOATER_MAX_SPEED;
+      floater.velocity.y = (floater.velocity.y / speed) * FLOATER_MAX_SPEED;
+    }
+    
+    // Update position
+    floater.position.x += floater.velocity.x * deltaTime * 60; // Scale by 60 for frame independence
+    floater.position.y += floater.velocity.y * deltaTime * 60;
+    
+    // Wrap around screen edges
+    if (floater.position.x < 0) floater.position.x = canvasWidth;
+    if (floater.position.x > canvasWidth) floater.position.x = 0;
+    if (floater.position.y < 0) floater.position.y = canvasHeight;
+    if (floater.position.y > canvasHeight) floater.position.y = 0;
+  });
+}
+
 export function updateGame(state: GameState, deltaTime: number): void {
   if (state.mode !== 'game') return;
 
   state.elapsedTime += deltaTime;
 
+  // Update chess mode turn timer if enabled
+  updateChessMode(state, deltaTime);
+
   updateIncome(state, deltaTime);
+  updateFloaters(state, deltaTime); // Update background floaters
   updateUnits(state, deltaTime);
   updateBases(state, deltaTime);
   updateProjectiles(state, deltaTime);
   updateCombat(state, deltaTime);
   cleanupDeadUnits(state); // Clean up dead units after combat
+  cleanupDyingUnits(state); // Clean up dying units after animation completes
   updateExplosionParticles(state, deltaTime);
   updateEnergyPulses(state);
   updateHitSparks(state, deltaTime);
@@ -950,10 +1440,30 @@ export function updateGame(state: GameState, deltaTime: number): void {
 
 function updateIncome(state: GameState, deltaTime: number): void {
   const elapsedSeconds = Math.floor(state.elapsedTime);
-  const newIncomeRate = Math.floor(elapsedSeconds / 10) + 1;
+  const baseIncomeRate = Math.floor(elapsedSeconds / 10) + 1;
 
-  state.players.forEach((player) => {
-    player.incomeRate = newIncomeRate;
+  state.players.forEach((player, playerIndex) => {
+    // Calculate mining income from active mining drones
+    let miningIncome = 0;
+    state.miningDepots.forEach((depot) => {
+      if (depot.owner === playerIndex) {
+        depot.deposits.forEach((deposit) => {
+          const activeWorkers = (deposit.workerIds ?? []).filter((workerId) => {
+            // Check if each worker is still alive
+            const worker = state.units.find(u => u.id === workerId);
+            return !!worker;
+          });
+
+          // Update worker list to remove dead drones
+          deposit.workerIds = activeWorkers;
+
+          // Each active drone adds +2 income
+          miningIncome += activeWorkers.length * 2;
+        });
+      }
+    });
+    
+    player.incomeRate = baseIncomeRate + miningIncome;
   });
 
   state.lastIncomeTime += deltaTime;
@@ -968,7 +1478,81 @@ function updateIncome(state: GameState, deltaTime: number): void {
   }
 }
 
+// Avoidance constants
+const AVOIDANCE_DETECTION_RANGE = 2.0; // Range to detect approaching friendly units
+const AVOIDANCE_MOVE_DISTANCE = 1.5; // Distance to temporarily move aside
+const AVOIDANCE_RETURN_DELAY = 1.0; // Seconds to wait before returning to original position
+const AVOIDANCE_HEADING_THRESHOLD = 0.5; // Dot product threshold to determine if unit is heading toward another (0.5 = ~60 degree cone)
+
 function updateUnits(state: GameState, deltaTime: number): void {
+  // First pass: detect stationary units that should move aside for moving units
+  state.units.forEach((stationaryUnit) => {
+    // Update return delay timer for units in temporary avoidance
+    if (stationaryUnit.temporaryAvoidance) {
+      stationaryUnit.temporaryAvoidance.returnDelay -= deltaTime;
+      
+      // Check if it's time to return to original position
+      if (stationaryUnit.temporaryAvoidance.returnDelay <= 0) {
+        // Return to original position
+        stationaryUnit.commandQueue.push({
+          type: 'move',
+          position: stationaryUnit.temporaryAvoidance.originalPosition
+        });
+        stationaryUnit.temporaryAvoidance = undefined;
+      }
+      return;
+    }
+    
+    // Skip units that are already moving
+    if (stationaryUnit.commandQueue.length > 0) return;
+    
+    // Check for approaching friendly units
+    for (const movingUnit of state.units) {
+      // Skip self, different teams, or non-moving units
+      if (movingUnit.id === stationaryUnit.id) continue;
+      if (movingUnit.owner !== stationaryUnit.owner) continue;
+      if (movingUnit.commandQueue.length === 0) continue;
+      
+      // Get moving unit's target
+      const targetNode = movingUnit.commandQueue[0];
+      if (targetNode.type !== 'move' && targetNode.type !== 'attack-move' && targetNode.type !== 'patrol') continue;
+      
+      // Check if moving unit is approaching stationary unit
+      const distToStationary = distance(movingUnit.position, stationaryUnit.position);
+      if (distToStationary > AVOIDANCE_DETECTION_RANGE) continue;
+      
+      // Check if moving unit is moving towards stationary unit
+      const movementDirection = normalize(subtract(targetNode.position, movingUnit.position));
+      const toStationary = normalize(subtract(stationaryUnit.position, movingUnit.position));
+      
+      const dotProduct = movementDirection.x * toStationary.x + movementDirection.y * toStationary.y;
+      
+      // If dot product exceeds threshold, moving unit is heading towards stationary unit
+      if (dotProduct > AVOIDANCE_HEADING_THRESHOLD) {
+        // Move stationary unit aside perpendicular to movement direction
+        const perpendicular = { x: -movementDirection.y, y: movementDirection.x };
+        const avoidancePos = add(stationaryUnit.position, scale(perpendicular, AVOIDANCE_MOVE_DISTANCE));
+        
+        // Check if avoidance position is valid (not in obstacle)
+        if (!checkObstacleCollision(avoidancePos, UNIT_SIZE_METERS / 2, state.obstacles)) {
+          // Store original position and set return delay
+          stationaryUnit.temporaryAvoidance = {
+            originalPosition: { x: stationaryUnit.position.x, y: stationaryUnit.position.y },
+            returnDelay: AVOIDANCE_RETURN_DELAY
+          };
+          
+          // Add temporary move command
+          stationaryUnit.commandQueue.push({
+            type: 'move',
+            position: avoidancePos
+          });
+          break; // Only avoid once per update
+        }
+      }
+    }
+  });
+  
+  // Second pass: update all units normally
   state.units.forEach((unit) => {
     // Clean up faded command queues that have been marked for cancellation
     if (unit.queueFadeStartTime) {
@@ -1020,6 +1604,32 @@ function updateUnits(state: GameState, deltaTime: number): void {
     }
 
     if (unit.commandQueue.length === 0) {
+      // Mining drones automatically queue back and forth between depot and deposit
+      if (unit.miningState) {
+        const depot = state.miningDepots.find(d => d.id === unit.miningState?.depotId);
+        const deposit = depot?.deposits.find(d => d.id === unit.miningState?.depositId);
+        
+        if (depot && deposit) {
+          // Hold briefly to keep paired drones in alternating cadence
+          if (unit.miningState.cadenceDelay && unit.miningState.cadenceDelay > 0) {
+            unit.miningState.cadenceDelay = Math.max(0, unit.miningState.cadenceDelay - deltaTime);
+            unit.stuckTimer = 0;
+            unit.lastPosition = undefined;
+            return;
+          }
+
+          if (unit.miningState.atDepot) {
+            // Go to deposit
+            unit.commandQueue.push({ type: 'move', position: deposit.position });
+            unit.miningState.atDepot = false;
+          } else {
+            // Go back to depot
+            unit.commandQueue.push({ type: 'move', position: depot.position });
+            unit.miningState.atDepot = true;
+          }
+        }
+      }
+      
       // Reset stuck timer when no commands
       unit.stuckTimer = 0;
       unit.lastPosition = undefined;
@@ -1039,10 +1649,28 @@ function updateUnits(state: GameState, deltaTime: number): void {
         // Reset stuck timer on successful completion
         unit.stuckTimer = 0;
         unit.lastPosition = undefined;
+        unit.jitterOffset = undefined;
         return;
       }
 
-      const direction = normalize(subtract(currentNode.position, unit.position));
+      let direction = normalize(subtract(currentNode.position, unit.position));
+      
+      // Apply flocking behavior for smooth group movement (like StarCraft)
+      direction = applyFlockingBehavior(unit, direction, state.units);
+      
+      // Try pathfinding if direct path might be blocked
+      const alternativePath = findPathAroundObstacle(unit, currentNode.position, state.obstacles);
+      if (alternativePath) {
+        direction = alternativePath;
+      }
+      
+      // If stuck, try jitter movement to wiggle out
+      if (unit.jitterOffset !== undefined) {
+        const jitteredDirection = applyJitterMovement(unit, direction, state.units, state.obstacles);
+        if (jitteredDirection) {
+          direction = jitteredDirection;
+        }
+      }
       
       // Update unit rotation to face movement direction
       updateUnitRotation(unit, direction, deltaTime);
@@ -1061,9 +1689,10 @@ function updateUnits(state: GameState, deltaTime: number): void {
         // Use alternative position if sliding found a path, otherwise use desired position
         unit.position = collisionResult.alternativePosition || newPosition;
         
-        // Reset stuck timer - unit is making progress
+        // Reset stuck timer and jitter - unit is making progress
         unit.stuckTimer = 0;
         unit.lastPosition = { ...unit.position };
+        unit.jitterOffset = undefined;
       } else {
         // Collision detected - slow down
         unit.currentSpeed = Math.max(0, (unit.currentSpeed || 0) * COLLISION_DECELERATION_FACTOR);
@@ -1118,10 +1747,30 @@ function updateUnits(state: GameState, deltaTime: number): void {
       if (dist < 0.1) {
         unit.commandQueue.shift();
         unit.currentSpeed = 0;
+        unit.stuckTimer = 0;
+        unit.lastPosition = undefined;
+        unit.jitterOffset = undefined;
         return;
       }
 
-      const direction = normalize(subtract(currentNode.position, unit.position));
+      let direction = normalize(subtract(currentNode.position, unit.position));
+      
+      // Apply flocking behavior for smooth group movement
+      direction = applyFlockingBehavior(unit, direction, state.units);
+
+      // Try pathfinding if direct path might be blocked
+      const alternativePath = findPathAroundObstacle(unit, currentNode.position, state.obstacles);
+      if (alternativePath) {
+        direction = alternativePath;
+      }
+      
+      // If stuck, try jitter movement
+      if (unit.jitterOffset !== undefined) {
+        const jitteredDirection = applyJitterMovement(unit, direction, state.units, state.obstacles);
+        if (jitteredDirection) {
+          direction = jitteredDirection;
+        }
+      }
 
       // Update unit rotation to face movement direction
       updateUnitRotation(unit, direction, deltaTime);
@@ -1139,9 +1788,10 @@ function updateUnits(state: GameState, deltaTime: number): void {
       if (!collisionResult.blocked) {
         // Use alternative position if sliding found a path
         unit.position = collisionResult.alternativePosition || newPosition;
-        // Reset stuck timer
+        // Reset stuck timer and jitter
         unit.stuckTimer = 0;
         unit.lastPosition = { ...unit.position };
+        unit.jitterOffset = undefined;
       } else {
         // Collision detected - slow down
         unit.currentSpeed = Math.max(0, (unit.currentSpeed || 0) * COLLISION_DECELERATION_FACTOR);
@@ -1163,31 +1813,13 @@ function updateUnits(state: GameState, deltaTime: number): void {
       unit.distanceTraveled += moveDist;
     } else if (currentNode.type === 'ability') {
       const dist = distance(unit.position, currentNode.position);
-      if (dist > 0.1) {
-        const def = UNIT_DEFINITIONS[unit.type];
-        const direction = normalize(subtract(currentNode.position, unit.position));
-        const movement = scale(direction, def.moveSpeed * deltaTime);
-        
-        // Update unit rotation to face movement direction
-        updateUnitRotation(unit, direction, deltaTime);
-        
-        unit.position = add(unit.position, movement);
-
-        const queueMovementNodes = unit.commandQueue.filter((n) => n.type === 'move').length;
-        const creditMultiplier = 1.0 + QUEUE_BONUS_PER_NODE * queueMovementNodes;
-        const moveDist = Math.min(distance({ x: 0, y: 0 }, movement), dist);
-        unit.distanceCredit += moveDist * creditMultiplier;
-
-        while (unit.distanceCredit >= PROMOTION_DISTANCE_THRESHOLD) {
-          unit.distanceCredit -= PROMOTION_DISTANCE_THRESHOLD;
-          unit.damageMultiplier *= PROMOTION_MULTIPLIER;
-        }
-
-        unit.distanceTraveled += moveDist;
-      } else {
-        executeAbility(state, unit, currentNode);
-        unit.commandQueue.shift();
-      }
+      
+      // Abilities should execute even if the unit drifted away from the queued anchor
+      const abilityOrigin = dist > 0.1 ? { ...unit.position } : currentNode.position;
+      const abilityNode: CommandNode = { ...currentNode, position: abilityOrigin };
+      
+      executeAbility(state, unit, abilityNode);
+      unit.commandQueue.shift();
     } else if (currentNode.type === 'patrol') {
       // Patrol: move to patrol point, then add return command to create loop
       const dist = distance(unit.position, currentNode.position);
@@ -1202,11 +1834,32 @@ function updateUnits(state: GameState, deltaTime: number): void {
             returnPosition: currentNode.position 
           });
         }
+        unit.stuckTimer = 0;
+        unit.lastPosition = undefined;
+        unit.jitterOffset = undefined;
         return;
       }
 
       const def = UNIT_DEFINITIONS[unit.type];
-      const direction = normalize(subtract(currentNode.position, unit.position));
+      let direction = normalize(subtract(currentNode.position, unit.position));
+      
+      // Apply flocking behavior for smooth group patrol movement
+      direction = applyFlockingBehavior(unit, direction, state.units);
+      
+      // Try pathfinding if direct path might be blocked
+      const alternativePath = findPathAroundObstacle(unit, currentNode.position, state.obstacles);
+      if (alternativePath) {
+        direction = alternativePath;
+      }
+      
+      // If stuck, try jitter movement
+      if (unit.jitterOffset !== undefined) {
+        const jitteredDirection = applyJitterMovement(unit, direction, state.units, state.obstacles);
+        if (jitteredDirection) {
+          direction = jitteredDirection;
+        }
+      }
+      
       const movement = scale(direction, def.moveSpeed * deltaTime);
       
       // Update unit rotation to face movement direction
@@ -1220,9 +1873,10 @@ function updateUnits(state: GameState, deltaTime: number): void {
       
       if (!collisionResult.blocked) {
         unit.position = collisionResult.alternativePosition || newPosition;
-        // Reset stuck timer
+        // Reset stuck timer and jitter
         unit.stuckTimer = 0;
         unit.lastPosition = { ...unit.position };
+        unit.jitterOffset = undefined;
       } else {
         // Track stuck state
         updateStuckDetection(unit, deltaTime);
@@ -1335,6 +1989,113 @@ function updateBases(state: GameState, deltaTime: number): void {
       base.laserCooldown = Math.max(0, base.laserCooldown - deltaTime);
     }
 
+    // Regeneration logic for support base type
+    if (base.baseType === 'support') {
+      // Heal nearby friendly units periodically
+      const REGEN_RADIUS = 8; // meters
+      const REGEN_AMOUNT = 15; // HP per second
+      const REGEN_PULSE_INTERVAL = 2; // seconds between visual pulses
+      
+      // Initialize cooldown if needed
+      if (base.autoAttackCooldown === undefined) {
+        base.autoAttackCooldown = 0;
+      }
+      
+      if (base.autoAttackCooldown > 0) {
+        base.autoAttackCooldown = Math.max(0, base.autoAttackCooldown - deltaTime);
+      }
+      
+      // Continuous healing
+      state.units.forEach((unit) => {
+        if (unit.owner === base.owner) {
+          const dist = distance(base.position, unit.position);
+          if (dist <= REGEN_RADIUS && unit.hp < unit.maxHp) {
+            unit.hp = Math.min(unit.maxHp, unit.hp + REGEN_AMOUNT * deltaTime);
+          }
+        }
+      });
+      
+      // Heal self
+      if (base.hp < base.maxHp) {
+        base.hp = Math.min(base.maxHp, base.hp + REGEN_AMOUNT * deltaTime * 0.5); // Half rate for self
+      }
+      
+      // Create visual pulse effect
+      if (base.autoAttackCooldown === 0) {
+        base.regenerationPulse = {
+          endTime: Date.now() + 500, // 0.5 second pulse duration
+          radius: REGEN_RADIUS,
+        };
+        base.autoAttackCooldown = REGEN_PULSE_INTERVAL;
+      }
+    }
+
+    // Auto-attack logic for defense base type
+    if (base.baseType === 'defense') {
+      const baseTypeDef = BASE_TYPE_DEFINITIONS[base.baseType];
+      if (baseTypeDef.autoAttack) {
+        // Update auto-attack cooldown
+        if (base.autoAttackCooldown === undefined) {
+          base.autoAttackCooldown = 0;
+        }
+        
+        if (base.autoAttackCooldown > 0) {
+          base.autoAttackCooldown = Math.max(0, base.autoAttackCooldown - deltaTime);
+        }
+
+        // Find closest enemy unit or base within range
+        if (base.autoAttackCooldown === 0) {
+          type TargetInfo = { position: Vector2; isUnit: boolean; id: string };
+          let closestTarget: TargetInfo | null = null;
+          let closestDist = Infinity;
+
+          // Check enemy units
+          state.units.forEach((unit) => {
+            if (unit.owner !== base.owner) {
+              const dist = distance(base.position, unit.position);
+              if (dist <= baseTypeDef.autoAttack!.range && dist < closestDist) {
+                closestDist = dist;
+                closestTarget = { position: unit.position, isUnit: true, id: unit.id };
+              }
+            }
+          });
+
+          // Check enemy bases
+          state.bases.forEach((targetBase) => {
+            if (targetBase.owner !== base.owner) {
+              const dist = distance(base.position, targetBase.position);
+              if (dist <= baseTypeDef.autoAttack!.range && dist < closestDist) {
+                closestDist = dist;
+                closestTarget = { position: targetBase.position, isUnit: false, id: targetBase.id };
+              }
+            }
+          });
+
+          // Fire at closest target
+          if (closestTarget !== null) {
+            const direction = normalize(subtract(closestTarget.position, base.position));
+            const projectile = projectilePool.acquire();
+            projectile.position = { ...base.position };
+            projectile.velocity = scale(direction, PROJECTILE_SPEED);
+            projectile.target = { ...closestTarget.position };
+            projectile.damage = baseTypeDef.autoAttack!.damage;
+            projectile.owner = base.owner;
+            projectile.color = state.players[base.owner].color;
+            projectile.lifetime = PROJECTILE_LIFETIME;
+            projectile.createdAt = Date.now();
+            projectile.sourceUnit = base.id;
+            if (closestTarget.isUnit) {
+              projectile.targetUnit = closestTarget.id;
+            }
+            state.projectiles.push(projectile);
+
+            // Set cooldown
+            base.autoAttackCooldown = 1 / baseTypeDef.autoAttack!.attackRate;
+          }
+        }
+      }
+    }
+
     if (!base.movementTarget) {
       // Deactivate shield when not moving (for mobile faction)
       if (base.shieldActive) {
@@ -1353,17 +2114,26 @@ function updateBases(state: GameState, deltaTime: number): void {
       return;
     }
 
-    // Activate shield for mobile faction when moving
-    const factionDef = FACTION_DEFINITIONS[base.faction];
-    if (factionDef.ability === 'shield' && !base.shieldActive) {
+    // Get base type definition for movement speed
+    const baseTypeDef = BASE_TYPE_DEFINITIONS[base.baseType];
+    if (!baseTypeDef.canMove) {
+      // Stationary base cannot move
+      base.movementTarget = null;
+      return;
+    }
+
+    // Activate shield for assault base when moving
+    if (base.baseType === 'assault' && !base.shieldActive) {
       base.shieldActive = { endTime: Date.now() + 10000 }; // Shield lasts while moving
     }
 
     const direction = normalize(subtract(base.movementTarget, base.position));
-    const movement = scale(direction, factionDef.baseMoveSpeed * deltaTime);
+    // Use baseTypeDef moveSpeed if > 0, otherwise use faction baseMoveSpeed
+    const moveSpeed = baseTypeDef.moveSpeed > 0 ? baseTypeDef.moveSpeed : FACTION_DEFINITIONS[base.faction].baseMoveSpeed;
+    const movement = scale(direction, moveSpeed * deltaTime);
     base.position = add(base.position, movement);
     
-    // Update shield endTime to keep it active while moving
+    // Update shield endTime to keep it active while moving (assault base)
     if (base.shieldActive) {
       base.shieldActive.endTime = Date.now() + 100; // Keep extending while moving
     }
@@ -1383,12 +2153,10 @@ function executeAbility(state: GameState, unit: Unit, node: CommandNode): void {
   unit.abilityCooldown = def.abilityCooldown;
   
   // Keep existing specific abilities as additional effects
+  // Warriors intentionally use only the generic laser to avoid dash-related crashes.
   if (unit.type === 'marine') {
     createAbilityEffect(state, unit, node.position, 'burst-fire');
     executeBurstFire(state, unit, node.direction);
-  } else if (unit.type === 'warrior') {
-    createAbilityEffect(state, unit, node.position, 'execute-dash');
-    executeExecuteDash(state, unit, node.position);
   } else if (unit.type === 'snaker') {
     createAbilityEffect(state, unit, node.position, 'line-jump');
     unit.lineJumpTelegraph = {
@@ -1411,6 +2179,90 @@ function executeAbility(state: GameState, unit: Unit, node: CommandNode): void {
   } else if (unit.type === 'interceptor') {
     createAbilityEffect(state, unit, node.position, 'missile-barrage');
     executeMissileBarrage(state, unit, node.direction);
+  } else if (unit.type === 'marksman') {
+    createAbilityEffect(state, unit, node.position, 'precision-shot');
+    executePrecisionShot(state, unit, node.direction);
+  } else if (unit.type === 'engineer') {
+    createAbilityEffect(state, unit, node.position, 'deploy-turret');
+    executeDeployTurret(state, unit, node.position);
+  } else if (unit.type === 'skirmisher') {
+    createAbilityEffect(state, unit, node.position, 'rapid-retreat');
+    executeRapidRetreat(state, unit, node.direction);
+  } else if (unit.type === 'paladin') {
+    createAbilityEffect(state, unit, node.position, 'holy-strike');
+    executeHolyStrike(state, unit, node.direction);
+  } else if (unit.type === 'gladiator') {
+    createAbilityEffect(state, unit, node.position, 'lethal-strike');
+    executeLethalStrike(state, unit, node.direction);
+  } else if (unit.type === 'ravager') {
+    createAbilityEffect(state, unit, node.position, 'blood-hunt');
+    executeBloodHunt(state, unit);
+  } else if (unit.type === 'warlord') {
+    createAbilityEffect(state, unit, node.position, 'battle-cry');
+    executeBattleCry(state, unit);
+  } else if (unit.type === 'duelist') {
+    createAbilityEffect(state, unit, node.position, 'riposte');
+    executeRiposte(state, unit);
+  } else if (unit.type === 'voidwalker') {
+    createAbilityEffect(state, unit, node.position, 'void-step');
+    executeVoidStep(state, unit, node.position);
+  } else if (unit.type === 'chronomancer') {
+    createAbilityEffect(state, unit, node.position, 'time-dilation');
+    executeTimeDilation(state, unit);
+  } else if (unit.type === 'nebula') {
+    createAbilityEffect(state, unit, node.position, 'cosmic-barrier');
+    executeCosmicBarrier(state, unit, node.position);
+  } else if (unit.type === 'quasar') {
+    createAbilityEffect(state, unit, node.position, 'stellar-convergence');
+    executeStellarConvergence(state, unit, node.position);
+  } else if (unit.type === 'berserker') {
+    createAbilityEffect(state, unit, node.position, 'rage');
+    executeRage(state, unit);
+  } else if (unit.type === 'assassin') {
+    createAbilityEffect(state, unit, node.position, 'shadow-strike');
+    executeShadowStrike(state, unit, node.position);
+  } else if (unit.type === 'juggernaut') {
+    createAbilityEffect(state, unit, node.position, 'ground-slam');
+    executeGroundSlam(state, unit);
+  } else if (unit.type === 'striker') {
+    createAbilityEffect(state, unit, node.position, 'whirlwind');
+    executeWhirlwind(state, unit);
+  } else if (unit.type === 'flare') {
+    createAbilityEffect(state, unit, node.position, 'solar-beam');
+    executeSolarBeam(state, unit, node.direction);
+  } else if (unit.type === 'nova') {
+    createAbilityEffect(state, unit, node.position, 'stellar-burst');
+    executeStellarBurst(state, unit);
+  } else if (unit.type === 'eclipse') {
+    createAbilityEffect(state, unit, node.position, 'shadow-veil');
+    executeShadowVeil(state, unit);
+  } else if (unit.type === 'corona') {
+    createAbilityEffect(state, unit, node.position, 'radiation-wave');
+    executeRadiationWave(state, unit, node.direction);
+  } else if (unit.type === 'supernova') {
+    createAbilityEffect(state, unit, node.position, 'cosmic-explosion');
+    executeCosmicExplosion(state, unit, node.position);
+  } else if (unit.type === 'guardian') {
+    createAbilityEffect(state, unit, node.position, 'protect-allies');
+    executeProtectAllies(state, unit);
+  } else if (unit.type === 'reaper') {
+    createAbilityEffect(state, unit, node.position, 'soul-strike');
+    executeSoulStrike(state, unit, node.direction);
+  } else if (unit.type === 'oracle') {
+    createAbilityEffect(state, unit, node.position, 'divine-restoration');
+    executeDivineRestoration(state, unit);
+  } else if (unit.type === 'harbinger') {
+    createAbilityEffect(state, unit, node.position, 'ethereal-strike');
+    executeEtherealStrike(state, unit, node.direction);
+  } else if (unit.type === 'zenith') {
+    createAbilityEffect(state, unit, node.position, 'solar-blessing');
+    executeSolarBlessing(state, unit);
+  } else if (unit.type === 'pulsar') {
+    createAbilityEffect(state, unit, node.position, 'stellar-dive');
+    executeStellarDive(state, unit, node.position);
+  } else if (unit.type === 'celestial') {
+    createAbilityEffect(state, unit, node.position, 'astral-charge');
+    executeAstralCharge(state, unit, node.position);
   }
 }
 
@@ -1512,42 +2364,6 @@ function executeBurstFire(state: GameState, unit: Unit, direction: { x: number; 
       }
     }
   }
-}
-
-function executeExecuteDash(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
-  const enemies = state.units.filter((u) => u.owner !== unit.owner);
-  const nearbyEnemies = enemies.filter((e) => distance(e.position, targetPos) <= 2);
-
-  if (nearbyEnemies.length === 0) return;
-
-  let nearest = nearbyEnemies[0];
-  let minDist = distance(unit.position, nearest.position);
-
-  nearbyEnemies.forEach((enemy) => {
-    const dist = distance(unit.position, enemy.position);
-    if (dist < minDist) {
-      minDist = dist;
-      nearest = enemy;
-    }
-  });
-
-  unit.position = { ...nearest.position };
-  const def = UNIT_DEFINITIONS.warrior;
-  const damage = def.attackDamage * 5 * unit.damageMultiplier;
-  nearest.hp -= damage;
-  
-  // Create impact effect and energy pulse for dash
-  createHitSparks(state, nearest.position, state.players[unit.owner].color, 8);
-  createEnergyPulse(state, nearest.position, state.players[unit.owner].color, 2.5, 0.4);
-  
-  if (state.matchStats && unit.owner === 0) {
-    state.matchStats.damageDealtByPlayer += damage;
-  }
-  
-  unit.dashExecuting = true;
-  setTimeout(() => {
-    unit.dashExecuting = false;
-  }, 200);
 }
 
 function executeLineJump(state: GameState, unit: Unit): void {
@@ -1658,6 +2474,758 @@ function executeMissileBarrage(state: GameState, unit: Unit, direction: { x: num
     endTime: Date.now() + 1500,
     missiles,
   };
+}
+
+// Radiant faction abilities
+function executePrecisionShot(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const dir = normalize(direction);
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
+  
+  let target: Unit | Base | null = null;
+  let maxDist = 0;
+  
+  // Find furthest target in direction
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const dist = distance(unit.position, enemy.position);
+    if (dist > 18) return;
+    
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x);
+    
+    if (projectedDist > 0 && perpDist < 1 && dist > maxDist) {
+      maxDist = dist;
+      target = enemy;
+    }
+  });
+  
+  if (target) {
+    const damage = 50 * unit.damageMultiplier;
+    (target as Unit).hp -= damage;
+    createHitSparks(state, target.position, state.players[unit.owner].color, 8);
+    createEnergyPulse(state, target.position, state.players[unit.owner].color, 1.5, 0.3);
+    
+    if (state.matchStats && unit.owner === 0) {
+      state.matchStats.damageDealtByPlayer += damage;
+    }
+  }
+}
+
+function executeDeployTurret(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  // Create a temporary stationary unit that acts as a turret
+  const turret: Unit = {
+    id: `turret-${Date.now()}-${Math.random()}`,
+    type: 'scout', // Use scout as base type for turret
+    owner: unit.owner,
+    position: { ...targetPos },
+    hp: 30,
+    maxHp: 30,
+    armor: 0,
+    commandQueue: [],
+    damageMultiplier: 0.5,
+    distanceTraveled: 0,
+    distanceCredit: 0,
+    abilityCooldown: 999, // High cooldown to prevent turret from using ability
+  };
+  
+  state.units.push(turret);
+  createSpawnEffect(state, targetPos, state.players[unit.owner].color);
+  
+  // Remove turret after 10 seconds
+  setTimeout(() => {
+    const index = state.units.findIndex(u => u.id === turret.id);
+    if (index !== -1) {
+      state.units.splice(index, 1);
+    }
+  }, 10000);
+}
+
+function executeRapidRetreat(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const retreatDistance = 8;
+  const dir = normalize(direction);
+  const retreatPos = {
+    x: unit.position.x - dir.x * retreatDistance,
+    y: unit.position.y - dir.y * retreatDistance,
+  };
+  
+  unit.position = retreatPos;
+  unit.cloaked = {
+    endTime: Date.now() + 2000,
+  };
+  createEnergyPulse(state, retreatPos, state.players[unit.owner].color, 2, 0.3);
+}
+
+function executeHolyStrike(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const dir = normalize(direction);
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const dist = distance(unit.position, enemy.position);
+    if (dist > 6) return;
+    
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x);
+    
+    if (projectedDist > 0 && perpDist < 2) {
+      const damage = 40 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+}
+
+// Aurum faction abilities
+function executeLethalStrike(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const dir = normalize(direction);
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  let target: Unit | null = null;
+  let minDist = Infinity;
+  
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const dist = distance(unit.position, enemy.position);
+    if (dist > 3) return;
+    
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    
+    if (projectedDist > 0 && dist < minDist) {
+      minDist = dist;
+      target = enemy;
+    }
+  });
+  
+  if (target) {
+    // High damage, execution-style ability
+    const damage = Math.min(target.hp * 0.5, 100) * unit.damageMultiplier;
+    target.hp -= damage;
+    createHitSparks(state, target.position, state.players[unit.owner].color, 10);
+    createEnergyPulse(state, target.position, state.players[unit.owner].color, 2, 0.5);
+    
+    if (state.matchStats && unit.owner === 0) {
+      state.matchStats.damageDealtByPlayer += damage;
+    }
+  }
+}
+
+function executeBloodHunt(state: GameState, unit: Unit): void {
+  // Life steal ability - damage nearby enemies and heal
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  let totalDamage = 0;
+  
+  enemies.forEach((enemy) => {
+    if (distance(unit.position, enemy.position) <= 3) {
+      const damage = 15 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      totalDamage += damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 4);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  // Heal for half the damage dealt
+  unit.hp = Math.min(unit.hp + totalDamage * 0.5, unit.maxHp);
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 3, 0.4);
+}
+
+function executeBattleCry(state: GameState, unit: Unit): void {
+  // Buff nearby allies
+  const allies = state.units.filter((u) => u.owner === unit.owner);
+  
+  allies.forEach((ally) => {
+    if (distance(ally.position, unit.position) <= 6) {
+      ally.damageMultiplier += 0.5;
+      createEnergyPulse(state, ally.position, state.players[unit.owner].color, 2, 0.3);
+      
+      // Reset buff after 5 seconds
+      setTimeout(() => {
+        ally.damageMultiplier = Math.max(1, ally.damageMultiplier - 0.5);
+      }, 5000);
+    }
+  });
+}
+
+function executeRiposte(state: GameState, unit: Unit): void {
+  // Counter-attack ability - briefly invulnerable and damages attackers
+  unit.shieldActive = {
+    endTime: Date.now() + 2000,
+    radius: 2,
+  };
+  
+  // Damage nearby enemies
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  enemies.forEach((enemy) => {
+    if (distance(unit.position, enemy.position) <= 2) {
+      const damage = 25 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+}
+
+// Solari faction abilities
+function executeVoidStep(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  // Teleport to location
+  const maxRange = 12;
+  const actualDistance = distance(unit.position, targetPos);
+  
+  if (actualDistance <= maxRange) {
+    createEnergyPulse(state, unit.position, state.players[unit.owner].color, 3, 0.4);
+    unit.position = { ...targetPos };
+    createEnergyPulse(state, targetPos, state.players[unit.owner].color, 3, 0.4);
+  }
+}
+
+function executeTimeDilation(state: GameState, unit: Unit): void {
+  // Slow enemies in area
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  enemies.forEach((enemy) => {
+    if (distance(unit.position, enemy.position) <= 7) {
+      const def = UNIT_DEFINITIONS[enemy.type];
+      // Temporarily reduce move speed
+      enemy.currentSpeed = def.moveSpeed * 0.3;
+      
+      createEnergyPulse(state, enemy.position, state.players[unit.owner].color, 2, 0.3);
+      
+      // Restore speed after 4 seconds
+      setTimeout(() => {
+        enemy.currentSpeed = undefined;
+      }, 4000);
+    }
+  });
+}
+
+function executeCosmicBarrier(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  // Create temporary obstacle/barrier effect
+  // This is simulated by creating a shield dome at target position
+  unit.shieldActive = {
+    endTime: Date.now() + 6000,
+    radius: 3,
+  };
+  
+  createEnergyPulse(state, targetPos, state.players[unit.owner].color, 3, 0.5);
+}
+
+function executeStellarConvergence(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  // Delayed area damage ability
+  unit.bombardmentActive = {
+    endTime: Date.now() + 3000,
+    targetPos,
+    impactTime: Date.now() + 2500,
+  };
+  
+  // Deal heavy damage at impact
+  setTimeout(() => {
+    const enemies = state.units.filter((u) => u.owner !== unit.owner);
+    const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
+    
+    enemies.forEach((enemy) => {
+      if (distance(enemy.position, targetPos) <= 4) {
+        const damage = 60 * unit.damageMultiplier;
+        enemy.hp -= damage;
+        createHitSparks(state, enemy.position, state.players[unit.owner].color, 8);
+        
+        if (state.matchStats && unit.owner === 0) {
+          state.matchStats.damageDealtByPlayer += damage;
+        }
+      }
+    });
+    
+    enemyBases.forEach((base) => {
+      if (distance(base.position, targetPos) <= 4) {
+        const baseDamage = 80 * unit.damageMultiplier;
+        base.hp -= baseDamage;
+        createImpactEffect(state, base.position, state.players[unit.owner].color, 4);
+        
+        if (state.matchStats && unit.owner === 0) {
+          state.matchStats.damageDealtByPlayer += baseDamage;
+        }
+      }
+    });
+    
+    createEnergyPulse(state, targetPos, state.players[unit.owner].color, 4, 0.8);
+  }, 2500);
+}
+
+// Berserker - Rage: Temporary damage boost
+function executeRage(state: GameState, unit: Unit): void {
+  // Store original damage multiplier to reset correctly
+  const originalMultiplier = unit.damageMultiplier;
+  unit.damageMultiplier += 0.8;
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 2, 0.5);
+  createHitSparks(state, unit.position, state.players[unit.owner].color, 10);
+  
+  // Reset buff after 6 seconds
+  setTimeout(() => {
+    unit.damageMultiplier = originalMultiplier;
+  }, 6000);
+}
+
+// Assassin - Shadow Strike: Teleport to nearby enemy and deal high damage
+function executeShadowStrike(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  const nearbyEnemies = enemies.filter((e) => distance(e.position, targetPos) <= 3);
+  
+  if (nearbyEnemies.length === 0) return;
+  
+  let nearest = nearbyEnemies[0];
+  let minDist = distance(unit.position, nearest.position);
+  
+  nearbyEnemies.forEach((enemy) => {
+    const dist = distance(unit.position, enemy.position);
+    if (dist < minDist) {
+      minDist = dist;
+      nearest = enemy;
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 2, 0.3);
+  
+  // Position assassin next to target, not on top of it
+  const direction = normalize(subtract(nearest.position, unit.position));
+  unit.position = {
+    x: nearest.position.x - direction.x * 1.2,
+    y: nearest.position.y - direction.y * 1.2,
+  };
+  
+  const damage = 45 * unit.damageMultiplier;
+  nearest.hp -= damage;
+  
+  createHitSparks(state, nearest.position, state.players[unit.owner].color, 8);
+  createEnergyPulse(state, nearest.position, state.players[unit.owner].color, 2, 0.4);
+  
+  if (state.matchStats && unit.owner === 0) {
+    state.matchStats.damageDealtByPlayer += damage;
+  }
+  
+  // Brief cloak after strike
+  unit.cloaked = {
+    endTime: Date.now() + 1500,
+  };
+}
+
+// Juggernaut - Ground Slam: Area of effect damage and stun
+function executeGroundSlam(state: GameState, unit: Unit): void {
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  enemies.forEach((enemy) => {
+    if (distance(unit.position, enemy.position) <= 4) {
+      const damage = 35 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+      
+      // Slow enemy temporarily - store original speed to restore properly
+      const def = UNIT_DEFINITIONS[enemy.type];
+      const originalSpeed = enemy.currentSpeed;
+      enemy.currentSpeed = def.moveSpeed * 0.2;
+      
+      setTimeout(() => {
+        enemy.currentSpeed = originalSpeed;
+      }, 3000);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 4, 0.7);
+  createScreenFlash(state, state.players[unit.owner].color, 0.3, 0.2);
+}
+
+// Striker - Whirlwind: Spin attack hitting all nearby enemies
+function executeWhirlwind(state: GameState, unit: Unit): void {
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  enemies.forEach((enemy) => {
+    if (distance(unit.position, enemy.position) <= 3) {
+      const damage = 30 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 5);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  // Create spinning energy pulse effect
+  for (let i = 0; i < 3; i++) {
+    setTimeout(() => {
+      createEnergyPulse(state, unit.position, state.players[unit.owner].color, 3, 0.4);
+    }, i * 200);
+  }
+}
+
+// Flare - Solar Beam: Focused beam dealing sustained damage
+function executeSolarBeam(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const dir = normalize(direction);
+  const beamRange = 7;
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
+  
+  const damage = 35 * unit.damageMultiplier;
+  const beamWidthHalf = 0.3;
+  
+  // Check units in beam path
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x);
+    
+    if (projectedDist > 0 && projectedDist < beamRange && perpDist < beamWidthHalf) {
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  // Check bases in beam path
+  enemyBases.forEach((base) => {
+    const toBase = subtract(base.position, unit.position);
+    const projectedDist = toBase.x * dir.x + toBase.y * dir.y;
+    const perpDist = Math.abs(toBase.x * dir.y - toBase.y * dir.x);
+    
+    const baseRadius = BASE_SIZE_METERS / 2;
+    if (projectedDist > 0 && projectedDist < beamRange && perpDist < beamWidthHalf + baseRadius) {
+      const baseDamage = damage * 0.5;
+      base.hp -= baseDamage;
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += baseDamage;
+      }
+    }
+  });
+  
+  createLaserParticles(state, unit.position, dir, beamRange, state.players[unit.owner].color);
+}
+
+// Nova - Stellar Burst: Explode dealing damage around the unit
+function executeStellarBurst(state: GameState, unit: Unit): void {
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  enemies.forEach((enemy) => {
+    if (distance(unit.position, enemy.position) <= 3.5) {
+      const damage = 40 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 7);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 3.5, 0.6);
+  createScreenFlash(state, state.players[unit.owner].color, 0.2, 0.15);
+}
+
+// Eclipse - Shadow Veil: Cloak self and nearby allies
+function executeShadowVeil(state: GameState, unit: Unit): void {
+  const allies = state.units.filter((u) => u.owner === unit.owner);
+  
+  allies.forEach((ally) => {
+    if (distance(ally.position, unit.position) <= 6) {
+      ally.cloaked = {
+        endTime: Date.now() + 5000,
+      };
+      createEnergyPulse(state, ally.position, state.players[unit.owner].color, 2, 0.3);
+    }
+  });
+}
+
+// Corona - Radiation Wave: Forward cone of damaging radiation
+function executeRadiationWave(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const dir = normalize(direction);
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const dist = distance(unit.position, enemy.position);
+    if (dist > 7) return;
+    
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x);
+    
+    // Cone shape: perpendicular distance proportional to forward distance
+    if (projectedDist > 0 && perpDist < projectedDist * 0.5 + 1) {
+      const damage = 32 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 3, 0.5);
+}
+
+// Supernova - Cosmic Explosion: Massive delayed explosion at target location
+function executeCosmicExplosion(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  const EXPLOSION_DELAY = 2000; // milliseconds
+  const EXPLOSION_DURATION = 2500; // milliseconds
+  
+  unit.bombardmentActive = {
+    endTime: Date.now() + EXPLOSION_DURATION,
+    targetPos,
+    impactTime: Date.now() + EXPLOSION_DELAY,
+  };
+  
+  setTimeout(() => {
+    const enemies = state.units.filter((u) => u.owner !== unit.owner);
+    const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
+    
+    enemies.forEach((enemy) => {
+      if (distance(enemy.position, targetPos) <= 5) {
+        const damage = 70 * unit.damageMultiplier;
+        enemy.hp -= damage;
+        createHitSparks(state, enemy.position, state.players[unit.owner].color, 10);
+        
+        if (state.matchStats && unit.owner === 0) {
+          state.matchStats.damageDealtByPlayer += damage;
+        }
+      }
+    });
+    
+    enemyBases.forEach((base) => {
+      if (distance(base.position, targetPos) <= 5) {
+        const baseDamage = 100 * unit.damageMultiplier;
+        base.hp -= baseDamage;
+        createImpactEffect(state, base.position, state.players[unit.owner].color, 5);
+        
+        if (state.matchStats && unit.owner === 0) {
+          state.matchStats.damageDealtByPlayer += baseDamage;
+        }
+      }
+    });
+    
+    createEnergyPulse(state, targetPos, state.players[unit.owner].color, 5, 1.0);
+    createScreenFlash(state, state.players[unit.owner].color, 0.4, 0.3);
+  }, EXPLOSION_DELAY);
+}
+
+// Guardian - Protect Allies: Grant temporary shield to nearby allies
+function executeProtectAllies(state: GameState, unit: Unit): void {
+  const allies = state.units.filter((u) => u.owner === unit.owner);
+  
+  allies.forEach((ally) => {
+    if (distance(ally.position, unit.position) <= 5) {
+      ally.shieldActive = {
+        endTime: Date.now() + 6000,
+        radius: 3,
+      };
+      createEnergyPulse(state, ally.position, state.players[unit.owner].color, 2, 0.3);
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 5, 0.5);
+}
+
+// Reaper - Soul Strike: Drain life from enemies in direction
+function executeSoulStrike(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const dir = normalize(direction);
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  let totalDamage = 0;
+  
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const dist = distance(unit.position, enemy.position);
+    if (dist > 9) return;
+    
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x);
+    
+    if (projectedDist > 0 && perpDist < 1.5) {
+      const damage = 25 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      totalDamage += damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  // Heal for portion of damage dealt
+  unit.hp = Math.min(unit.hp + totalDamage * 0.4, unit.maxHp);
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 2.5, 0.4);
+}
+
+// Oracle - Divine Restoration: Powerful area heal for allies
+function executeDivineRestoration(state: GameState, unit: Unit): void {
+  const healAmount = 80;
+  const healRadius = 6;
+  
+  unit.healPulseActive = {
+    endTime: Date.now() + 1500,
+    radius: healRadius,
+  };
+  
+  const allies = state.units.filter((u) => u.owner === unit.owner);
+  allies.forEach((ally) => {
+    if (distance(ally.position, unit.position) <= healRadius) {
+      ally.hp = Math.min(ally.hp + healAmount, ally.maxHp);
+      createEnergyPulse(state, ally.position, state.players[unit.owner].color, 2, 0.3);
+    }
+  });
+  
+  const allyBases = state.bases.filter((b) => b.owner === unit.owner);
+  allyBases.forEach((base) => {
+    if (distance(base.position, unit.position) <= healRadius) {
+      base.hp = Math.min(base.hp + healAmount * 2, base.maxHp);
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 6, 0.6);
+}
+
+// Harbinger - Ethereal Strike: Phase through enemies dealing damage
+function executeEtherealStrike(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const dir = normalize(direction);
+  const dashDistance = 8;
+  const dashPos = {
+    x: unit.position.x + dir.x * dashDistance,
+    y: unit.position.y + dir.y * dashDistance,
+  };
+  
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  // Damage all enemies along the path
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x);
+    
+    if (projectedDist > 0 && projectedDist < dashDistance && perpDist < 1.5) {
+      const damage = 28 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 2, 0.3);
+  unit.position = dashPos;
+  createEnergyPulse(state, dashPos, state.players[unit.owner].color, 2, 0.3);
+}
+
+// Zenith - Solar Blessing: Heal and boost nearby allies
+function executeSolarBlessing(state: GameState, unit: Unit): void {
+  const healAmount = 60;
+  const healRadius = 5.5;
+  
+  unit.healPulseActive = {
+    endTime: Date.now() + 1200,
+    radius: healRadius,
+  };
+  
+  const allies = state.units.filter((u) => u.owner === unit.owner);
+  allies.forEach((ally) => {
+    if (distance(ally.position, unit.position) <= healRadius) {
+      ally.hp = Math.min(ally.hp + healAmount, ally.maxHp);
+      // Small damage boost - store original to reset correctly
+      const originalMultiplier = ally.damageMultiplier;
+      ally.damageMultiplier += 0.2;
+      createEnergyPulse(state, ally.position, state.players[unit.owner].color, 2, 0.3);
+      
+      setTimeout(() => {
+        ally.damageMultiplier = originalMultiplier;
+      }, 4000);
+    }
+  });
+  
+  const allyBases = state.bases.filter((b) => b.owner === unit.owner);
+  allyBases.forEach((base) => {
+    if (distance(base.position, unit.position) <= healRadius) {
+      base.hp = Math.min(base.hp + healAmount * 1.5, base.maxHp);
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 5.5, 0.5);
+}
+
+// Pulsar - Stellar Dive: Rapid dive attack at target location
+function executeStellarDive(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  const maxRange = 10;
+  const actualDistance = distance(unit.position, targetPos);
+  
+  if (actualDistance <= maxRange) {
+    createEnergyPulse(state, unit.position, state.players[unit.owner].color, 2, 0.3);
+    
+    // Damage enemies near target
+    const enemies = state.units.filter((u) => u.owner !== unit.owner);
+    enemies.forEach((enemy) => {
+      if (distance(enemy.position, targetPos) <= 2.5) {
+        const damage = 35 * unit.damageMultiplier;
+        enemy.hp -= damage;
+        createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+        
+        if (state.matchStats && unit.owner === 0) {
+          state.matchStats.damageDealtByPlayer += damage;
+        }
+      }
+    });
+    
+    unit.position = { ...targetPos };
+    createEnergyPulse(state, targetPos, state.players[unit.owner].color, 2.5, 0.5);
+  }
+}
+
+// Celestial - Astral Charge: Charge forward damaging enemies
+function executeAstralCharge(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  const direction = normalize(subtract(targetPos, unit.position));
+  const chargeDistance = Math.min(distance(unit.position, targetPos), 8);
+  
+  const newPos = {
+    x: unit.position.x + direction.x * chargeDistance,
+    y: unit.position.y + direction.y * chargeDistance,
+  };
+  
+  // Damage enemies along the path
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const projectedDist = toEnemy.x * direction.x + toEnemy.y * direction.y;
+    const perpDist = Math.abs(toEnemy.x * direction.y - toEnemy.y * direction.x);
+    
+    if (projectedDist > 0 && projectedDist < chargeDistance && perpDist < 1.5) {
+      const damage = 38 * unit.damageMultiplier;
+      enemy.hp -= damage;
+      createHitSparks(state, enemy.position, state.players[unit.owner].color, 7);
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+    }
+  });
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 2, 0.3);
+  unit.position = newPos;
+  createEnergyPulse(state, newPos, state.players[unit.owner].color, 2, 0.4);
 }
 
 function updateCombat(state: GameState, deltaTime: number): void {
@@ -1826,10 +3394,27 @@ function cleanupDeadUnits(state: GameState): void {
     return acc;
   }, {} as Record<number, number>);
   
+  // Identify dead units and move them to dyingUnits array for queue animation
+  const deadUnits = oldUnits.filter(u => u.hp <= 0);
+  if (deadUnits.length > 0) {
+    // Initialize dyingUnits array if it doesn't exist
+    if (!state.dyingUnits) {
+      state.dyingUnits = [];
+    }
+    
+    deadUnits.forEach(u => {
+      // Trigger reverse un-draw animation if unit has queued commands
+      if (u.commandQueue.length > 0) {
+        u.queueDrawStartTime = Date.now();
+        u.queueDrawReverse = true;
+        state.dyingUnits!.push(u);
+      }
+    });
+  }
+  
   state.units = state.units.filter((u) => u.hp > 0);
   
   // Create impact effects for dead units and screen shake for multiple deaths
-  const deadUnits = oldUnits.filter(u => u.hp <= 0);
   if (deadUnits.length > 0) {
     deadUnits.forEach(u => {
       const color = state.players[u.owner].color;
@@ -1853,6 +3438,21 @@ function cleanupDeadUnits(state: GameState): void {
     
     const enemyUnitsKilled = (unitsByOwner[1] || 0) - (afterUnitsByOwner[1] || 0);
     state.matchStats.unitsKilledByPlayer += enemyUnitsKilled;
+  }
+}
+
+function cleanupDyingUnits(state: GameState): void {
+  // Remove dying units whose queue un-draw animation has completed
+  if (state.dyingUnits && state.dyingUnits.length > 0) {
+    state.dyingUnits = state.dyingUnits.filter(unit => {
+      if (unit.queueDrawStartTime && unit.queueDrawReverse) {
+        const elapsed = (Date.now() - unit.queueDrawStartTime) / 1000;
+        // Keep unit until animation completes
+        return elapsed < QUEUE_UNDRAW_DURATION;
+      }
+      // Remove unit if no animation is running
+      return false;
+    });
   }
 }
 
@@ -1959,22 +3559,26 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
     attackCooldown: 0, // Initialize attack cooldown
   };
   
-  // Initialize particles for all units with different particle counts based on unit type
-  const particleCounts: Record<UnitType, number> = {
-    marine: 12,      // Ranged attacker - moderate particle count
-    warrior: 16,     // Melee bruiser - more particles for intimidation
-    snaker: 10,      // Fast harassment - fewer particles for speed aesthetic
-    tank: 20,        // Heavy tank - most particles for imposing presence
-    scout: 8,        // Fast scout - minimal particles for stealth aesthetic
-    artillery: 14,   // Long-range - moderate-high particles for power
-    medic: 12,       // Support unit - moderate particles with healing theme
-    interceptor: 14, // Fast attacker - moderate-high particles for aggressive look
-    berserker: 18,   // Heavy melee - lots of particles for rage effect
-    assassin: 10,    // Fast melee - fewer particles for stealth/speed
-    juggernaut: 22,  // Heaviest unit - most particles for imposing presence
-    striker: 14,     // Medium melee - moderate particles for whirlwind effect
-  };
-  unit.particles = createParticlesForUnit(unit, particleCounts[type]);
+  // Initialize particles only for Solari faction units
+  const solariUnits: Set<UnitType> = new Set(['flare', 'nova', 'eclipse', 'corona', 'supernova', 'zenith', 'pulsar', 'celestial', 'voidwalker', 'chronomancer', 'nebula', 'quasar']);
+  
+  if (solariUnits.has(type)) {
+    const particleCounts: Partial<Record<UnitType, number>> = {
+      flare: 10,
+      nova: 16,
+      eclipse: 12,
+      corona: 18,
+      supernova: 14,
+      zenith: 12,
+      pulsar: 14,
+      celestial: 16,
+      voidwalker: 12,
+      chronomancer: 12,
+      nebula: 14,
+      quasar: 14,
+    };
+    unit.particles = createParticlesForUnit(unit, particleCounts[type] || 12);
+  }
 
   state.units.push(unit);
   

@@ -1,7 +1,7 @@
 # Agents Documentation Guidelines
 
 ## Build Information
-**Current Build Number:** 6
+**Current Build Number:** 19
 
 **Note:** With each pull request, increment the build number by one.
 
@@ -245,6 +245,90 @@ If you're unsure about:
 - What level of detail to include
 
 **Default to including it.** More documentation is better than less, as long as it's accurate and useful.
+
+---
+
+## Maintaining the Unit Information Page
+
+The Unit Information page (`/src/components/UnitInformationScreen.tsx`) provides a comprehensive database of all units organized by faction. When making changes to units, **always update this page** to keep it synchronized with the codebase.
+
+### When to Update
+
+Update the Unit Information page whenever you:
+- Add a new unit type
+- Modify unit stats (HP, armor, speed, attack damage, etc.)
+- Change unit modifiers (melee, ranged, flying, small, healing)
+- Update unit abilities (name, cooldown, or behavior)
+- Add or change unit attack types
+- Modify faction definitions or available units
+
+### What to Update
+
+1. **Unit Stats**: Ensure all stat displays match `UNIT_DEFINITIONS` in `/src/lib/types.ts`
+   - HP, armor, move speed
+   - Attack range, damage, and rate
+   - Cost and ability cooldown
+
+2. **Ability Descriptions**: Update the `getAbilityDescription()` function with:
+   - Accurate damage values from `/src/lib/simulation.ts`
+   - Correct range and area of effect
+   - Duration and special effects
+   - Any modifications to ability behavior
+
+3. **Attack Descriptions**: Verify the `getAttackDescription()` function accurately reflects:
+   - Attack type (melee/ranged/none)
+   - Damage values
+   - Range
+   - Attack rate
+   - Armor interaction notes
+
+4. **Unit Icons**: If adding new units, add appropriate emoji icons in `getUnitIcon()` function
+
+5. **Faction Information**: Update faction headers if faction definitions change:
+   - Available units list
+   - Base speed
+   - Base shape
+   - Faction ability
+
+### How to Update
+
+1. **Locate the change in types.ts**: Find the unit definition in `UNIT_DEFINITIONS`
+2. **Update ability description**: Modify `getAbilityDescription()` function with new damage/behavior
+3. **Check simulation.ts**: Verify ability implementation matches your description
+4. **Test the display**: Run the app and navigate to Unit Information to verify changes appear correctly
+
+### Example Update Workflow
+
+If you modify the Marine unit's burst fire ability:
+```typescript
+// 1. Update types.ts with new stats
+marine: {
+  ...
+  attackDamage: 7, // changed from 6
+  ...
+}
+
+// 2. Update simulation.ts ability implementation
+function executeBurstFire(...) {
+  const shotDamage = 3 * unit.damageMultiplier; // changed from 2
+  ...
+}
+
+// 3. Update UnitInformationScreen.tsx description
+marine: 'Fires 10 rapid shots in a cone, each dealing 3 damage...' // changed from 2
+```
+
+### Verification Checklist
+
+Before completing changes to units, verify:
+- [ ] Unit stats in UnitInformationScreen match UNIT_DEFINITIONS
+- [ ] Ability descriptions include correct damage values from simulation.ts
+- [ ] Attack descriptions accurately reflect attack type and behavior
+- [ ] All new units have entries in ability/attack description functions
+- [ ] Faction organization is correct (units listed under right faction)
+- [ ] Test the page renders without errors
+
+**Remember**: The Unit Information page is a player-facing feature. Accuracy is critical for gameplay understanding and balance perception.
 
 ---
 

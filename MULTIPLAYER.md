@@ -1,8 +1,12 @@
-# Online Multiplayer System
+# Multiplayer System
 
 ## Overview
 
-The Speed of Light RTS game features a real-time online multiplayer system that allows players to compete against each other remotely. The system is built with a flexible backend abstraction that supports both Spark KV and Supabase.
+The Speed of Light RTS game features multiple multiplayer modes allowing players to compete against each other:
+- **Online Multiplayer**: Play against opponents over the internet using Spark KV or Supabase
+- **LAN Multiplayer**: Play directly with someone on the same local network using WebRTC peer-to-peer connections
+
+The system is built with a flexible backend abstraction that supports Spark KV, Supabase, and peer-to-peer connections.
 
 ## Features
 
@@ -54,6 +58,42 @@ CREATE TABLE multiplayer_kv (
 -- Add index for prefix searches
 CREATE INDEX idx_multiplayer_kv_key_prefix ON multiplayer_kv (key text_pattern_ops);
 ```
+
+### LAN Multiplayer (Peer-to-Peer)
+LAN multiplayer uses WebRTC for direct peer-to-peer connections without requiring a backend server. This mode is ideal for:
+- Playing on the same local network
+- Playing without internet connection
+- Low-latency gameplay with nearby players
+- No backend configuration required
+
+#### How to Use LAN Multiplayer
+
+1. **Host a Game**:
+   - From the main menu, select "Online Multiplayer" → "LAN Multiplayer" → "Host Game"
+   - Your unique Peer ID will be displayed
+   - Share this Peer ID with the other player (via text message, QR code, etc.)
+   - Wait for the guest to connect
+   - Once connected, start the game from the lobby
+
+2. **Join a Game**:
+   - From the main menu, select "Online Multiplayer" → "LAN Multiplayer"
+   - Enter the host's Peer ID
+   - Click "Connect to Host"
+   - Wait for the host to start the game
+
+#### Technical Details
+- Uses PeerJS library for WebRTC connections
+- Implements the same `RealtimeKVStore` interface as online backends
+- Data is synchronized directly between peers with no server intermediary
+- Host maintains the authoritative game state
+- Both players can be on the same network or use STUN/TURN servers for NAT traversal
+- Connection typically works best when both players are on the same WiFi or within a few network hops
+
+#### Troubleshooting LAN Connections
+- **Connection fails**: Ensure both devices are on the same network or have internet access for STUN servers
+- **Slow connection**: Check network quality and reduce distance between devices
+- **Disconnection during game**: WebRTC requires stable connection; if one player's connection drops, the game will end
+- **Cannot connect to peer ID**: Double-check that the Peer ID was copied correctly (it's case-sensitive)
 
 ## How It Works
 
@@ -115,9 +155,11 @@ Game loop in `App.tsx` calls `updateMultiplayerSync()` which:
 ### Files
 - `src/lib/multiplayer.ts` - Core multiplayer manager and lobby system
 - `src/lib/realtimeStore.ts` - Backend abstraction (Spark/Supabase)
+- `src/lib/lanStore.ts` - LAN/WebRTC peer-to-peer store adapter
 - `src/lib/multiplayerGame.ts` - Command sync and game integration
 - `src/components/MultiplayerLobbyScreen.tsx` - Lobby UI
 - `src/components/OnlineModeScreen.tsx` - Online mode selection
+- `src/components/LANModeScreen.tsx` - LAN mode host/join UI
 
 ### Key Data Structures
 
@@ -158,24 +200,45 @@ Game loop in `App.tsx` calls `updateMultiplayerSync()` which:
 
 ## Troubleshooting
 
-### "Multiplayer requires Spark runtime or Supabase credentials"
+### Online Multiplayer
+
+#### "Multiplayer requires Spark runtime or Supabase credentials"
 - Ensure you're either running in Spark or have set Supabase environment variables
 - Check that `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are set correctly
 
-### "Failed to join game"
+#### "Failed to join game"
 - Game may already be full (has both host and guest)
 - Game may have already started or finished
 - Check network connection
 
-### "Disconnected" shown during game
+#### "Disconnected" shown during game
 - Backend may be unreachable
 - Check network connection
 - Verify Supabase credentials if using Supabase
 
-### Commands not syncing
+#### Commands not syncing
 - Check browser console for errors
 - Verify backend is reachable
 - Ensure both players are in the same game ID
+
+### LAN Multiplayer
+
+#### Cannot connect to peer
+- Verify the Peer ID was entered correctly (case-sensitive)
+- Ensure both devices have network connectivity
+- Check that WebRTC is not blocked by firewall
+- Try using a different network
+
+#### Connection is slow or laggy
+- Both players should be on the same local network for best performance
+- Reduce distance between devices if using WiFi
+- Check for network interference or congestion
+
+#### Connection drops during game
+- WebRTC requires stable connection throughout the game
+- Check WiFi signal strength
+- Ensure no other bandwidth-heavy applications are running
+- Consider using wired ethernet connection if possible
 
 ## Future Enhancements
 - [ ] Reconnection handling for dropped connections

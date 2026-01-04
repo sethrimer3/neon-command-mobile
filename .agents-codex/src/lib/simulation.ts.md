@@ -73,7 +73,7 @@ Contains the core game simulation loop and logic. Handles unit movement, combat,
 - **updateParticles(unit, deltaTime):** Updates particle positions using attraction forces
   - Particles attracted to unit center with spring-like force
   - Damping applied to prevent excessive velocity
-  - Maintains desired orbit distance of 0.8 meters
+  - Maintains desired orbit distance scaled to unit size (0.8 × unit size)
 
 ### executeLineJump(state: GameState, unit: Unit): void
 - **Purpose:** Executes the Snaker's line jump ability
@@ -81,7 +81,6 @@ Contains the core game simulation loop and logic. Handles unit movement, combat,
 
 ### Ability System Functions
 Multiple functions for unit abilities:
-- `executeWarriorDash()` - Warrior's dash attack
 - `executeScoutCloak()` - Scout invisibility
 - `executeTankShield()` - Tank's protective dome
 - `executeArtilleryBombardment()` - Artillery siege attack
@@ -105,9 +104,13 @@ Multiple functions for unit abilities:
 - Line jump has 500ms telegraph delay before execution
 - Income rate formula: floor(elapsedSeconds / 10) + 1
 - All abilities have unique implementations and effects
+- Warrior abilities intentionally stop at the shared laser effect to avoid dash-related crashes
 - Combat uses attack rate to determine damage intervals
 - Bases can move but slowly (for gameplay balance)
 - Spawn rally points are clamped inside the 1m boundary to prevent off-screen movement targets
+- Ability commands execute immediately when dequeued, using current position if the unit drifted from the queued anchor
+- Mining income now counts every active worker id per deposit, and dead drones are pruned from deposit worker lists
+- Mining drones can wait briefly using cadence delays so paired drones alternate between depot and deposit
 
 ### Known Issues
 - None currently identified
@@ -131,6 +134,10 @@ Multiple functions for unit abilities:
 - Added time limit support
 - **2025-12-31**: Added particle physics system for marines with 10 particles per unit that orbit using attraction forces
 - **2026-01-01**: Clamped spawn rally points to playable bounds to prevent stuck units
+- **2026-01-05**: Executed queued abilities from current position to avoid stalled ability commands
+- **2026-01-07**: Removed the warrior's execute dash extra effect so warriors only trigger the shared laser ability and cleaned up dash timing logic
+- **2025-03-10**: Scaled particle orbit distance and orbital forces with unit size to keep unit-following particles proportional after size changes
+- **2025-03-17**: Updated mining income and mining drone cadence handling to support two drones per deposit
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds

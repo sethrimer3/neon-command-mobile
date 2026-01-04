@@ -114,6 +114,7 @@ Main application component that orchestrates the entire game. Manages game state
 - Game state stored in ref for performance (avoid re-renders)
 - Delta time capped at 0.1s to prevent large jumps (e.g., tab switching)
 - Canvas resizes with window
+- Gameplay coordinate orientation is derived from `shouldUsePortraitCoordinates()` to keep desktop rotation cosmetic
 - Settings synced from useKV to game state on change
 - Match statistics tracked throughout game
 - MMR calculated using ELO formula for online matches
@@ -163,6 +164,8 @@ Main application component that orchestrates the entire game. Manages game state
 - **2026-01-01**: Wired multiplayer init to realtime store abstraction and improved error handling
 - **2026-01-01**: Updated menu build badge and sprite URL construction to use the Vite base path.
 - **2026-01-01**: Added tracked countdown seconds for UI refreshes and bumped the visible build number.
+- **2026-01-01**: Removed the main menu build badge so only the loading overlay displays build metadata.
+- Added portrait-stable coordinate usage so desktop rotation does not change gameplay layout.
 
 ## Watch Out For
 - Game state ref vs React state - use correctly for performance

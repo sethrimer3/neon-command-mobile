@@ -48,6 +48,7 @@ Defines the HTML entry point for the Vite-powered React application, including m
 ## Change History
 - **2025-02-14:** Updated asset paths to be relative for GitHub Pages compatibility and added explanatory comments.
 - **2026-01-01:** Updated startup overlay build badge and sprite sheet URL handling for base-path-safe assets.
+- **2026-01-01:** Bumped the startup overlay build badge to the latest AI-driven build number.
 
 ## Watch Out For
 - Keep asset paths relative if the site is hosted under a non-root base path.

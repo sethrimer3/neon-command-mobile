@@ -21,10 +21,14 @@ Defines all core type definitions, interfaces, and constants for the SoL-RTS gam
 
 ### Constants
 - **PIXELS_PER_METER:** `20` - Conversion ratio between game meters and screen pixels
-- **BASE_SIZE_METERS:** `3` - Size of player bases in game units
-- **UNIT_SIZE_METERS:** `1` - Standard unit collision size
+- **BASE_SIZE_METERS:** `6` - Size of player bases in game units
+- **UNIT_SIZE_METERS:** `2` - Standard unit collision size
+- **MINING_DEPOT_SIZE_METERS:** `3` - Mining depot footprint used for rendering and input hit tests
+- **RESOURCE_DEPOSIT_SIZE_METERS:** `1.2` - Hex resource deposit size around each depot
+- **RESOURCE_DEPOSIT_RING_RADIUS_METERS:** `5` - Radius of the deposit ring around each depot
+- **MINING_DRONE_SIZE_MULTIPLIER:** `2` - Visual/selection scale factor for mining drones
 - **ABILITY_MAX_RANGE:** `10` - Maximum range for ability targeting
-- **QUEUE_MAX_LENGTH:** `20` - Maximum command queue size per unit
+- **QUEUE_MAX_LENGTH:** `3` - Maximum command queue size per unit
 - **LASER_RANGE:** `20` - Base laser weapon range
 - **LASER_DAMAGE_UNIT/BASE:** Unit and base damage values for laser
 - **PROMOTION_DISTANCE_THRESHOLD:** `10` - Distance units must travel to gain promotion
@@ -65,8 +69,9 @@ Represents a game unit with:
 - Basic properties: id, type, owner, position, hp
 - Command system: commandQueue for queued actions
 - Progression: damageMultiplier, distanceTraveled, distanceCredit
-- Ability states: dashExecuting, lineJumpTelegraph, shieldActive, cloaked, bombardmentActive, healPulseActive, missileBarrageActive
+- Ability states: lineJumpTelegraph, shieldActive, cloaked, bombardmentActive, healPulseActive, missileBarrageActive
 - Visual effects: particles (optional array of Particle objects, currently used for marines)
+- Mining state: depot/deposit identifiers with cadence delays for alternating mining drone behavior
 
 ### Base Interface
 Represents a player base with:
@@ -90,7 +95,7 @@ Configuration for each unit type including:
 ### UNIT_DEFINITIONS
 Complete configuration object for all 8 unit types with balanced stats:
 - **Marine**: Ranged basic unit with Burst Fire ability
-- **Warrior**: Melee tank with Execute Dash
+- **Warrior**: Melee tank with Laser Beam
 - **Snaker**: Fast non-combat unit with Line Jump mobility
 - **Tank**: Heavy unit with Shield Dome
 - **Scout**: Fast reconnaissance with Cloak
@@ -117,6 +122,7 @@ The complete game state structure containing:
 - **matchStats**: Match statistics tracking
 - **matchTimeLimit**: Optional time limit for matches
 - **topographyLines**: Background decoration
+- **miningDragPreview**: Optional preview line from a mining depot to a snapped resource deposit
 
 ## Terminology
 - **Photons**: In-game currency/resource for training units
@@ -135,6 +141,7 @@ The complete game state structure containing:
 - Promotion system rewards long-distance movement with damage buffs
 - Queue bonus system encourages strategic planning (more queued moves = faster promotions)
 - Optional properties (with `?`) indicate temporary ability states
+- Resource deposits now track up to two mining drones via `workerIds`
 
 ### Known Issues
 None currently identified
@@ -155,6 +162,10 @@ None currently identified
 - Added topography lines for visual enhancement
 - **2025-12-31**: Added Particle interface and particle physics system for visual effects on marines (10 particles per marine that orbit using attraction forces)
 - **2026-01-01**: Added countdownSeconds to keep UI and audio updates in sync during match start.
+- **2026-01-07**: Updated the warrior ability name to Laser Beam to match the shared laser-only behavior and removed dash-specific unit state.
+- **2025-03-10**: Doubled base and unit size constants to scale up all core gameplay footprints.
+- **2025-03-17**: Added mining drag preview state, deposit worker lists, and mining cadence delay fields for drones.
+- **2025-03-18**: Added mining structure/drone sizing constants to scale depots, deposits, and drones together.
 
 ## Watch Out For
 - Always use meters for game logic, only convert to pixels for rendering

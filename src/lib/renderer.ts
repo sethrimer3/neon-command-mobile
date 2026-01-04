@@ -5,6 +5,9 @@ import {
   COLORS,
   UNIT_SIZE_METERS,
   BASE_SIZE_METERS,
+  MINING_DEPOT_SIZE_METERS,
+  RESOURCE_DEPOSIT_SIZE_METERS,
+  MINING_DRONE_SIZE_MULTIPLIER,
   UNIT_DEFINITIONS,
   Projectile,
   LASER_RANGE,
@@ -12,11 +15,36 @@ import {
   ABILITY_LASER_DURATION,
   FACTION_DEFINITIONS,
   UnitModifier,
+  Vector2,
+  CommandNode,
+  ARENA_WIDTH_METERS,
+  ARENA_HEIGHT_METERS,
+  Floater,
 } from './types';
-import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract } from './gameUtils';
+import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract, getViewportOffset, getViewportDimensions } from './gameUtils';
+import { applyCameraTransform, removeCameraTransform, worldToScreen } from './camera';
 import { Obstacle } from './maps';
-import { MOTION_TRAIL_DURATION, QUEUE_FADE_DURATION } from './simulation';
+import { MOTION_TRAIL_DURATION, QUEUE_FADE_DURATION, QUEUE_DRAW_DURATION, QUEUE_UNDRAW_DURATION } from './simulation';
 import { getFormationName } from './formations';
+import { calculateFloaterConnections } from './floaters';
+
+// Load projectile sprite
+const projectileSprite = new Image();
+const assetBaseUrl = import.meta.env.BASE_URL;
+projectileSprite.src = `${assetBaseUrl}ASSETS/sprites/projectiles/throw/throw1.png`;
+let projectileSpriteLoaded = false;
+projectileSprite.onload = () => {
+  projectileSpriteLoaded = true;
+};
+
+function getUnitSizeMeters(unit: Unit): number {
+  // Expand mining drones so their visuals match the larger resource structures.
+  if (unit.type === 'miningDrone') {
+    return UNIT_SIZE_METERS * MINING_DRONE_SIZE_MULTIPLIER;
+  }
+
+  return UNIT_SIZE_METERS;
+}
 
 // Helper function to get modifier icon emoji
 function getModifierIcon(modifier: UnitModifier): string {
@@ -54,6 +82,18 @@ function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, outerRa
   ctx.closePath();
 }
 
+// Helper function to draw a triangle shape (equilateral, pointing up)
+function drawTriangle(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number) {
+  ctx.beginPath();
+  // Point 1: Top (pointing up)
+  ctx.moveTo(cx, cy - radius);
+  // Point 2: Bottom right
+  ctx.lineTo(cx + radius * Math.cos(Math.PI / 6), cy + radius * Math.sin(Math.PI / 6));
+  // Point 3: Bottom left
+  ctx.lineTo(cx - radius * Math.cos(Math.PI / 6), cy + radius * Math.sin(Math.PI / 6));
+  ctx.closePath();
+}
+
 // Minimap constants
 const MINIMAP_SIZE_RATIO = 0.2;
 const MINIMAP_PADDING = 10;
@@ -64,12 +104,26 @@ const MINIMAP_OBSTACLE_MIN_SIZE = 2;
 // Culling constants
 const OFFSCREEN_CULLING_MARGIN = 50; // pixels margin for culling off-screen objects
 
+// Background floater constants
+const FLOATER_BASE_RADIUS_METERS = 0.3; // Base size in meters for floater rendering
+
 // Enhanced visual effect constants
 const SELECTION_RING_EXPANSION_SPEED = 1.5; // Speed of expanding selection ring
 const SELECTION_RING_MAX_SIZE = 1.8; // Maximum size multiplier for selection ring
 const GLOW_PULSE_FREQUENCY = 1.5; // Hz for glow pulsing
 const ABILITY_READY_PULSE_INTENSITY = 0.4; // Intensity of ability ready pulse
 const MOTION_BLUR_SPEED_THRESHOLD = 1.5; // Minimum speed for motion blur to appear
+const ABILITY_ARROW_LENGTH = 12; // Arrow length for ability command visualization
+// Scale projectile visuals alongside unit sizing so bullets track the larger silhouettes.
+const PROJECTILE_SIZE_METERS = UNIT_SIZE_METERS * 1.2;
+const PROJECTILE_TRAIL_LENGTH_METERS = UNIT_SIZE_METERS * 0.9;
+const PROJECTILE_OUTER_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.3;
+const PROJECTILE_INNER_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.15;
+const PROJECTILE_CORE_RADIUS_METERS = UNIT_SIZE_METERS * 0.25;
+const PROJECTILE_CORE_INNER_RADIUS_METERS = UNIT_SIZE_METERS * 0.125;
+// Scale unit-attached particle visuals with unit size for consistent glow and trails.
+const UNIT_PARTICLE_BASE_SIZE_METERS = UNIT_SIZE_METERS * 0.15;
+const UNIT_PARTICLE_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.125;
 
 // Helper function to get bright highlight color for team
 function getTeamHighlightColor(owner: number): string {
@@ -93,9 +147,25 @@ function addAlphaToColor(color: string, alpha: number): string {
   return color;
 }
 
+// Helper function to get camera-adjusted positions for visibility tests and overlays
+function getCameraAdjustedScreenPos(state: GameState, canvas: HTMLCanvasElement, worldPos: Vector2): Vector2 {
+  const baseScreenPos = positionToPixels(worldPos);
+  
+  if (!state.camera) {
+    return baseScreenPos;
+  }
+  
+  return worldToScreen(baseScreenPos, state, canvas);
+}
+
 // Helper function to check if an object is visible on screen
-function isOnScreen(position: Vector2, canvas: HTMLCanvasElement, margin: number = OFFSCREEN_CULLING_MARGIN): boolean {
-  const screenPos = positionToPixels(position);
+function isOnScreen(
+  position: Vector2,
+  canvas: HTMLCanvasElement,
+  state: GameState,
+  margin: number = OFFSCREEN_CULLING_MARGIN
+): boolean {
+  const screenPos = getCameraAdjustedScreenPos(state, canvas, position);
   return screenPos.x >= -margin && 
          screenPos.x <= canvas.width + margin && 
          screenPos.y >= -margin && 
@@ -144,9 +214,24 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
   }
 
   drawBackground(ctx, canvas, state);
+  
+  // Draw background floaters (after background, before border)
+  if (state.mode === 'game' || state.mode === 'countdown') {
+    // Apply camera transform so the battlefield zooms/pans while the UI stays fixed
+    if (state.camera) {
+      applyCameraTransform(ctx, state, canvas);
+    }
+    drawBackgroundFloaters(ctx, state);
+  }
+  
+  // Draw playfield border in game modes
+  if (state.mode === 'game' || state.mode === 'countdown') {
+    drawPlayfieldBorder(ctx, canvas);
+  }
 
   if (state.mode === 'game' || state.mode === 'countdown') {
     drawObstacles(ctx, state);
+    drawMiningDepots(ctx, state);
     drawBases(ctx, state);
     
     if (state.mode === 'game') {
@@ -156,17 +241,28 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
       drawUnits(ctx, state);
       drawExplosionParticles(ctx, state);
       drawHitSparks(ctx, state);
+      drawBounceParticles(ctx, state);
       drawEnergyPulses(ctx, state);
       drawSpawnEffects(ctx, state);
       drawImpactEffects(ctx, state);
       drawDamageNumbers(ctx, state);
       drawSelectionIndicators(ctx, state);
       drawAbilityRangeIndicators(ctx, state);
+      drawAbilityCastPreview(ctx, state);
+      drawBaseAbilityPreview(ctx, state);
+      drawVisualFeedback(ctx, state);
+    }
+    
+    // Remove camera transform so screen-space UI does not zoom/pan
+    if (state.camera) {
+      removeCameraTransform(ctx);
+    }
+    
+    if (state.mode === 'game') {
       if (selectionRect) {
         drawSelectionRect(ctx, selectionRect, state);
       }
-      drawAbilityCastPreview(ctx, state);
-      drawVisualFeedback(ctx, state);
+      drawOffscreenZoomIndicators(ctx, state, canvas);
       drawHUD(ctx, state);
       drawMinimap(ctx, state, canvas);
     }
@@ -199,6 +295,87 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
       delete state.screenFlash;
     }
   }
+}
+
+// Draw off-screen unit/base indicators when zoomed in
+function drawOffscreenZoomIndicators(ctx: CanvasRenderingContext2D, state: GameState, canvas: HTMLCanvasElement): void {
+  if (!state.camera || state.camera.zoom <= 1.05) {
+    return;
+  }
+  
+  const viewportOffset = getViewportOffset();
+  const viewportDimensions = getViewportDimensions();
+  const bounds = {
+    left: viewportOffset.x,
+    right: viewportOffset.x + viewportDimensions.width,
+    top: viewportOffset.y,
+    bottom: viewportOffset.y + viewportDimensions.height,
+  };
+  
+  // Fallback to full canvas when viewport dimensions are unavailable
+  if (viewportDimensions.width === 0 || viewportDimensions.height === 0) {
+    bounds.left = 0;
+    bounds.right = canvas.width;
+    bounds.top = 0;
+    bounds.bottom = canvas.height;
+  }
+  
+  const center = {
+    x: (bounds.left + bounds.right) / 2,
+    y: (bounds.top + bounds.bottom) / 2,
+  };
+  
+  const drawIndicator = (screenPos: Vector2, color: string, radius: number): void => {
+    const dx = screenPos.x - center.x;
+    const dy = screenPos.y - center.y;
+    
+    if (dx === 0 && dy === 0) {
+      return;
+    }
+    
+    const tX = dx > 0 ? (bounds.right - center.x) / dx : (bounds.left - center.x) / dx;
+    const tY = dy > 0 ? (bounds.bottom - center.y) / dy : (bounds.top - center.y) / dy;
+    const t = Math.min(tX, tY);
+    const edgePoint = { x: center.x + dx * t, y: center.y + dy * t };
+    
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.85;
+    // Center the indicator on the edge so half the circle is clipped off-screen
+    ctx.beginPath();
+    ctx.arc(edgePoint.x, edgePoint.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+  
+  // Draw unit indicators first so bases stand out on top
+  state.units.forEach((unit) => {
+    const screenPos = getCameraAdjustedScreenPos(state, canvas, unit.position);
+    const isVisible = screenPos.x >= bounds.left &&
+      screenPos.x <= bounds.right &&
+      screenPos.y >= bounds.top &&
+      screenPos.y <= bounds.bottom;
+    
+    if (isVisible) {
+      return;
+    }
+    
+    drawIndicator(screenPos, state.players[unit.owner].color, 7);
+  });
+  
+  state.bases.forEach((base) => {
+    const screenPos = getCameraAdjustedScreenPos(state, canvas, base.position);
+    const isVisible = screenPos.x >= bounds.left &&
+      screenPos.x <= bounds.right &&
+      screenPos.y >= bounds.top &&
+      screenPos.y <= bounds.bottom;
+    
+    if (isVisible) {
+      return;
+    }
+    
+    drawIndicator(screenPos, state.players[base.owner].color, 12);
+  });
 }
 
 function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, state?: GameState): void {
@@ -273,32 +450,123 @@ function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement
       ctx.stroke();
     });
   }
+}
 
-  ctx.strokeStyle = COLORS.pattern;
+/**
+ * Draw background floaters with connecting lines
+ * Should be called after drawBackground but before drawPlayfieldBorder
+ */
+function drawBackgroundFloaters(ctx: CanvasRenderingContext2D, state: GameState): void {
+  // Skip if floaters are undefined or disabled
+  if (!state.floaters || state.floaters.length === 0) {
+    return;
+  }
+  
+  ctx.save();
+  
+  // Calculate connections between nearby floaters
+  const connections = calculateFloaterConnections(state.floaters);
+  
+  // Draw connections first (lines)
+  connections.forEach(connection => {
+    const fromPixels = positionToPixels(connection.from.position);
+    const toPixels = positionToPixels(connection.to.position);
+    
+    // Alpha based on connection strength (max 0.25 for connections)
+    const alpha = connection.strength * 0.25;
+    
+    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+    // Line width scaled by viewport (~1-2px)
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(fromPixels.x, fromPixels.y);
+    ctx.lineTo(toPixels.x, toPixels.y);
+    ctx.stroke();
+  });
+  
+  // Draw floaters second (hollow circles)
+  state.floaters.forEach(floater => {
+    const screenPos = positionToPixels(floater.position);
+    
+    // Radius scaled by floater.size and viewport (3-8 pixels typical)
+    // Use metersToPixels to properly scale with viewport, with safety checks
+    const scaledRadius = floater.size * metersToPixels(FLOATER_BASE_RADIUS_METERS);
+    const radius = Math.max(3, Math.abs(scaledRadius)); // Ensure minimum 3px and positive
+    
+    // Stroke width proportional to radius (~20% of radius)
+    const strokeWidth = Math.max(0.5, radius * 0.2);
+    
+    // White stroke at low opacity
+    const alpha = floater.opacity * 0.3;
+    if (alpha <= 0) return; // Skip if not visible yet
+    
+    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.lineWidth = strokeWidth;
+    
+    // Draw hollow circle (stroke only, no fill)
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+  
+  ctx.restore();
+}
+
+function drawPlayfieldBorder(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void {
+  // Use the letterboxed viewport offset so the border aligns with the arena
+  const viewportOffset = getViewportOffset();
+  const viewportDimensions = getViewportDimensions();
+  // Use the rotated viewport dimensions so the border hugs the visible arena
+  const playfieldWidthPixels = viewportDimensions.width || metersToPixels(ARENA_WIDTH_METERS);
+  const playfieldHeightPixels = viewportDimensions.height || metersToPixels(ARENA_HEIGHT_METERS);
+  
+  // Border thickness is 1 meter
+  const borderThickness = metersToPixels(1);
+  
+  ctx.save();
+  
+  // Draw the main border
+  ctx.fillStyle = COLORS.borderMain;
+  
+  // Top border
+  ctx.fillRect(viewportOffset.x, viewportOffset.y, playfieldWidthPixels, borderThickness);
+  
+  // Bottom border
+  ctx.fillRect(
+    viewportOffset.x,
+    viewportOffset.y + playfieldHeightPixels - borderThickness,
+    playfieldWidthPixels,
+    borderThickness,
+  );
+  
+  // Left border
+  ctx.fillRect(viewportOffset.x, viewportOffset.y, borderThickness, playfieldHeightPixels);
+  
+  // Right border
+  ctx.fillRect(
+    viewportOffset.x + playfieldWidthPixels - borderThickness,
+    viewportOffset.y,
+    borderThickness,
+    playfieldHeightPixels,
+  );
+  
+  // Add inner highlight for depth effect
+  // The inner rectangle is inset by borderThickness on all sides (2 * borderThickness for width/height)
+  ctx.strokeStyle = COLORS.borderHighlight;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(
+    viewportOffset.x + borderThickness,
+    viewportOffset.y + borderThickness,
+    playfieldWidthPixels - borderThickness * 2,
+    playfieldHeightPixels - borderThickness * 2,
+  );
+  
+  // Add subtle outer shadow for depth effect
+  ctx.strokeStyle = COLORS.borderShadow;
   ctx.lineWidth = 1;
-
-  const gridSize = 40;
-  for (let x = 0; x < canvas.width; x += gridSize) {
-    for (let y = 0; y < canvas.height; y += gridSize) {
-      ctx.beginPath();
-      ctx.arc(x, y, 1, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  const spacing = 80;
-  for (let x = 0; x < canvas.width; x += spacing) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, canvas.height);
-    ctx.stroke();
-  }
-  for (let y = 0; y < canvas.height; y += spacing) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(canvas.width, y);
-    ctx.stroke();
-  }
+  ctx.strokeRect(viewportOffset.x, viewportOffset.y, playfieldWidthPixels, playfieldHeightPixels);
+  
+  ctx.restore();
 }
 
 function drawObstacles(ctx: CanvasRenderingContext2D, state: GameState): void {
@@ -364,16 +632,119 @@ function drawObstacles(ctx: CanvasRenderingContext2D, state: GameState): void {
   });
 }
 
+function drawMiningDepots(ctx: CanvasRenderingContext2D, state: GameState): void {
+  const DEPOT_SIZE = MINING_DEPOT_SIZE_METERS; // meters
+  const DEPOSIT_SIZE = RESOURCE_DEPOSIT_SIZE_METERS; // meters
+  
+  state.miningDepots.forEach((depot) => {
+    const depotScreenPos = positionToPixels(depot.position);
+    const depotWidth = metersToPixels(DEPOT_SIZE);
+    const depotHeight = metersToPixels(DEPOT_SIZE);
+
+    // Draw the snapped mining preview line when dragging from this depot
+    if (state.miningDragPreview?.depotId === depot.id) {
+      const previewDeposit = depot.deposits.find((deposit) => deposit.id === state.miningDragPreview?.depositId);
+      if (previewDeposit) {
+        const depositScreenPos = positionToPixels(previewDeposit.position);
+        ctx.save();
+        ctx.strokeStyle = state.players[depot.owner].color;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(depotScreenPos.x, depotScreenPos.y);
+        ctx.lineTo(depositScreenPos.x, depositScreenPos.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+    
+    // Draw the depot building
+    ctx.save();
+    
+    // Depot base
+    const depotColor = state.players[depot.owner].color;
+    ctx.fillStyle = 'oklch(0.25 0.05 0)';
+    ctx.strokeStyle = depotColor;
+    ctx.lineWidth = 2;
+    
+    ctx.fillRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
+    ctx.strokeRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
+    
+    // Add glow effect
+    applyGlowEffect(ctx, state, depotColor, 10);
+    ctx.strokeRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
+    clearGlowEffect(ctx, state);
+    
+    // Draw a center marker scaled to the depot footprint
+    ctx.fillStyle = depotColor;
+    ctx.beginPath();
+    ctx.arc(depotScreenPos.x, depotScreenPos.y, metersToPixels(DEPOT_SIZE * 0.2), 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
+    
+    // Draw resource deposits around the depot
+    depot.deposits.forEach((deposit) => {
+      const depositScreenPos = positionToPixels(deposit.position);
+      const depositWidth = metersToPixels(DEPOSIT_SIZE);
+      
+      ctx.save();
+      
+      // Deposit is a hexagon shape
+      const workerCount = deposit.workerIds?.length ?? 0;
+      const isOccupied = workerCount > 0;
+      const depositColor = workerCount >= 2
+        ? 'oklch(0.90 0.22 95)'
+        : isOccupied
+          ? 'oklch(0.85 0.20 95)'
+          : 'oklch(0.50 0.15 95)'; // Yellow photon color
+      
+      ctx.fillStyle = depositColor;
+      ctx.strokeStyle = depotColor;
+      ctx.lineWidth = 1.5;
+      
+      // Draw hexagon
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+        const x = depositScreenPos.x + Math.cos(angle) * depositWidth / 2;
+        const y = depositScreenPos.y + Math.sin(angle) * depositWidth / 2;
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      
+      // Add glow for occupied deposits
+      if (isOccupied) {
+        applyGlowEffect(ctx, state, depositColor, 8);
+        ctx.stroke();
+        clearGlowEffect(ctx, state);
+      }
+      
+      ctx.restore();
+    });
+  });
+}
+
 function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): void {
   const time = Date.now() / 1000; // Calculate once for efficiency
+  const currentTime = Date.now();
   
-  state.units.forEach((unit) => {
+  // Helper function to draw a single unit's command queue with animation
+  const drawUnitQueue = (unit: Unit) => {
+    if (unit.commandQueue.length === 0) return;
+    
     const color = state.players[unit.owner].color;
     
     // Calculate fade alpha if queue is being cancelled
     let fadeAlpha = 1.0;
     if (unit.queueFadeStartTime) {
-      const fadeElapsed = (Date.now() - unit.queueFadeStartTime) / 1000;
+      const fadeElapsed = (currentTime - unit.queueFadeStartTime) / 1000;
       fadeAlpha = Math.max(0, 1.0 - fadeElapsed / QUEUE_FADE_DURATION);
       
       // Clean up fade tracking after animation completes
@@ -382,143 +753,198 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
       }
     }
     
+    // Calculate draw progress (for draw-in or reverse un-draw animations)
+    let drawProgress = 1.0; // Default: fully drawn
+    if (unit.queueDrawStartTime) {
+      const elapsed = (currentTime - unit.queueDrawStartTime) / 1000;
+      if (unit.queueDrawReverse) {
+        // Reverse animation: start from 1.0 and go to 0.0
+        drawProgress = Math.max(0, 1.0 - elapsed / QUEUE_UNDRAW_DURATION);
+      } else {
+        // Forward animation: start from 0.0 and go to 1.0
+        drawProgress = Math.min(1.0, elapsed / QUEUE_DRAW_DURATION);
+        // Clean up once animation completes
+        if (drawProgress >= 1.0) {
+          unit.queueDrawStartTime = undefined;
+        }
+      }
+    }
+    
+    // Calculate total path length to determine how much to draw
+    const pathSegments: Array<{
+      start: Vector2;
+      end: Vector2;
+      type: 'move' | 'ability' | 'attack-move' | 'patrol';
+      node: CommandNode;
+      index: number;
+    }> = [];
+    
+    let totalLength = 0;
+    let lastPos = unit.position;
+    
+    unit.commandQueue.forEach((node, index) => {
+      const segmentStart = lastPos;
+      const segmentEnd = node.position;
+      const segmentLength = distance(segmentStart, segmentEnd);
+      
+      pathSegments.push({
+        start: segmentStart,
+        end: segmentEnd,
+        type: node.type,
+        node,
+        index
+      });
+      
+      totalLength += segmentLength;
+      lastPos = segmentEnd;
+    });
+    
+    // Calculate how much of the path to draw based on progress
+    const drawLength = totalLength * drawProgress;
+    let accumulatedLength = 0;
+    
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.7 * fadeAlpha;
-
-    let lastPos = unit.position;
-
-    unit.commandQueue.forEach((node, index) => {
-      const screenPos = positionToPixels(node.position);
-
-      if (node.type === 'move') {
-        const lastScreenPos = positionToPixels(lastPos);
-        
+    ctx.globalAlpha = 0.2 * fadeAlpha; // Queued lines: 20% opacity
+    
+    // Draw each segment up to the draw length
+    for (const segment of pathSegments) {
+      const segmentLength = distance(segment.start, segment.end);
+      const segmentStartLength = accumulatedLength;
+      const segmentEndLength = accumulatedLength + segmentLength;
+      
+      // Skip if this segment hasn't started drawing yet
+      if (drawLength <= segmentStartLength) break;
+      
+      // Calculate how much of this segment to draw
+      const segmentDrawLength = Math.min(drawLength - segmentStartLength, segmentLength);
+      const segmentProgress = segmentDrawLength / segmentLength;
+      
+      // Calculate the actual end point for partial drawing
+      const drawEnd = {
+        x: segment.start.x + (segment.end.x - segment.start.x) * segmentProgress,
+        y: segment.start.y + (segment.end.y - segment.start.y) * segmentProgress
+      };
+      
+      const startScreen = positionToPixels(segment.start);
+      const endScreen = positionToPixels(drawEnd);
+      const fullEndScreen = positionToPixels(segment.end);
+      
+      if (segment.type === 'move') {
         // Draw path with glow
         ctx.shadowColor = color;
         ctx.shadowBlur = 8;
         ctx.beginPath();
-        ctx.moveTo(lastScreenPos.x, lastScreenPos.y);
-        ctx.lineTo(screenPos.x, screenPos.y);
+        ctx.moveTo(startScreen.x, startScreen.y);
+        ctx.lineTo(endScreen.x, endScreen.y);
         ctx.stroke();
         ctx.shadowBlur = 0;
-
-        // Draw waypoint with pulsing animation
-        const pulse = Math.sin(time * 2 + index) * 0.3 + 0.7;
-        ctx.globalAlpha = 0.8 * pulse * fadeAlpha;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 12;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y, 4 + pulse * 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.globalAlpha = 0.7 * fadeAlpha;
-
-        lastPos = node.position;
-      } else if (node.type === 'ability') {
-        const dir = normalize(node.direction);
-        const arrowLen = 12;
-        const arrowEnd = add(node.position, scale(dir, 0.5));
+        
+        // Draw waypoint if segment is fully drawn
+        if (segmentProgress >= 1.0) {
+          const pulse = Math.sin(time * 2 + segment.index) * 0.3 + 0.7;
+          ctx.globalAlpha = 0.6 * pulse * fadeAlpha; // Movement nodes: 60% opacity
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.arc(fullEndScreen.x, fullEndScreen.y, 4 + pulse * 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.globalAlpha = 0.2 * fadeAlpha; // Reset to queued line opacity
+        }
+      } else if (segment.type === 'ability' && segmentProgress >= 1.0) {
+        // Only draw ability arrow if segment is fully drawn and node is ability type
+        if (segment.node.type !== 'ability') continue;
+        
+        const dir = normalize(segment.node.direction);
+        const arrowEnd = add(segment.end, scale(dir, 0.5));
         const arrowEndScreen = positionToPixels(arrowEnd);
-
+        
         ctx.save();
         ctx.translate(arrowEndScreen.x, arrowEndScreen.y);
         const angle = Math.atan2(dir.y, dir.x);
         ctx.rotate(angle);
-
-        // Draw arrow with enhanced glow
+        
         ctx.shadowColor = color;
         ctx.shadowBlur = 15;
-        ctx.globalAlpha = 0.9 * fadeAlpha;
+        ctx.globalAlpha = 0.4 * fadeAlpha; // Ability casts: 40% opacity
         ctx.beginPath();
-        ctx.moveTo(arrowLen, 0);
+        ctx.moveTo(ABILITY_ARROW_LENGTH, 0);
         ctx.lineTo(0, -6);
         ctx.lineTo(0, 6);
         ctx.closePath();
         ctx.fill();
-
+        
         ctx.restore();
-
-        lastPos = node.position;
-      } else if (node.type === 'attack-move') {
-        // Draw attack-move nodes with cross-hair symbol
-        const screenPos = positionToPixels(node.position);
-
-        // Draw path line to this position
-        if (lastPos) {
-          const lastScreenPos = positionToPixels(lastPos);
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 2;
-          ctx.globalAlpha = 0.4 * fadeAlpha;
-          ctx.setLineDash([5, 5]);
-          ctx.beginPath();
-          ctx.moveTo(lastScreenPos.x, lastScreenPos.y);
-          ctx.lineTo(screenPos.x, screenPos.y);
-          ctx.stroke();
-          ctx.setLineDash([]);
-        }
-
-        // Draw cross-hair symbol
-        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.2 * fadeAlpha; // Reset to queued line opacity
+      } else if (segment.type === 'attack-move') {
+        // Draw path line
         ctx.strokeStyle = color;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
-        ctx.globalAlpha = 0.8 * fadeAlpha;
-        
-        // Outer circle
         ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.4 * fadeAlpha;
+        ctx.setLineDash([5, 5]);
         ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y, 8, 0, Math.PI * 2);
+        ctx.moveTo(startScreen.x, startScreen.y);
+        ctx.lineTo(endScreen.x, endScreen.y);
         ctx.stroke();
+        ctx.setLineDash([]);
         
-        // Cross lines
-        ctx.beginPath();
-        ctx.moveTo(screenPos.x - 10, screenPos.y);
-        ctx.lineTo(screenPos.x + 10, screenPos.y);
-        ctx.moveTo(screenPos.x, screenPos.y - 10);
-        ctx.lineTo(screenPos.x, screenPos.y + 10);
-        ctx.stroke();
+        // Draw cross-hair if segment is fully drawn
+        if (segmentProgress >= 1.0) {
+          ctx.fillStyle = color;
+          ctx.strokeStyle = color;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 8;
+          ctx.globalAlpha = 0.8 * fadeAlpha;
+          
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(fullEndScreen.x, fullEndScreen.y, 8, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          ctx.beginPath();
+          ctx.moveTo(fullEndScreen.x - 10, fullEndScreen.y);
+          ctx.lineTo(fullEndScreen.x + 10, fullEndScreen.y);
+          ctx.moveTo(fullEndScreen.x, fullEndScreen.y - 10);
+          ctx.lineTo(fullEndScreen.x, fullEndScreen.y + 10);
+          ctx.stroke();
+          
+          const pulse = Math.sin(time * 3 + segment.index * 0.3) * 0.5 + 0.5;
+          ctx.shadowBlur = 15;
+          ctx.beginPath();
+          ctx.arc(fullEndScreen.x, fullEndScreen.y, 3 + pulse * 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+        ctx.globalAlpha = 0.2 * fadeAlpha; // Reset to queued line opacity
+      } else if (segment.type === 'patrol' && segmentProgress >= 1.0) {
+        // Only draw patrol path if segment is fully drawn and node is patrol type
+        if (segment.node.type !== 'patrol') continue;
         
-        // Center dot with pulse
-        const pulse = Math.sin(time * 3 + index * 0.3) * 0.5 + 0.5;
-        ctx.shadowBlur = 15;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y, 3 + pulse * 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.globalAlpha = 0.7 * fadeAlpha;
-
-        lastPos = node.position;
-      } else if (node.type === 'patrol') {
-        // Draw patrol path with bidirectional arrow
-        const screenPos = positionToPixels(node.position);
-        const returnScreenPos = positionToPixels(node.returnPosition);
+        const returnScreenPos = positionToPixels(segment.node.returnPosition);
         
-        // Draw bidirectional dashed path
         ctx.strokeStyle = color;
         ctx.lineWidth = 2;
         ctx.globalAlpha = 0.5 * fadeAlpha;
         ctx.setLineDash([8, 4]);
-        ctx.lineDashOffset = time * 20; // Animated dashes
+        ctx.lineDashOffset = time * 20;
         ctx.shadowColor = color;
         ctx.shadowBlur = 10;
         
         ctx.beginPath();
-        ctx.moveTo(screenPos.x, screenPos.y);
+        ctx.moveTo(fullEndScreen.x, fullEndScreen.y);
         ctx.lineTo(returnScreenPos.x, returnScreenPos.y);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.shadowBlur = 0;
         
-        // Draw patrol markers at both ends with pulsing
         const pulse = Math.sin(time * 2.5) * 0.3 + 0.7;
         ctx.globalAlpha = 0.7 * pulse * fadeAlpha;
         ctx.fillStyle = color;
         ctx.shadowColor = color;
         ctx.shadowBlur = 12;
         
-        // Draw diamond shapes for patrol points
         const drawPatrolMarker = (x: number, y: number) => {
           ctx.save();
           ctx.translate(x, y);
@@ -532,18 +958,76 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
           ctx.restore();
         };
         
-        drawPatrolMarker(screenPos.x, screenPos.y);
+        drawPatrolMarker(fullEndScreen.x, fullEndScreen.y);
         drawPatrolMarker(returnScreenPos.x, returnScreenPos.y);
         
         ctx.shadowBlur = 0;
-        ctx.globalAlpha = 0.7 * fadeAlpha;
-        
-        lastPos = node.position;
+        ctx.globalAlpha = 0.2 * fadeAlpha; // Reset to queued line opacity
       }
-    });
-
+      
+      accumulatedLength += segmentLength;
+    }
+    
     ctx.globalAlpha = 1.0;
-  });
+  };
+  
+  // Draw queues for all units
+  state.units.forEach(drawUnitQueue);
+  
+  // Also draw queues for dying units (for reverse animation)
+  if (state.dyingUnits && state.dyingUnits.length > 0) {
+    state.dyingUnits.forEach(drawUnitQueue);
+  }
+  
+  // Draw pending chess mode commands with different visual style
+  if (state.settings.chessMode && state.chessMode && state.chessMode.pendingCommands.size > 0) {
+    state.chessMode.pendingCommands.forEach((commands, unitId) => {
+      const unit = state.units.find(u => u.id === unitId);
+      if (!unit || commands.length === 0) return;
+      
+      const color = state.players[unit.owner].color;
+      const command = commands[0]; // Only one command per turn
+      
+      // Draw pending command with pulsing dashed line
+      const pulse = Math.sin(time * 4) * 0.3 + 0.7; // Fast pulse
+      
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.5 * pulse; // Pulsing opacity
+      ctx.setLineDash([8, 8]); // Dashed line
+      
+      const startPos = positionToPixels(unit.position);
+      const endPos = positionToPixels(command.position);
+      
+      // Draw dashed line
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.moveTo(startPos.x, startPos.y);
+      ctx.lineTo(endPos.x, endPos.y);
+      ctx.stroke();
+      
+      // Draw endpoint marker with different style
+      ctx.globalAlpha = 0.7 * pulse;
+      ctx.shadowBlur = 15;
+      ctx.beginPath();
+      ctx.arc(endPos.x, endPos.y, 6, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Draw inner dot for contrast
+      ctx.globalAlpha = 1.0;
+      ctx.fillStyle = 'white';
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.arc(endPos.x, endPos.y, 2, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.setLineDash([]); // Reset dash
+      ctx.restore();
+    });
+  }
 }
 
 function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
@@ -625,6 +1109,9 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
       } else if (factionDef.baseShape === 'star') {
         drawStar(ctx, screenPos.x, screenPos.y, size / 2, size / 4, 5);
         ctx.stroke();
+      } else if (factionDef.baseShape === 'triangle') {
+        drawTriangle(ctx, screenPos.x, screenPos.y, size / 2);
+        ctx.stroke();
       } else {
         ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
       }
@@ -637,6 +1124,9 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
         ctx.stroke();
       } else if (factionDef.baseShape === 'star') {
         drawStar(ctx, screenPos.x, screenPos.y, size * 0.65, size * 0.33, 5);
+        ctx.stroke();
+      } else if (factionDef.baseShape === 'triangle') {
+        drawTriangle(ctx, screenPos.x, screenPos.y, size * 0.65);
         ctx.stroke();
       } else {
         const expanded = size * 1.3;
@@ -654,6 +1144,9 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
         ctx.stroke();
       } else if (factionDef.baseShape === 'star') {
         drawStar(ctx, screenPos.x, screenPos.y, size / 2, size / 4, 5);
+        ctx.stroke();
+      } else if (factionDef.baseShape === 'triangle') {
+        drawTriangle(ctx, screenPos.x, screenPos.y, size / 2);
         ctx.stroke();
       } else {
         ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
@@ -684,6 +1177,9 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
     } else if (factionDef.baseShape === 'star') {
       drawStar(ctx, screenPos.x, screenPos.y, size / 2, size / 4, 5);
       ctx.fill();
+    } else if (factionDef.baseShape === 'triangle') {
+      drawTriangle(ctx, screenPos.x, screenPos.y, size / 2);
+      ctx.fill();
     } else {
       ctx.fillRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
     }
@@ -695,8 +1191,64 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
     } else if (factionDef.baseShape === 'star') {
       drawStar(ctx, screenPos.x, screenPos.y, size / 2, size / 4, 5);
       ctx.stroke();
+    } else if (factionDef.baseShape === 'triangle') {
+      drawTriangle(ctx, screenPos.x, screenPos.y, size / 2);
+      ctx.stroke();
     } else {
       ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+    }
+
+    // Draw cannon indicator for defense base
+    if (base.baseType === 'defense') {
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      
+      // Draw turret on top of base
+      const turretSize = size * 0.3;
+      ctx.fillRect(screenPos.x - turretSize / 2, screenPos.y - turretSize / 2, turretSize, turretSize);
+      
+      // Draw cannon barrel pointing upwards (or towards nearest enemy if in range)
+      const barrelLength = size * 0.4;
+      const barrelWidth = 4;
+      
+      // For now, just point upwards
+      ctx.fillRect(screenPos.x - barrelWidth / 2, screenPos.y - turretSize / 2 - barrelLength, barrelWidth, barrelLength);
+      
+      ctx.restore();
+    }
+    
+    // Draw shield indicator for assault base
+    if (base.baseType === 'assault' && !base.shieldActive) {
+      // Draw small shield icon to indicate it has shield ability
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.4;
+      const shieldSize = size * 0.25;
+      ctx.beginPath();
+      ctx.arc(screenPos.x + size * 0.25, screenPos.y - size * 0.25, shieldSize, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    
+    // Draw healing cross for support base
+    if (base.baseType === 'support') {
+      ctx.save();
+      ctx.fillStyle = '#4ade80';
+      ctx.strokeStyle = '#4ade80';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.6;
+      
+      const crossSize = size * 0.2;
+      const crossThickness = 3;
+      
+      // Draw cross
+      ctx.fillRect(screenPos.x - crossThickness / 2, screenPos.y - crossSize / 2, crossThickness, crossSize);
+      ctx.fillRect(screenPos.x - crossSize / 2, screenPos.y - crossThickness / 2, crossSize, crossThickness);
+      
+      ctx.restore();
     }
 
     if (state.mode === 'game' && (!state.matchStartAnimation || state.matchStartAnimation.phase === 'go')) {
@@ -744,12 +1296,112 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
         ctx.fill();
       }
       
+      // Draw rally point flag for selected bases
+      if (base.isSelected) {
+        const rallyScreen = positionToPixels(base.rallyPoint);
+        const flagHeight = 20;
+        const flagWidth = 15;
+        
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.8;
+        
+        // Draw flag pole
+        ctx.beginPath();
+        ctx.moveTo(rallyScreen.x, rallyScreen.y);
+        ctx.lineTo(rallyScreen.x, rallyScreen.y - flagHeight);
+        ctx.stroke();
+        
+        // Draw flag
+        ctx.beginPath();
+        ctx.moveTo(rallyScreen.x, rallyScreen.y - flagHeight);
+        ctx.lineTo(rallyScreen.x + flagWidth, rallyScreen.y - flagHeight + flagWidth / 3);
+        ctx.lineTo(rallyScreen.x, rallyScreen.y - flagHeight + flagWidth * 2 / 3);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Draw line from base to rally point
+        ctx.globalAlpha = 0.3;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(screenPos.x, screenPos.y);
+        ctx.lineTo(rallyScreen.x, rallyScreen.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        ctx.restore();
+      }
+      
+      // Draw rally point preview when dragging
+      if (state.rallyPointPreview && state.rallyPointPreview.baseId === base.id) {
+        const previewRallyScreen = positionToPixels(state.rallyPointPreview.rallyPoint);
+        const flagHeight = 20;
+        const flagWidth = 15;
+        
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.5; // Semi-transparent for preview
+        
+        // Draw flag pole
+        ctx.beginPath();
+        ctx.moveTo(previewRallyScreen.x, previewRallyScreen.y);
+        ctx.lineTo(previewRallyScreen.x, previewRallyScreen.y - flagHeight);
+        ctx.stroke();
+        
+        // Draw flag
+        ctx.beginPath();
+        ctx.moveTo(previewRallyScreen.x, previewRallyScreen.y - flagHeight);
+        ctx.lineTo(previewRallyScreen.x + flagWidth, previewRallyScreen.y - flagHeight + flagWidth / 3);
+        ctx.lineTo(previewRallyScreen.x, previewRallyScreen.y - flagHeight + flagWidth * 2 / 3);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Draw line from base to rally point with pulsing effect
+        // Use elapsedTime for consistent animation timing across different frame rates
+        ctx.globalAlpha = 0.4 + Math.sin(state.elapsedTime * 5) * 0.1; // Pulsing animation
+        ctx.setLineDash([5, 5]);
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(screenPos.x, screenPos.y);
+        ctx.lineTo(previewRallyScreen.x, previewRallyScreen.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        ctx.restore();
+      }
+      
       drawBaseHealthBar(ctx, base, screenPos, size, color, state);
     }
     
     // Draw laser beam if active
     if (base.laserBeam && Date.now() < base.laserBeam.endTime) {
       drawLaserBeam(ctx, base, screenPos, color);
+    }
+    
+    // Draw regeneration pulse for support base
+    if (base.regenerationPulse && Date.now() < base.regenerationPulse.endTime) {
+      const elapsed = Date.now() - (base.regenerationPulse.endTime - 500); // 500ms duration
+      const progress = elapsed / 500;
+      const radius = metersToPixels(base.regenerationPulse.radius);
+      
+      ctx.save();
+      ctx.strokeStyle = '#4ade80'; // Green color for healing
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = (1 - progress) * 0.5; // Fade out as it expands
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, radius * progress, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Inner glow
+      ctx.globalAlpha = (1 - progress) * 0.3;
+      ctx.shadowColor = '#4ade80';
+      ctx.shadowBlur = 15;
+      ctx.stroke();
+      ctx.restore();
     }
   });
 }
@@ -852,7 +1504,7 @@ function drawLaserBeam(ctx: CanvasRenderingContext2D, base: Base, screenPos: { x
 function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void {
   state.projectiles.forEach((projectile) => {
     // Skip projectiles that are off-screen for performance
-    if (!isOnScreen(projectile.position, ctx.canvas, OFFSCREEN_CULLING_MARGIN)) {
+    if (!isOnScreen(projectile.position, ctx.canvas, state, OFFSCREEN_CULLING_MARGIN)) {
       return;
     }
     
@@ -860,61 +1512,20 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     
     ctx.save();
     
-    // Calculate age for pulsing effect
-    const age = (Date.now() - projectile.createdAt) / 1000;
-    const pulseIntensity = 0.8 + Math.sin(age * 30) * 0.2; // Fast pulse
+    // Calculate rotation angle based on velocity direction
+    const angle = Math.atan2(projectile.velocity.y, projectile.velocity.x);
     
-    // Draw outer glow layer
-    const trailLength = 18;
-    const direction = normalize(projectile.velocity);
-    const trailStart = subtract(projectile.position, scale(direction, trailLength / 20));
-    const trailScreenPos = positionToPixels(trailStart);
+    // Translate to projectile position and rotate
+    ctx.translate(screenPos.x, screenPos.y);
+    ctx.rotate(angle);
     
-    // Create multi-layer gradient for trail
-    const outerGradient = ctx.createLinearGradient(trailScreenPos.x, trailScreenPos.y, screenPos.x, screenPos.y);
-    outerGradient.addColorStop(0, 'transparent');
-    outerGradient.addColorStop(0.5, addAlphaToColor(projectile.color, 0.3));
-    outerGradient.addColorStop(1, addAlphaToColor(projectile.color, 0.6));
+    // Draw tiny rectangle bullet (4px x 2px)
+    const bulletWidth = 4;
+    const bulletHeight = 2;
     
-    ctx.strokeStyle = outerGradient;
-    ctx.lineWidth = 6;
-    ctx.lineCap = 'round';
-    ctx.shadowColor = projectile.color;
-    ctx.shadowBlur = 25 * pulseIntensity;
-    
-    ctx.beginPath();
-    ctx.moveTo(trailScreenPos.x, trailScreenPos.y);
-    ctx.lineTo(screenPos.x, screenPos.y);
-    ctx.stroke();
-    
-    // Draw energy trail with gradient and glow (inner layer)
-    const gradient = ctx.createLinearGradient(trailScreenPos.x, trailScreenPos.y, screenPos.x, screenPos.y);
-    gradient.addColorStop(0, 'transparent');
-    gradient.addColorStop(0.3, addAlphaToColor(projectile.color, 0.5));
-    gradient.addColorStop(1, projectile.color);
-    
-    ctx.strokeStyle = gradient;
-    ctx.lineWidth = 3;
-    ctx.shadowBlur = 18 * pulseIntensity;
-    
-    ctx.beginPath();
-    ctx.moveTo(trailScreenPos.x, trailScreenPos.y);
-    ctx.lineTo(screenPos.x, screenPos.y);
-    ctx.stroke();
-    
-    // Draw projectile core with enhanced glow
+    // Draw the rectangle centered
     ctx.fillStyle = projectile.color;
-    ctx.shadowBlur = 20 * pulseIntensity;
-    ctx.beginPath();
-    ctx.arc(screenPos.x, screenPos.y, 5, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Draw bright center with appropriate team color
-    ctx.fillStyle = getTeamHighlightColor(projectile.owner);
-    ctx.shadowBlur = 25 * pulseIntensity;
-    ctx.beginPath();
-    ctx.arc(screenPos.x, screenPos.y, 2.5, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(-bulletWidth / 2, -bulletHeight / 2, bulletWidth, bulletHeight);
     
     ctx.restore();
   });
@@ -924,7 +1535,10 @@ function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos:
   const barWidth = 24;
   const barHeight = 4;
   const barX = screenPos.x - barWidth / 2;
-  const barY = screenPos.y - 18;
+  const unitSizeMeters = getUnitSizeMeters(unit);
+  // Offset the bar to avoid overlapping larger-than-normal unit silhouettes.
+  const unitSizeOffset = metersToPixels(unitSizeMeters / 2) - metersToPixels(UNIT_SIZE_METERS / 2);
+  const barY = screenPos.y - 18 - unitSizeOffset;
   
   // Use display HP for smooth interpolation
   const displayHp = unit.displayHp !== undefined ? unit.displayHp : unit.hp;
@@ -972,7 +1586,7 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
   
   state.units.forEach((unit) => {
     // Skip units that are off-screen for performance
-    if (!isOnScreen(unit.position, ctx.canvas, OFFSCREEN_CULLING_MARGIN)) {
+    if (!isOnScreen(unit.position, ctx.canvas, state, OFFSCREEN_CULLING_MARGIN)) {
       return;
     }
     
@@ -988,13 +1602,20 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
       screenPos = { x: screenPos.x, y: screenPos.y + bobOffset };
     }
     
-    // Calculate distance from camera center for LOD
-    const cameraCenter = { x: ctx.canvas.width / 2, y: ctx.canvas.height / 2 };
+    // Calculate distance from arena viewport center for LOD
+    const viewportOffset = getViewportOffset();
+    const viewportDimensions = getViewportDimensions();
+    const cameraCenter = {
+      x: viewportOffset.x + viewportDimensions.width / 2,
+      y: viewportOffset.y + viewportDimensions.height / 2,
+    };
     const distFromCenter = Math.sqrt(
       Math.pow(screenPos.x - cameraCenter.x, 2) + 
       Math.pow(screenPos.y - cameraCenter.y, 2)
     );
-    const maxDist = Math.sqrt(Math.pow(ctx.canvas.width / 2, 2) + Math.pow(ctx.canvas.height / 2, 2));
+    const maxDist = Math.sqrt(
+      Math.pow(viewportDimensions.width / 2, 2) + Math.pow(viewportDimensions.height / 2, 2),
+    );
     const distanceRatio = distFromCenter / maxDist;
     
     // LOD: Simplify distant units
@@ -1031,7 +1652,8 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     } else if (unit.type === 'interceptor') {
       drawInterceptor(ctx, unit, screenPos, color);
     } else {
-      const radius = metersToPixels(UNIT_SIZE_METERS / 2);
+      const unitSizeMeters = getUnitSizeMeters(unit);
+      const radius = metersToPixels(unitSizeMeters / 2);
 
       // Health-based glow intensity
       const healthPercent = unit.hp / unit.maxHp;
@@ -1227,7 +1849,7 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
       const iconSpacing = 14;
       const totalWidth = unitDef.modifiers.length * iconSpacing - 2;
       const startX = screenPos.x - totalWidth / 2;
-      const iconY = screenPos.y - metersToPixels(UNIT_SIZE_METERS / 2) - 30;
+      const iconY = screenPos.y - metersToPixels(getUnitSizeMeters(unit) / 2) - 30;
       
       ctx.save();
       ctx.font = `${iconSize}px Arial`;
@@ -1250,71 +1872,48 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.textAlign = 'center';
     ctx.fillText(`${unit.damageMultiplier.toFixed(1)}x`, screenPos.x, screenPos.y + 20);
     
-    // Draw ability cooldown indicator with enhanced visuals
+    // Draw ability cooldown bar below the unit
     if (unitDef.abilityName && unitDef.abilityCooldown > 0) {
       const cooldownPercent = unit.abilityCooldown / unitDef.abilityCooldown;
-      const radius = metersToPixels(UNIT_SIZE_METERS / 2) + 2;
-      const yOffset = -radius - 5;
+      const barWidth = 30; // Width of the cooldown bar in pixels
+      const barHeight = 4; // Height of the bar
+      const radius = metersToPixels(UNIT_SIZE_METERS / 2);
+      const yOffset = radius + 8; // Position below the unit
       
-      if (cooldownPercent > 0) {
-        // Draw cooldown arc with enhanced styling
-        ctx.save();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2.5;
-        ctx.globalAlpha = 0.4;
-        const startAngle = -Math.PI / 2;
-        const endAngle = startAngle + (Math.PI * 2 * (1 - cooldownPercent));
-        
-        // Background circle
-        ctx.globalAlpha = 0.2;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y + yOffset, 6, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        // Cooldown progress
-        ctx.globalAlpha = 0.6;
-        ctx.lineWidth = 3;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y + yOffset, 6, startAngle, endAngle);
-        ctx.stroke();
-        ctx.restore();
-      } else {
-        // Ability ready - draw enhanced pulsing indicator
-        const time = Date.now() / 1000;
-        const pulse = Math.sin(time * 5) * 0.4 + 0.6;
-        
-        ctx.save();
-        
-        // Outer glow ring
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = pulse * 0.5;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 15;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y + yOffset, 7 + pulse * 2, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        // Inner filled circle
+      ctx.save();
+      
+      // Background bar (empty/dark)
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(screenPos.x - barWidth / 2, screenPos.y + yOffset, barWidth, barHeight);
+      
+      // Filled portion showing cooldown remaining (empties as ability is used, fills as it recovers)
+      const fillWidth = barWidth * (1 - cooldownPercent); // Inverted: full when cooldown is 0, empty when cooling down
+      if (fillWidth > 0) {
         ctx.fillStyle = color;
-        ctx.globalAlpha = pulse;
-        ctx.shadowBlur = 12;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y + yOffset, 4, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Bright center
-        ctx.fillStyle = getTeamHighlightColor(unit.owner);
-        ctx.globalAlpha = 1.0;
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y + yOffset, 2, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.restore();
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 4;
+        ctx.globalAlpha = 0.9;
+        ctx.fillRect(screenPos.x - barWidth / 2, screenPos.y + yOffset, fillWidth, barHeight);
       }
+      
+      // Border around the bar
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.6;
+      ctx.strokeRect(screenPos.x - barWidth / 2, screenPos.y + yOffset, barWidth, barHeight);
+      
+      // If ability is ready, add a subtle pulse effect
+      if (cooldownPercent === 0) {
+        const time = Date.now() / 1000;
+        const pulse = Math.sin(time * 4) * 0.3 + 0.7;
+        
+        ctx.globalAlpha = pulse * 0.4;
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = color;
+        ctx.fillRect(screenPos.x - barWidth / 2, screenPos.y + yOffset, barWidth, barHeight);
+      }
+      
+      ctx.restore();
     }
   });
 }
@@ -1364,6 +1963,9 @@ function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
   if (!unit.particles || unit.particles.length === 0) return;
   
   const time = Date.now() / 1000;
+  // Convert unit-relative particle sizing into pixels for consistent scaling.
+  const baseParticleSize = metersToPixels(UNIT_PARTICLE_BASE_SIZE_METERS);
+  const baseTrailWidth = metersToPixels(UNIT_PARTICLE_TRAIL_WIDTH_METERS);
   
   unit.particles.forEach((particle, index) => {
     const screenPos = positionToPixels(particle.position);
@@ -1385,9 +1987,10 @@ function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
         // Safe division: trail.length is guaranteed to be > 1 from the outer check
         const alpha = 1 - (i / Math.max(particle.trail.length, 1));
         ctx.globalAlpha = alpha * 0.8;
-        ctx.lineWidth = 2.5 * alpha;
+        // Scale trail width with unit size so particle trails match larger units.
+        ctx.lineWidth = baseTrailWidth * alpha;
         ctx.shadowColor = particle.color;
-        ctx.shadowBlur = 6 * alpha;
+        ctx.shadowBlur = baseParticleSize * 2 * alpha;
         
         ctx.beginPath();
         ctx.moveTo(trailPos1.x, trailPos1.y);
@@ -1401,12 +2004,13 @@ function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
     
     // Add subtle size variation based on orbital position
     const sizeVariation = Math.sin(time * 3 + index * 0.5) * 0.3 + 1;
-    const particleSize = 3 * sizeVariation;
+    // Scale particle size with unit size while preserving the shimmer animation.
+    const particleSize = baseParticleSize * sizeVariation;
     
     // Draw particle with enhanced glow effect and color variation
     ctx.fillStyle = particle.color;
     ctx.shadowColor = particle.color;
-    ctx.shadowBlur = 14;
+    ctx.shadowBlur = baseParticleSize * 4.5;
     
     // Outer glow layer
     ctx.globalAlpha = 0.3;
@@ -1416,13 +2020,13 @@ function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
     
     // Main particle circle
     ctx.globalAlpha = 1.0;
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = baseParticleSize * 4;
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, particleSize, 0, Math.PI * 2);
     ctx.fill();
     
     // Draw brighter inner core with stronger glow
-    ctx.shadowBlur = 22;
+    ctx.shadowBlur = baseParticleSize * 7;
     ctx.globalAlpha = 0.9;
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, particleSize * 0.6, 0, Math.PI * 2);
@@ -1433,13 +2037,16 @@ function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
 }
 
 function drawSnaker(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
-  const segmentSize = 6;
+  // Scale snaker segments with unit size to keep the silhouette consistent.
+  const segmentSize = metersToPixels(UNIT_SIZE_METERS * 0.3);
+  const segmentSpacing = metersToPixels(UNIT_SIZE_METERS * 0.4);
+  const wobbleAmplitude = metersToPixels(UNIT_SIZE_METERS * 0.15);
   const segments = 5;
 
   for (let i = 0; i < segments; i++) {
-    const offset = i * 8;
+    const offset = i * segmentSpacing;
     const angle = (unit.distanceTraveled * 2 + i * 0.5) % (Math.PI * 2);
-    const wobble = Math.sin(angle) * 3;
+    const wobble = Math.sin(angle) * wobbleAmplitude;
 
     ctx.fillStyle = color;
     ctx.beginPath();
@@ -1533,20 +2140,73 @@ function drawShieldDome(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { 
   if (!unit.shieldActive) return;
 
   const radius = metersToPixels(unit.shieldActive.radius);
+  const time = Date.now() / 1000;
+  const pulse = Math.sin(time * 3) * 0.2 + 0.8;
+  const hexRotation = time * 0.5; // Pre-calculate rotation for all hexagons
 
   ctx.save();
+  
+  // Draw outer shield circle with pulsing effect
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
-  ctx.globalAlpha = 0.4;
+  ctx.globalAlpha = 0.4 * pulse;
   ctx.setLineDash([5, 5]);
 
   ctx.beginPath();
   ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
   ctx.stroke();
 
-  ctx.globalAlpha = 0.1;
+  // Draw hexagonal pattern inside the shield
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 0.3;
+  ctx.lineWidth = 1.5;
+  
+  const hexSize = radius * 0.25;
+  const hexCols = Math.min(Math.ceil(radius * 2 / (hexSize * Math.sqrt(3))), 8); // Limit to 8 columns
+  const hexRows = Math.min(Math.ceil(radius * 2 / (hexSize * 1.5)), 8); // Limit to 8 rows
+  
+  for (let row = -hexRows; row <= hexRows; row++) {
+    for (let col = -hexCols; col <= hexCols; col++) {
+      const x = screenPos.x + col * hexSize * Math.sqrt(3) + (row % 2) * hexSize * Math.sqrt(3) / 2;
+      const y = screenPos.y + row * hexSize * 1.5;
+      
+      // Only draw hexagons within shield radius
+      const dist = Math.sqrt((x - screenPos.x) ** 2 + (y - screenPos.y) ** 2);
+      if (dist > radius - hexSize) continue;
+      
+      // Draw hexagon with pre-calculated rotation
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i + hexRotation;
+        const hx = x + Math.cos(angle) * hexSize;
+        const hy = y + Math.sin(angle) * hexSize;
+        if (i === 0) {
+          ctx.moveTo(hx, hy);
+        } else {
+          ctx.lineTo(hx, hy);
+        }
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+  }
+
+  // Draw filled shield with gradient
+  ctx.globalAlpha = 0.15;
   ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
   ctx.fill();
+
+  // Draw bright inner ring
+  ctx.globalAlpha = 0.5 * pulse;
+  ctx.lineWidth = 3;
+  ctx.setLineDash([]);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(screenPos.x, screenPos.y, radius * 0.95, 0, Math.PI * 2);
+  ctx.stroke();
 
   ctx.restore();
 }
@@ -1556,15 +2216,61 @@ function drawHealPulse(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x
 
   const progress = (Date.now() - (unit.healPulseActive.endTime - 1000)) / 1000;
   const radius = metersToPixels(unit.healPulseActive.radius * progress);
+  const alpha = Math.max(0, 1 - progress);
 
   ctx.save();
-  ctx.strokeStyle = '#00ff00';
-  ctx.lineWidth = 3;
-  ctx.globalAlpha = Math.max(0, 1 - progress);
-
+  
+  // Draw multiple expanding healing waves
+  const healColor = 'oklch(0.70 0.20 140)';
+  
+  // Outer wave
+  ctx.strokeStyle = healColor;
+  ctx.lineWidth = 4;
+  ctx.globalAlpha = alpha * 0.6;
+  ctx.shadowColor = healColor;
+  ctx.shadowBlur = 15;
   ctx.beginPath();
   ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
   ctx.stroke();
+  
+  // Inner wave (slightly delayed)
+  if (progress > 0.2) {
+    const innerProgress = (progress - 0.2) / 0.8;
+    const innerRadius = metersToPixels(unit.healPulseActive.radius * innerProgress);
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, innerRadius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  
+  // Draw plus symbols around the pulse
+  const plusCount = 8;
+  ctx.globalAlpha = alpha * 0.7;
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  
+  for (let i = 0; i < plusCount; i++) {
+    const angle = (i / plusCount) * Math.PI * 2 + progress * Math.PI;
+    const x = screenPos.x + Math.cos(angle) * radius * 0.8;
+    const y = screenPos.y + Math.sin(angle) * radius * 0.8;
+    const size = 8;
+    
+    // Draw plus
+    ctx.beginPath();
+    ctx.moveTo(x - size, y);
+    ctx.lineTo(x + size, y);
+    ctx.moveTo(x, y - size);
+    ctx.lineTo(x, y + size);
+    ctx.stroke();
+  }
+  
+  // Draw filled glow in center
+  ctx.globalAlpha = alpha * 0.2;
+  ctx.fillStyle = healColor;
+  ctx.beginPath();
+  ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.restore();
 }
@@ -1579,15 +2285,58 @@ function drawMissileBarrage(ctx: CanvasRenderingContext2D, unit: Unit, screenPos
   ctx.shadowColor = color;
   ctx.shadowBlur = 8;
 
-  unit.missileBarrageActive.missiles.forEach((missile) => {
+  unit.missileBarrageActive.missiles.forEach((missile, index) => {
     const currentPos = {
       x: missile.position.x + (missile.target.x - missile.position.x) * progress,
       y: missile.position.y + (missile.target.y - missile.position.y) * progress,
     };
     const currentScreenPos = positionToPixels(currentPos);
-
+    
+    // Draw missile trail
+    if (progress > 0.1) {
+      const trailLength = 3; // Reduced from 5 for better performance
+      const trailProgress = Math.max(0, progress - 0.1);
+      
+      // Pre-calculate direction vector and step
+      const dx = missile.target.x - missile.position.x;
+      const dy = missile.target.y - missile.position.y;
+      const stepSize = 0.03; // Increased step for fewer calculations
+      
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      
+      ctx.beginPath();
+      for (let i = 0; i < trailLength; i++) {
+        const t = trailProgress - i * stepSize;
+        const trailPos = {
+          x: missile.position.x + dx * t,
+          y: missile.position.y + dy * t,
+        };
+        const trailScreenPos = positionToPixels(trailPos);
+        
+        if (i === 0) {
+          ctx.moveTo(trailScreenPos.x, trailScreenPos.y);
+        } else {
+          ctx.lineTo(trailScreenPos.x, trailScreenPos.y);
+        }
+      }
+      ctx.stroke();
+    }
+    
+    // Draw missile head
+    ctx.globalAlpha = 1.0;
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 12;
     ctx.beginPath();
-    ctx.arc(currentScreenPos.x, currentScreenPos.y, 3, 0, Math.PI * 2);
+    ctx.arc(currentScreenPos.x, currentScreenPos.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw missile glow
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.arc(currentScreenPos.x, currentScreenPos.y, 7, 0, Math.PI * 2);
     ctx.fill();
   });
 
@@ -1599,20 +2348,104 @@ function drawBombardment(ctx: CanvasRenderingContext2D, unit: Unit, color: strin
 
   const targetScreen = positionToPixels(unit.bombardmentActive.targetPos);
   const now = Date.now();
+  const time = now / 1000;
 
   if (now < unit.bombardmentActive.impactTime) {
+    // Targeting phase with enhanced reticle
+    const timeToImpact = unit.bombardmentActive.impactTime - now;
+    const urgency = Math.max(0, 1 - timeToImpact / 1000);
+    
     ctx.save();
     ctx.strokeStyle = color;
+    
+    // Rotating outer circle
+    ctx.save();
+    ctx.translate(targetScreen.x, targetScreen.y);
+    ctx.rotate(time * 2);
+    ctx.translate(-targetScreen.x, -targetScreen.y);
+    
     ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
     ctx.globalAlpha = 0.6;
-
+    ctx.setLineDash([10, 10]);
     ctx.beginPath();
     ctx.arc(targetScreen.x, targetScreen.y, metersToPixels(3), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    
+    // Inner targeting circle
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.8;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.arc(targetScreen.x, targetScreen.y, metersToPixels(2), 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Crosshairs
+    ctx.setLineDash([]);
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.7;
+    ctx.lineCap = 'round';
+    const crossSize = metersToPixels(3.5);
+    
+    ctx.beginPath();
+    ctx.moveTo(targetScreen.x - crossSize, targetScreen.y);
+    ctx.lineTo(targetScreen.x - crossSize * 0.3, targetScreen.y);
+    ctx.moveTo(targetScreen.x + crossSize * 0.3, targetScreen.y);
+    ctx.lineTo(targetScreen.x + crossSize, targetScreen.y);
+    ctx.moveTo(targetScreen.x, targetScreen.y - crossSize);
+    ctx.lineTo(targetScreen.x, targetScreen.y - crossSize * 0.3);
+    ctx.moveTo(targetScreen.x, targetScreen.y + crossSize * 0.3);
+    ctx.lineTo(targetScreen.x, targetScreen.y + crossSize);
+    ctx.stroke();
+    
+    // Pulsing center dot
+    const pulse = Math.sin(time * 8) * 0.3 + 0.7;
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10 * urgency;
+    ctx.beginPath();
+    ctx.arc(targetScreen.x, targetScreen.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Warning corners
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.8 * urgency;
+    const cornerSize = metersToPixels(3.5);
+    const cornerLength = 15;
+    
+    // Top-left
+    ctx.beginPath();
+    ctx.moveTo(targetScreen.x - cornerSize, targetScreen.y - cornerSize + cornerLength);
+    ctx.lineTo(targetScreen.x - cornerSize, targetScreen.y - cornerSize);
+    ctx.lineTo(targetScreen.x - cornerSize + cornerLength, targetScreen.y - cornerSize);
+    ctx.stroke();
+    
+    // Top-right
+    ctx.beginPath();
+    ctx.moveTo(targetScreen.x + cornerSize - cornerLength, targetScreen.y - cornerSize);
+    ctx.lineTo(targetScreen.x + cornerSize, targetScreen.y - cornerSize);
+    ctx.lineTo(targetScreen.x + cornerSize, targetScreen.y - cornerSize + cornerLength);
+    ctx.stroke();
+    
+    // Bottom-left
+    ctx.beginPath();
+    ctx.moveTo(targetScreen.x - cornerSize, targetScreen.y + cornerSize - cornerLength);
+    ctx.lineTo(targetScreen.x - cornerSize, targetScreen.y + cornerSize);
+    ctx.lineTo(targetScreen.x - cornerSize + cornerLength, targetScreen.y + cornerSize);
+    ctx.stroke();
+    
+    // Bottom-right
+    ctx.beginPath();
+    ctx.moveTo(targetScreen.x + cornerSize - cornerLength, targetScreen.y + cornerSize);
+    ctx.lineTo(targetScreen.x + cornerSize, targetScreen.y + cornerSize);
+    ctx.lineTo(targetScreen.x + cornerSize, targetScreen.y + cornerSize - cornerLength);
     ctx.stroke();
 
     ctx.restore();
   } else {
+    // Explosion phase
     const explosionProgress = (now - unit.bombardmentActive.impactTime) / (unit.bombardmentActive.endTime - unit.bombardmentActive.impactTime);
     const radius = metersToPixels(3 * (1 + explosionProgress * 0.5));
 
@@ -1883,28 +2716,58 @@ function drawHUD(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.fillStyle = COLORS.white;
   ctx.fillText(`Time: ${Math.floor(state.elapsedTime)}s`, 10, 40);
   
-  // Draw current formation indicator
-  if (state.currentFormation && state.currentFormation !== 'none') {
-    const formationName = getFormationName(state.currentFormation);
-    ctx.fillStyle = COLORS.telegraph;
-    ctx.fillText(`Formation: ${formationName}`, 10, 60);
-  } else if (state.elapsedTime < 15) {
-    // Show hint for first 15 seconds
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.font = '12px Space Grotesk, sans-serif';
-    ctx.fillText('Press F to cycle formations', 10, 60);
+  // Draw chess mode timer if enabled
+  if (state.settings.chessMode && state.chessMode) {
+    const turnElapsed = state.elapsedTime - state.chessMode.turnStartTime;
+    const turnRemaining = Math.max(0, state.chessMode.turnDuration - turnElapsed);
+    const secs = Math.floor(turnRemaining);
+    const phase = state.chessMode.turnPhase;
+    
+    // Color based on phase and time remaining
+    let timerColor = COLORS.photon;
+    if (phase === 'planning') {
+      if (secs <= 3) {
+        timerColor = 'oklch(0.62 0.28 25)'; // Red when running out
+      } else if (secs <= 5) {
+        timerColor = 'oklch(0.85 0.20 95)'; // Yellow warning
+      }
+    }
+    
+    ctx.save();
+    ctx.fillStyle = timerColor;
+    ctx.shadowColor = timerColor;
+    ctx.shadowBlur = 10;
+    ctx.font = '16px Orbitron, sans-serif';
+    ctx.fillText(`♟ ${phase.toUpperCase()}: ${secs}s`, 10, 60);
+    ctx.restore();
+    
     ctx.font = '14px Space Grotesk, sans-serif';
+  } else {
+    // Original formation display when chess mode is not active
+    // Draw current formation indicator
+    if (state.currentFormation && state.currentFormation !== 'none') {
+      const formationName = getFormationName(state.currentFormation);
+      ctx.fillStyle = COLORS.telegraph;
+      ctx.fillText(`Formation: ${formationName}`, 10, 60);
+    } else if (state.elapsedTime < 15) {
+      // Show hint for first 15 seconds
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.font = '12px Space Grotesk, sans-serif';
+      ctx.fillText('Press F to cycle formations', 10, 60);
+      ctx.font = '14px Space Grotesk, sans-serif';
+    }
   }
   
   // Draw patrol mode indicator
+  const patrolY = 80;
   if (state.patrolMode) {
     ctx.fillStyle = COLORS.photon;
-    ctx.fillText('PATROL MODE', 10, 80);
-  } else if (state.elapsedTime < 15) {
-    // Show hint for first 15 seconds
+    ctx.fillText('PATROL MODE', 10, patrolY);
+  } else if (state.elapsedTime < 15 && !state.settings.chessMode) {
+    // Show hint for first 15 seconds (only if not in chess mode)
     ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
     ctx.font = '12px Space Grotesk, sans-serif';
-    ctx.fillText('Hold P for patrol', 10, 80);
+    ctx.fillText('Hold P for patrol', 10, patrolY);
     ctx.font = '14px Space Grotesk, sans-serif';
   }
   
@@ -2167,78 +3030,97 @@ function drawSelectionRect(ctx: CanvasRenderingContext2D, rect: { x1: number; y1
 function drawAbilityCastPreview(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (!state.abilityCastPreview) return;
   
-  const { commandOrigin, dragVector } = state.abilityCastPreview;
+  const { dragVector } = state.abilityCastPreview;
   
-  // Get the selected units to determine color
-  const selectedUnit = state.units.find(unit => state.selectedUnits.has(unit.id));
-  if (!selectedUnit) return;
+  // Get all selected units
+  const selectedUnits = state.units.filter(unit => state.selectedUnits.has(unit.id));
+  if (selectedUnits.length === 0) return;
   
-  const color = state.players[selectedUnit.owner].color;
-  
-  // Convert world positions to screen positions
-  const originScreen = positionToPixels(commandOrigin);
-  const endPos = add(commandOrigin, dragVector);
-  const endScreen = positionToPixels(endPos);
-  
+  const color = state.players[selectedUnits[0].owner].color;
   const time = Date.now() / 1000;
   
   ctx.save();
   
-  // Draw the line from command origin to target
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 3;
-  ctx.globalAlpha = 0.8;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 12;
-  ctx.setLineDash([8, 4]);
-  ctx.lineDashOffset = time * 20; // Animate dashes
+  // Helper function to get command origin for a unit (last queued position or current position)
+  const getUnitCommandOrigin = (unit: Unit): Vector2 => {
+    for (let i = unit.commandQueue.length - 1; i >= 0; i--) {
+      const node = unit.commandQueue[i];
+      if (node.type === 'move' || node.type === 'attack-move') {
+        return node.position;
+      }
+    }
+    return unit.position;
+  };
   
-  ctx.beginPath();
-  ctx.moveTo(originScreen.x, originScreen.y);
-  ctx.lineTo(endScreen.x, endScreen.y);
-  ctx.stroke();
+  // Draw arrows from each selected unit
+  selectedUnits.forEach(unit => {
+    const unitOrigin = getUnitCommandOrigin(unit);
+    const originScreen = positionToPixels(unitOrigin);
+    const endPos = add(unitOrigin, dragVector);
+    const endScreen = positionToPixels(endPos);
+    
+    // Draw the line from unit's command origin to target
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.7; // Slightly more transparent since there may be multiple lines
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 12;
+    ctx.setLineDash([8, 4]);
+    ctx.lineDashOffset = time * 20; // Animate dashes
+    
+    ctx.beginPath();
+    ctx.moveTo(originScreen.x, originScreen.y);
+    ctx.lineTo(endScreen.x, endScreen.y);
+    ctx.stroke();
+    
+    ctx.setLineDash([]);
+    
+    // Draw pulsing dot at command origin
+    const originPulse = Math.sin(time * 3) * 0.3 + 0.7;
+    ctx.globalAlpha = 0.8 * originPulse;
+    ctx.shadowBlur = 15;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(originScreen.x, originScreen.y, 4 + originPulse * 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw arrow at the end
+    const dx = endScreen.x - originScreen.x;
+    const dy = endScreen.y - originScreen.y;
+    const angle = Math.atan2(dy, dx);
+    
+    ctx.globalAlpha = 0.95;
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = color;
+    
+    ctx.save();
+    ctx.translate(endScreen.x, endScreen.y);
+    ctx.rotate(angle);
+    
+    // Draw larger arrow for preview
+    const arrowLength = 16;
+    const arrowWidth = 10;
+    ctx.beginPath();
+    ctx.moveTo(arrowLength, 0);
+    ctx.lineTo(0, -arrowWidth);
+    ctx.lineTo(0, arrowWidth);
+    ctx.closePath();
+    ctx.fill();
+    
+    ctx.restore();
+  });
   
-  ctx.setLineDash([]);
+  // Draw distance indicator (only once, at the center of the first unit's arrow)
+  const firstUnit = selectedUnits[0];
+  const firstOrigin = getUnitCommandOrigin(firstUnit);
+  const firstOriginScreen = positionToPixels(firstOrigin);
+  const firstEndPos = add(firstOrigin, dragVector);
+  const firstEndScreen = positionToPixels(firstEndPos);
   
-  // Draw pulsing dot at command origin
-  const originPulse = Math.sin(time * 3) * 0.3 + 0.7;
-  ctx.globalAlpha = 0.9 * originPulse;
-  ctx.shadowBlur = 15;
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(originScreen.x, originScreen.y, 4 + originPulse * 2, 0, Math.PI * 2);
-  ctx.fill();
-  
-  // Draw arrow at the end
-  const dx = endScreen.x - originScreen.x;
-  const dy = endScreen.y - originScreen.y;
-  const angle = Math.atan2(dy, dx);
-  
-  ctx.globalAlpha = 0.95;
-  ctx.shadowBlur = 18;
-  ctx.fillStyle = color;
-  
-  ctx.save();
-  ctx.translate(endScreen.x, endScreen.y);
-  ctx.rotate(angle);
-  
-  // Draw larger arrow for preview
-  const arrowLength = 16;
-  const arrowWidth = 10;
-  ctx.beginPath();
-  ctx.moveTo(arrowLength, 0);
-  ctx.lineTo(0, -arrowWidth);
-  ctx.lineTo(0, arrowWidth);
-  ctx.closePath();
-  ctx.fill();
-  
-  ctx.restore();
-  
-  // Draw distance indicator
   const dragLen = distance({ x: 0, y: 0 }, dragVector);
   const midScreen = {
-    x: (originScreen.x + endScreen.x) / 2,
-    y: (originScreen.y + endScreen.y) / 2
+    x: (firstOriginScreen.x + firstEndScreen.x) / 2,
+    y: (firstOriginScreen.y + firstEndScreen.y) / 2
   };
   
   ctx.globalAlpha = 0.9;
@@ -2248,6 +3130,99 @@ function drawAbilityCastPreview(ctx: CanvasRenderingContext2D, state: GameState)
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(`${dragLen.toFixed(1)}m`, midScreen.x, midScreen.y - 15);
+  
+  ctx.restore();
+}
+
+function drawBaseAbilityPreview(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.baseAbilityPreview) return;
+  
+  const { basePosition, direction, baseId } = state.baseAbilityPreview;
+  
+  // Find the base to get the player color
+  const base = state.bases.find(b => b.id === baseId);
+  if (!base) return;
+  
+  const color = state.players[base.owner].color;
+  const time = Date.now() / 1000;
+  
+  ctx.save();
+  
+  // Draw a big arrow from the base in the laser direction
+  const baseScreen = positionToPixels(basePosition);
+  const endPos = add(basePosition, scale(direction, LASER_RANGE));
+  const endScreen = positionToPixels(endPos);
+  
+  // Draw laser beam preview line
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 6;
+  ctx.globalAlpha = 0.8;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 20;
+  ctx.setLineDash([12, 6]);
+  ctx.lineDashOffset = time * 30; // Animate dashes faster for laser
+  
+  ctx.beginPath();
+  ctx.moveTo(baseScreen.x, baseScreen.y);
+  ctx.lineTo(endScreen.x, endScreen.y);
+  ctx.stroke();
+  
+  ctx.setLineDash([]);
+  
+  // Draw pulsing glow at base
+  const basePulse = Math.sin(time * 4) * 0.3 + 0.7;
+  ctx.globalAlpha = 0.9 * basePulse;
+  ctx.shadowBlur = 25;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(baseScreen.x, baseScreen.y, 8 + basePulse * 3, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Draw large arrow at the end
+  const dx = endScreen.x - baseScreen.x;
+  const dy = endScreen.y - baseScreen.y;
+  const angle = Math.atan2(dy, dx);
+  
+  ctx.globalAlpha = 0.95;
+  ctx.shadowBlur = 25;
+  ctx.fillStyle = color;
+  
+  ctx.save();
+  ctx.translate(endScreen.x, endScreen.y);
+  ctx.rotate(angle);
+  
+  // Draw a bigger arrow for base ability
+  const arrowLength = 24;
+  const arrowWidth = 16;
+  ctx.beginPath();
+  ctx.moveTo(arrowLength, 0);
+  ctx.lineTo(-arrowLength * 0.3, -arrowWidth);
+  ctx.lineTo(-arrowLength * 0.3, arrowWidth);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Draw arrowhead outline for extra emphasis
+  ctx.strokeStyle = COLORS.white;
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.6;
+  ctx.stroke();
+  
+  ctx.restore();
+  
+  // Draw laser range indicator text
+  ctx.globalAlpha = 0.9;
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = COLORS.white;
+  ctx.font = 'bold 16px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  
+  const midScreen = {
+    x: (baseScreen.x + endScreen.x) / 2,
+    y: (baseScreen.y + endScreen.y) / 2
+  };
+  
+  ctx.fillText(`LASER ${LASER_RANGE.toFixed(0)}m`, midScreen.x, midScreen.y - 20);
   
   ctx.restore();
 }
@@ -2428,6 +3403,38 @@ function drawHitSparks(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
     ctx.fill();
+    
+    ctx.restore();
+  });
+}
+
+// Draw bounce particles for armored units
+function drawBounceParticles(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.bounceParticles) return;
+  if (!state.settings.enableParticleEffects) return; // Skip if particles disabled
+  
+  const now = Date.now();
+  state.bounceParticles.forEach((particle) => {
+    const age = (now - particle.createdAt) / 1000;
+    const progress = age / particle.lifetime;
+    const alpha = 1 - progress;
+    
+    const screenPos = positionToPixels(particle.position);
+    
+    // Draw tiny rectangle bullet (similar to projectile rendering)
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    
+    // Calculate rotation based on velocity
+    const angle = Math.atan2(particle.velocity.y, particle.velocity.x);
+    ctx.translate(screenPos.x, screenPos.y);
+    ctx.rotate(angle);
+    
+    // Draw tiny rectangle
+    const bulletWidth = 3;
+    const bulletHeight = 1.5;
+    ctx.fillStyle = particle.color;
+    ctx.fillRect(-bulletWidth / 2, -bulletHeight / 2, bulletWidth, bulletHeight);
     
     ctx.restore();
   });
@@ -2704,8 +3711,8 @@ function drawMinimap(ctx: CanvasRenderingContext2D, state: GameState, canvas: HT
   const minimapY = canvas.height - minimapSize - MINIMAP_PADDING;
   
   // Calculate arena bounds
-  const arenaWidth = canvas.width / 20; // meters
-  const arenaHeight = canvas.height / 20; // meters
+  const arenaWidth = ARENA_WIDTH_METERS; // meters
+  const arenaHeight = ARENA_HEIGHT_METERS; // meters
   
   ctx.save();
   
