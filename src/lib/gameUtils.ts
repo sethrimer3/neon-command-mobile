@@ -375,6 +375,7 @@ export function createMiningDepots(arenaWidth: number, arenaHeight: number): imp
         id: generateId(),
         position: depositPos,
         depotId: depotId,
+        workerIds: [],
       });
     }
     

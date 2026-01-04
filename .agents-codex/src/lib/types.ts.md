@@ -67,6 +67,7 @@ Represents a game unit with:
 - Progression: damageMultiplier, distanceTraveled, distanceCredit
 - Ability states: lineJumpTelegraph, shieldActive, cloaked, bombardmentActive, healPulseActive, missileBarrageActive
 - Visual effects: particles (optional array of Particle objects, currently used for marines)
+- Mining state: depot/deposit identifiers with cadence delays for alternating mining drone behavior
 
 ### Base Interface
 Represents a player base with:
@@ -117,6 +118,7 @@ The complete game state structure containing:
 - **matchStats**: Match statistics tracking
 - **matchTimeLimit**: Optional time limit for matches
 - **topographyLines**: Background decoration
+- **miningDragPreview**: Optional preview line from a mining depot to a snapped resource deposit
 
 ## Terminology
 - **Photons**: In-game currency/resource for training units
@@ -135,6 +137,7 @@ The complete game state structure containing:
 - Promotion system rewards long-distance movement with damage buffs
 - Queue bonus system encourages strategic planning (more queued moves = faster promotions)
 - Optional properties (with `?`) indicate temporary ability states
+- Resource deposits now track up to two mining drones via `workerIds`
 
 ### Known Issues
 None currently identified
@@ -157,6 +160,7 @@ None currently identified
 - **2026-01-01**: Added countdownSeconds to keep UI and audio updates in sync during match start.
 - **2026-01-07**: Updated the warrior ability name to Laser Beam to match the shared laser-only behavior and removed dash-specific unit state.
 - **2025-03-10**: Doubled base and unit size constants to scale up all core gameplay footprints.
+- **2025-03-17**: Added mining drag preview state, deposit worker lists, and mining cadence delay fields for drones.
 
 ## Watch Out For
 - Always use meters for game logic, only convert to pixels for rendering

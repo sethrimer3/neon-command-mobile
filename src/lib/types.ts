@@ -117,6 +117,7 @@ export interface Unit {
     depotId: string; // ID of the mining depot
     depositId: string; // ID of the resource deposit being mined
     atDepot: boolean; // true when at depot, false when at deposit
+    cadenceDelay?: number; // Optional delay to keep drones alternating when sharing a deposit
   };
 }
 
@@ -243,7 +244,7 @@ export interface ResourceDeposit {
   id: string;
   position: Vector2;
   depotId: string; // ID of the mining depot this deposit belongs to
-  workerId?: string; // ID of the mining drone working this deposit (only 1 per deposit)
+  workerIds?: string[]; // IDs of the mining drones working this deposit (max 2)
 }
 
 export interface MiningDepot {
@@ -927,6 +928,12 @@ export interface GameState {
     startTime: number;
     endPosition?: Vector2;
   }>;
+
+  // Mining drag preview for snap-to-deposit feedback
+  miningDragPreview?: {
+    depotId: string;
+    depositId: string;
+  };
   
   // Double-tap tracking
   lastTapTime?: number;

@@ -109,6 +109,8 @@ Multiple functions for unit abilities:
 - Bases can move but slowly (for gameplay balance)
 - Spawn rally points are clamped inside the 1m boundary to prevent off-screen movement targets
 - Ability commands execute immediately when dequeued, using current position if the unit drifted from the queued anchor
+- Mining income now counts every active worker id per deposit, and dead drones are pruned from deposit worker lists
+- Mining drones can wait briefly using cadence delays so paired drones alternate between depot and deposit
 
 ### Known Issues
 - None currently identified
@@ -135,6 +137,7 @@ Multiple functions for unit abilities:
 - **2026-01-05**: Executed queued abilities from current position to avoid stalled ability commands
 - **2026-01-07**: Removed the warrior's execute dash extra effect so warriors only trigger the shared laser ability and cleaned up dash timing logic
 - **2025-03-10**: Scaled particle orbit distance and orbital forces with unit size to keep unit-following particles proportional after size changes
+- **2025-03-17**: Updated mining income and mining drone cadence handling to support two drones per deposit
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds

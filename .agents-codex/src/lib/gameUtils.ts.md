@@ -149,6 +149,7 @@ Provides core mathematical utility functions for vector operations, coordinate t
 - Viewport scale swaps arena dimensions when the playfield is rotated for desktop
 - normalize() handles zero-length vectors gracefully (returns zero vector)
 - generateId() is NOT cryptographically secure - only for game entity IDs
+- Mining depot creation seeds each resource deposit with an empty `workerIds` array for mining drones
 
 ### Known Issues
 - None currently identified
@@ -170,6 +171,7 @@ Provides core mathematical utility functions for vector operations, coordinate t
 - Added viewport offset/dimension tracking to support letterboxed rendering
 - Added desktop rotation support with portrait-stable gameplay coordinates
 - **2026-01-06**: Switched desktop rotation to counter-clockwise and updated inverse coordinate mapping for rotated input
+- **2025-03-17**: Initialized mining depot resource deposits with `workerIds` arrays to support multiple drones
 
 ## Watch Out For
 - Always normalize vectors before using them as directions (especially for movement)

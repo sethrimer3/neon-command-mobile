@@ -1400,16 +1400,17 @@ function updateIncome(state: GameState, deltaTime: number): void {
     state.miningDepots.forEach((depot) => {
       if (depot.owner === playerIndex) {
         depot.deposits.forEach((deposit) => {
-          if (deposit.workerId) {
-            // Check if the worker is still alive
-            const worker = state.units.find(u => u.id === deposit.workerId);
-            if (worker) {
-              miningIncome += 2; // Each drone adds +2 income
-            } else {
-              // Worker died, clear the reference
-              deposit.workerId = undefined;
-            }
-          }
+          const activeWorkers = (deposit.workerIds ?? []).filter((workerId) => {
+            // Check if each worker is still alive
+            const worker = state.units.find(u => u.id === workerId);
+            return !!worker;
+          });
+
+          // Update worker list to remove dead drones
+          deposit.workerIds = activeWorkers;
+
+          // Each active drone adds +2 income
+          miningIncome += activeWorkers.length * 2;
         });
       }
     });
@@ -1561,6 +1562,14 @@ function updateUnits(state: GameState, deltaTime: number): void {
         const deposit = depot?.deposits.find(d => d.id === unit.miningState?.depositId);
         
         if (depot && deposit) {
+          // Hold briefly to keep paired drones in alternating cadence
+          if (unit.miningState.cadenceDelay && unit.miningState.cadenceDelay > 0) {
+            unit.miningState.cadenceDelay = Math.max(0, unit.miningState.cadenceDelay - deltaTime);
+            unit.stuckTimer = 0;
+            unit.lastPosition = undefined;
+            return;
+          }
+
           if (unit.miningState.atDepot) {
             // Go to deposit
             unit.commandQueue.push({ type: 'move', position: deposit.position });

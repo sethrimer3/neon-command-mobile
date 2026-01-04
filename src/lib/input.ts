@@ -45,6 +45,7 @@ const TAP_TIME_MS = 300;
 const HOLD_TIME_MS = 200;
 const DOUBLE_TAP_TIME_MS = 400; // Time window for double-tap detection
 const DOUBLE_TAP_DISTANCE_PX = 50; // Max distance between taps to count as double-tap
+const MINING_DEPOT_CANCEL_RADIUS = 1.0; // Meters to allow canceling mining drone creation near depot
 
 function addVisualFeedback(state: GameState, type: 'tap' | 'drag', position: { x: number; y: number }, endPosition?: { x: number; y: number }): void {
   if (!state.visualFeedback) {
@@ -196,6 +197,21 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
     if (touchState.isDragging && state.selectedUnits.size > 0 && !touchState.touchedBase && !touchState.touchedMovementDot) {
       updateAbilityCastPreview(state, dx, dy, touchState.startPos);
     }
+
+    // Update mining depot drag preview so the line snaps toward the closest available deposit
+    if (touchState.isDragging && touchState.touchedDepot && touchState.touchedDepotPos) {
+      const endWorldPos = pixelsToPosition({ x, y });
+      const snappedDeposit = findSnappedResourceDeposit(touchState.touchedDepot, touchState.touchedDepotPos, endWorldPos);
+
+      if (snappedDeposit) {
+        state.miningDragPreview = {
+          depotId: touchState.touchedDepot.id,
+          depositId: snappedDeposit.id,
+        };
+      } else {
+        delete state.miningDragPreview;
+      }
+    }
     
     // Update base ability preview when base is selected and dragging (but not from the base itself)
     updateBaseAbilityPreview(state, touchState.isDragging, touchState.touchedBase, touchState.startPos, dx, dy);
@@ -295,6 +311,7 @@ export function handleTouchEnd(e: TouchEvent, state: GameState, canvas: HTMLCanv
     
     // Clear all input-related previews when touch is released
     clearBaseAbilityPreview(state);
+    delete state.miningDragPreview;
 
     touchStates.delete(touch.identifier);
   });
@@ -317,12 +334,40 @@ function findTouchedMiningDepot(state: GameState, worldPos: { x: number; y: numb
   });
 }
 
-function findTouchedResourceDeposit(depot: import('./types').MiningDepot, worldPos: { x: number; y: number }): import('./types').ResourceDeposit | undefined {
-  const DEPOSIT_SIZE = 0.6;
-  return depot.deposits.find((deposit) => {
-    const dist = distance(deposit.position, worldPos);
-    return dist < DEPOSIT_SIZE;
+function findSnappedResourceDeposit(
+  depot: import('./types').MiningDepot,
+  startWorldPos: Vector2,
+  endWorldPos: Vector2
+): import('./types').ResourceDeposit | undefined {
+  const dragVector = subtract(endWorldPos, startWorldPos);
+  const dragDistance = distance({ x: 0, y: 0 }, dragVector);
+
+  // Ignore tiny drags so we don't snap to an arbitrary deposit
+  if (dragDistance <= 0.01) {
+    return undefined;
+  }
+
+  const dragDirection = normalize(dragVector);
+  let bestDeposit: import('./types').ResourceDeposit | undefined;
+  let bestAngle = Number.POSITIVE_INFINITY;
+
+  depot.deposits.forEach((deposit) => {
+    const workerCount = deposit.workerIds?.length ?? 0;
+    if (workerCount >= 2) {
+      return;
+    }
+
+    const depositDirection = normalize(subtract(deposit.position, depot.position));
+    const dot = Math.max(-1, Math.min(1, dragDirection.x * depositDirection.x + dragDirection.y * depositDirection.y));
+    const angle = Math.acos(dot);
+
+    if (angle < bestAngle) {
+      bestAngle = angle;
+      bestDeposit = deposit;
+    }
   });
+
+  return bestDeposit;
 }
 
 // Helper to find the currently selected base for a given player
@@ -498,8 +543,13 @@ function handleSetRallyPoint(state: GameState, base: Base, swipe: { x: number; y
 }
 
 function handleMiningDepotDrag(state: GameState, depot: import('./types').MiningDepot, startWorldPos: Vector2, endWorldPos: Vector2, playerIndex: number): void {
-  // Check if drag ended on a resource deposit
-  const targetDeposit = findTouchedResourceDeposit(depot, endWorldPos);
+  // Allow canceling the mining drone if released near the depot
+  if (distance(endWorldPos, depot.position) <= MINING_DEPOT_CANCEL_RADIUS) {
+    return;
+  }
+
+  // Snap to the closest deposit in the drag direction that is still available
+  const targetDeposit = findSnappedResourceDeposit(depot, startWorldPos, endWorldPos);
   
   if (!targetDeposit) {
     // No valid deposit at end position
@@ -507,7 +557,8 @@ function handleMiningDepotDrag(state: GameState, depot: import('./types').Mining
   }
   
   // Check if deposit already has a worker
-  if (targetDeposit.workerId) {
+  const currentWorkers = targetDeposit.workerIds ?? [];
+  if (currentWorkers.length >= 2) {
     soundManager.playError();
     return;
   }
@@ -524,6 +575,18 @@ function handleMiningDepotDrag(state: GameState, depot: import('./types').Mining
   
   // Create mining drone at depot position
   const droneId = generateId();
+  const existingWorkerId = currentWorkers[0];
+  const existingWorker = existingWorkerId ? state.units.find((unit) => unit.id === existingWorkerId) : undefined;
+  const distanceToDepot = existingWorker ? distance(existingWorker.position, depot.position) : 0;
+  const distanceToDeposit = existingWorker ? distance(existingWorker.position, targetDeposit.position) : 0;
+  const shouldStartAtDepot = existingWorker ? distanceToDepot <= distanceToDeposit : true;
+
+  // Nudge the existing worker so paired drones stay in alternating cadence.
+  if (existingWorker?.miningState) {
+    existingWorker.miningState.cadenceDelay = 0.5;
+  }
+
+  const initialTarget = shouldStartAtDepot ? targetDeposit.position : depot.position;
   const drone: Unit = {
     id: droneId,
     type: 'miningDrone',
@@ -532,7 +595,7 @@ function handleMiningDepotDrag(state: GameState, depot: import('./types').Mining
     hp: UNIT_DEFINITIONS.miningDrone.hp,
     maxHp: UNIT_DEFINITIONS.miningDrone.hp,
     armor: UNIT_DEFINITIONS.miningDrone.armor,
-    commandQueue: [{ type: 'move', position: targetDeposit.position }],
+    commandQueue: [{ type: 'move', position: initialTarget }],
     damageMultiplier: 1.0,
     distanceTraveled: 0,
     distanceCredit: 0,
@@ -541,12 +604,13 @@ function handleMiningDepotDrag(state: GameState, depot: import('./types').Mining
     miningState: {
       depotId: depot.id,
       depositId: targetDeposit.id,
-      atDepot: true,
+      atDepot: shouldStartAtDepot,
+      cadenceDelay: shouldStartAtDepot ? 0 : 0.5,
     },
   };
   
   state.units.push(drone);
-  targetDeposit.workerId = droneId;
+  targetDeposit.workerIds = [...currentWorkers, droneId];
   
   // Income rate will be updated automatically by updateIncome function
   

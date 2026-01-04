@@ -516,6 +516,23 @@ function drawMiningDepots(ctx: CanvasRenderingContext2D, state: GameState): void
     const depotScreenPos = positionToPixels(depot.position);
     const depotWidth = metersToPixels(DEPOT_SIZE);
     const depotHeight = metersToPixels(DEPOT_SIZE);
+
+    // Draw the snapped mining preview line when dragging from this depot
+    if (state.miningDragPreview?.depotId === depot.id) {
+      const previewDeposit = depot.deposits.find((deposit) => deposit.id === state.miningDragPreview?.depositId);
+      if (previewDeposit) {
+        const depositScreenPos = positionToPixels(previewDeposit.position);
+        ctx.save();
+        ctx.strokeStyle = state.players[depot.owner].color;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(depotScreenPos.x, depotScreenPos.y);
+        ctx.lineTo(depositScreenPos.x, depositScreenPos.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
     
     // Draw the depot building
     ctx.save();
@@ -550,8 +567,13 @@ function drawMiningDepots(ctx: CanvasRenderingContext2D, state: GameState): void
       ctx.save();
       
       // Deposit is a hexagon shape
-      const isOccupied = !!deposit.workerId;
-      const depositColor = isOccupied ? 'oklch(0.85 0.20 95)' : 'oklch(0.50 0.15 95)'; // Yellow photon color
+      const workerCount = deposit.workerIds?.length ?? 0;
+      const isOccupied = workerCount > 0;
+      const depositColor = workerCount >= 2
+        ? 'oklch(0.90 0.22 95)'
+        : isOccupied
+          ? 'oklch(0.85 0.20 95)'
+          : 'oklch(0.50 0.15 95)'; // Yellow photon color
       
       ctx.fillStyle = depositColor;
       ctx.strokeStyle = depotColor;

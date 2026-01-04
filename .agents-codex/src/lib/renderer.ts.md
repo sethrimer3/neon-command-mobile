@@ -104,6 +104,8 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - All positions must be converted from meters to pixels before drawing
 - Playfield borders align to the letterboxed arena viewport offset
 - LOD distance calculations use the arena viewport center, not the full canvas
+- Mining depots render a dashed preview line when `state.miningDragPreview` targets that depot
+- Resource deposits adjust glow/brightness based on 0/1/2 assigned worker drones
 
 ### Rendering Optimizations
 - Clears only once per frame
@@ -146,6 +148,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - **2026-01-03**: Anchored unit LOD calculations to the arena viewport center
 - **2026-01-06**: Sized playfield borders using viewport dimensions to match rotated desktop bounds
 - **2025-03-10**: Scaled projectile and unit-attached particle rendering using meter-based sizing tied to unit size constants
+- **2025-03-17**: Added mining drag preview lines and updated deposit colors for two-worker occupancy states
 
 ## Watch Out For
 - Always convert game positions to pixels before drawing

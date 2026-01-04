@@ -100,6 +100,8 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - Ability command queue nodes clone their origin/direction vectors to avoid later mutation
 - Coordinates converted from pixels to game meters
 - Touch events prevented to avoid browser scrolling
+- Mining depot drags snap toward the closest available deposit by drag angle, with a preview line stored in `state.miningDragPreview`
+- Mining drone creation can be canceled by releasing near the depot, and deposits cap at two drones with cadence delays for staggering
 
 ### Input Modes
 1. **Tap**: Select units/bases
@@ -149,6 +151,7 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - **2026-01-03**: Anchored split-screen input detection to the letterboxed arena viewport center
 - **2026-01-05**: Cloned ability command origin/direction vectors to keep queued ability anchors stable
 - **2026-01-06**: Derived ability drag vectors from world-space positions to respect rotated desktop input
+- **2025-03-17**: Added mining depot snap-to-deposit drag logic, preview state updates, and cancellation behavior near depots
 
 ## Watch Out For
 - Always prevent default on touch events to avoid scrolling
