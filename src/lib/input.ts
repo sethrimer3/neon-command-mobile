@@ -17,7 +17,7 @@ import {
   PIXELS_PER_METER,
   Vector2,
 } from './types';
-import { distance, normalize, scale, add, subtract, pixelsToPosition, positionToPixels, getViewportOffset, getViewportDimensions } from './gameUtils';
+import { distance, normalize, scale, add, subtract, pixelsToPosition, positionToPixels, getViewportOffset, getViewportDimensions, pixelsToMeters } from './gameUtils';
 import { spawnUnit } from './simulation';
 import { soundManager } from './sound';
 import { applyFormation } from './formations';
@@ -31,6 +31,7 @@ interface TouchState {
   selectedUnitsSnapshot: Set<string>;
   selectionRect?: { x1: number; y1: number; x2: number; y2: number };
   touchedBase?: Base;
+  touchedBaseWasSelected?: boolean; // Track if the touched base was already selected
   touchedMovementDot?: { base: Base; dotPos: { x: number; y: number } };
 }
 
@@ -122,6 +123,7 @@ export function handleTouchStart(e: TouchEvent, state: GameState, canvas: HTMLCa
       isDragging: false,
       selectedUnitsSnapshot: new Set(state.selectedUnits),
       touchedBase,
+      touchedBaseWasSelected: touchedBase?.isSelected || false,
       touchedMovementDot: touchedDot,
     });
   });
@@ -211,13 +213,19 @@ export function handleTouchEnd(e: TouchEvent, state: GameState, canvas: HTMLCanv
         state.selectedUnits.clear();
       }
     } else if (touchState.touchedBase && touchState.isDragging && dist > SWIPE_THRESHOLD_PX) {
-      handleBaseSwipe(state, touchState.touchedBase, { x: dx, y: dy }, playerIndex);
+      // If base was already selected, dragging from it sets rally point
+      // If base was not selected, dragging from it spawns units
+      if (touchState.touchedBaseWasSelected) {
+        handleSetRallyPoint(state, touchState.touchedBase, { x: dx, y: dy });
+      } else {
+        handleBaseSwipe(state, touchState.touchedBase, { x: dx, y: dy }, playerIndex);
+      }
     } else if (touchState.isDragging && dist > SWIPE_THRESHOLD_PX) {
       const selectedBase = getSelectedBase(state, playerIndex);
 
-      // Allow swipe-to-spawn anywhere when the player's base is selected (but no units selected)
-      if (selectedBase && state.selectedUnits.size === 0) {
-        handleBaseSwipe(state, selectedBase, { x: dx, y: dy }, playerIndex);
+      // When base is selected and drag is NOT from the base, queue the base's ability
+      if (selectedBase && state.selectedUnits.size === 0 && !touchState.touchedBase) {
+        handleBaseAbilityDrag(state, selectedBase, { x: dx, y: dy }, touchState.startPos, playerIndex);
       } else if (state.selectedUnits.size > 0 && !touchState.touchedBase && !touchState.touchedMovementDot) {
         // Handle ability drag for selected units
         const dragVectorPixels = { x: dx, y: dy };
@@ -389,6 +397,46 @@ function fireLaser(state: GameState, base: Base, direction: { x: number; y: numb
   });
 }
 
+// Handle drag from anywhere (not from base) when base is selected - this queues the base's ability
+function handleBaseAbilityDrag(state: GameState, base: Base, swipe: { x: number; y: number }, startPos: { x: number; y: number }, playerIndex: number): void {
+  const swipeLen = Math.sqrt(swipe.x * swipe.x + swipe.y * swipe.y);
+  if (swipeLen < SWIPE_THRESHOLD_PX) return;
+
+  if (base.laserCooldown > 0) {
+    soundManager.playError();
+    return;
+  }
+
+  const swipeDir = normalize({ x: swipe.x, y: -swipe.y });
+
+  soundManager.playLaserFire();
+  fireLaser(state, base, swipeDir);
+  base.laserCooldown = LASER_COOLDOWN;
+  
+  // Send laser command to multiplayer backend for online games
+  if (state.vsMode === 'online' && state.multiplayerManager) {
+    sendBaseLaserCommand(state.multiplayerManager, base.id, swipeDir).catch(err => 
+      console.warn('Failed to send laser command:', err)
+    );
+  }
+}
+
+// Handle setting rally point by dragging from a selected base
+function handleSetRallyPoint(state: GameState, base: Base, swipe: { x: number; y: number }): void {
+  const swipeLen = Math.sqrt(swipe.x * swipe.x + swipe.y * swipe.y);
+  if (swipeLen < SWIPE_THRESHOLD_PX) return;
+
+  // Convert swipe from pixels to world coordinates using proper scaling
+  const swipeWorldX = pixelsToMeters(swipe.x);
+  const swipeWorldY = -pixelsToMeters(swipe.y); // Flip Y since screen Y is inverted
+  
+  // Set rally point based on swipe direction and distance
+  const newRallyPoint = add(base.position, { x: swipeWorldX, y: swipeWorldY });
+  base.rallyPoint = newRallyPoint;
+  
+  soundManager.playUnitMove();
+}
+
 function handleBaseSwipe(state: GameState, base: Base, swipe: { x: number; y: number }, playerIndex: number): void {
   const swipeLen = Math.sqrt(swipe.x * swipe.x + swipe.y * swipe.y);
   if (swipeLen < SWIPE_THRESHOLD_PX) return;
@@ -397,30 +445,25 @@ function handleBaseSwipe(state: GameState, base: Base, swipe: { x: number; y: nu
   const angleDeg = (angle * 180) / Math.PI;
 
   let spawnType: UnitType | null = null;
-  let rallyOffset = { x: 0, y: 0 };
 
   if (angleDeg >= -45 && angleDeg < 45) {
     spawnType = state.settings.unitSlots.right;
-    rallyOffset = { x: 8, y: 0 };
   } else if (angleDeg >= 45 && angleDeg < 135) {
     spawnType = state.settings.unitSlots.up;
-    rallyOffset = { x: 0, y: -8 };
   } else if (angleDeg < -45 && angleDeg >= -135) {
     spawnType = state.settings.unitSlots.down;
-    rallyOffset = { x: 0, y: 8 };
   } else {
     spawnType = state.settings.unitSlots.left;
-    rallyOffset = { x: -8, y: 0 };
   }
 
-  const rallyPos = add(base.position, rallyOffset);
+  // Use the base's rally point instead of directional offsets
   if (spawnType) {
-    const success = spawnUnit(state, playerIndex, spawnType, base.position, rallyPos);
+    const success = spawnUnit(state, playerIndex, spawnType, base.position, base.rallyPoint);
     if (!success) {
       soundManager.playError();
     } else if (state.vsMode === 'online' && state.multiplayerManager) {
       // Send spawn command to multiplayer backend
-      sendSpawnCommand(state.multiplayerManager, playerIndex, spawnType, base.id, rallyPos).catch(err => 
+      sendSpawnCommand(state.multiplayerManager, playerIndex, spawnType, base.id, base.rallyPoint).catch(err => 
         console.warn('Failed to send spawn command:', err)
       );
     }
@@ -758,6 +801,7 @@ export function handleMouseDown(e: MouseEvent, state: GameState, canvas: HTMLCan
     isDragging: false,
     selectedUnitsSnapshot: new Set(state.selectedUnits),
     touchedBase,
+    touchedBaseWasSelected: touchedBase?.isSelected || false,
     touchedMovementDot: touchedDot,
   };
 }
@@ -869,13 +913,19 @@ export function handleMouseUp(e: MouseEvent, state: GameState, canvas: HTMLCanva
       state.selectedUnits.clear();
     }
   } else if (mouseState.touchedBase && mouseState.isDragging && dist > SWIPE_THRESHOLD_PX) {
-    handleBaseSwipe(state, mouseState.touchedBase, { x: dx, y: dy }, playerIndex);
+    // If base was already selected, dragging from it sets rally point
+    // If base was not selected, dragging from it spawns units
+    if (mouseState.touchedBaseWasSelected) {
+      handleSetRallyPoint(state, mouseState.touchedBase, { x: dx, y: dy });
+    } else {
+      handleBaseSwipe(state, mouseState.touchedBase, { x: dx, y: dy }, playerIndex);
+    }
   } else if (mouseState.isDragging && dist > SWIPE_THRESHOLD_PX) {
     const selectedBase = getSelectedBase(state, playerIndex);
 
-    // Allow swipe-to-spawn anywhere when the player's base is selected
-    if (selectedBase && state.selectedUnits.size === 0) {
-      handleBaseSwipe(state, selectedBase, { x: dx, y: dy }, playerIndex);
+    // When base is selected and drag is NOT from the base, queue the base's ability
+    if (selectedBase && state.selectedUnits.size === 0 && !mouseState.touchedBase) {
+      handleBaseAbilityDrag(state, selectedBase, { x: dx, y: dy }, mouseState.startPos, playerIndex);
     }
   } else if (elapsed < TAP_TIME_MS && dist < 10) {
     handleTap(state, { x, y }, canvas, playerIndex);

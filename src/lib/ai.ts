@@ -39,15 +39,8 @@ function performAIActions(state: GameState, aiPlayer: number = 1): void {
   const def = UNIT_DEFINITIONS[chosenType];
 
   if (aiPhotons >= def.cost) {
-    const rallyOffsets = [
-      { x: -8, y: 0 },
-      { x: 0, y: -8 },
-      { x: 0, y: 8 },
-    ];
-    const rallyOffset = rallyOffsets[Math.floor(Math.random() * rallyOffsets.length)];
-    const rallyPos = add(aiBase.position, rallyOffset);
-
-    spawnUnit(state, aiPlayer, chosenType, aiBase.position, rallyPos);
+    // Use the base's rally point instead of random offsets
+    spawnUnit(state, aiPlayer, chosenType, aiBase.position, aiBase.rallyPoint);
   }
 
   const aiUnits = state.units.filter((u) => u.owner === aiPlayer);

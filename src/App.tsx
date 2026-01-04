@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useKV } from './hooks/useKV';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS, FactionType, FACTION_DEFINITIONS, BASE_TYPE_DEFINITIONS, BaseType, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS } from './lib/types';
-import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, isPortraitOrientation, updateViewportScale } from './lib/gameUtils';
+import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, isPortraitOrientation, updateViewportScale, calculateDefaultRallyPoint } from './lib/gameUtils';
 import { updateGame } from './lib/simulation';
 import { updateAI } from './lib/ai';
 import { renderGame } from './lib/renderer';
@@ -1690,6 +1690,7 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
         maxHp: playerBaseTypeDef.hp,
         armor: playerBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.player, basePositions.enemy),
         isSelected: false,
         laserCooldown: 0,
         faction: player1Faction,
@@ -1704,6 +1705,7 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
         maxHp: playerBaseTypeDef.hp,
         armor: playerBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.enemy, basePositions.player),
         isSelected: false,
         laserCooldown: 0,
         faction: player2Faction,
@@ -1818,6 +1820,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
         maxHp: playerBaseTypeDef.hp,
         armor: playerBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.player, basePositions.enemy),
         isSelected: false,
         laserCooldown: 0,
         faction: settings.playerFaction || 'radiant',
@@ -1832,6 +1835,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
         maxHp: enemyBaseTypeDef.hp,
         armor: enemyBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.enemy, basePositions.player),
         isSelected: false,
         laserCooldown: 0,
         faction: settings.enemyFaction || 'radiant',
@@ -1906,6 +1910,7 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
         maxHp: playerBaseTypeDef.hp,
         armor: playerBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.player, basePositions.enemy),
         isSelected: false,
         laserCooldown: 0,
         faction: settings.playerFaction || 'radiant',
@@ -1920,6 +1925,7 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
         maxHp: enemyBaseTypeDef.hp,
         armor: enemyBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.enemy, basePositions.player),
         isSelected: false,
         laserCooldown: 0,
         faction: settings.enemyFaction || 'radiant',
@@ -1983,6 +1989,7 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
         maxHp: playerBaseTypeDef.hp,
         armor: playerBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.player, basePositions.enemy),
         isSelected: false,
         laserCooldown: 0,
         faction: 'radiant',
@@ -1997,6 +2004,7 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
         maxHp: enemyBaseTypeDef.hp,
         armor: enemyBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.enemy, basePositions.player),
         isSelected: false,
         laserCooldown: 0,
         faction: 'radiant',
@@ -2076,6 +2084,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
         maxHp: playerBaseTypeDef.hp,
         armor: playerBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.player, basePositions.enemy),
         isSelected: false,
         laserCooldown: 0,
         faction: 'radiant',
@@ -2090,6 +2099,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
         maxHp: enemyBaseTypeDef.hp,
         armor: enemyBaseTypeDef.armor,
         movementTarget: null,
+        rallyPoint: calculateDefaultRallyPoint(basePositions.enemy, basePositions.player),
         isSelected: false,
         laserCooldown: 0,
         faction: 'radiant',

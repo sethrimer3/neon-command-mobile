@@ -1060,6 +1060,44 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
         ctx.fill();
       }
       
+      // Draw rally point flag for selected bases
+      if (base.isSelected) {
+        const rallyScreen = positionToPixels(base.rallyPoint);
+        const flagHeight = 20;
+        const flagWidth = 15;
+        
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.8;
+        
+        // Draw flag pole
+        ctx.beginPath();
+        ctx.moveTo(rallyScreen.x, rallyScreen.y);
+        ctx.lineTo(rallyScreen.x, rallyScreen.y - flagHeight);
+        ctx.stroke();
+        
+        // Draw flag
+        ctx.beginPath();
+        ctx.moveTo(rallyScreen.x, rallyScreen.y - flagHeight);
+        ctx.lineTo(rallyScreen.x + flagWidth, rallyScreen.y - flagHeight + flagWidth / 3);
+        ctx.lineTo(rallyScreen.x, rallyScreen.y - flagHeight + flagWidth * 2 / 3);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Draw line from base to rally point
+        ctx.globalAlpha = 0.3;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(screenPos.x, screenPos.y);
+        ctx.lineTo(rallyScreen.x, rallyScreen.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        ctx.restore();
+      }
+      
       drawBaseHealthBar(ctx, base, screenPos, size, color, state);
     }
     

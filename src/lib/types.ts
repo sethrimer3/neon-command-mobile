@@ -220,6 +220,7 @@ export interface Base {
   maxHp: number;
   armor: number; // Reduces damage from ranged attacks
   movementTarget: Vector2 | null;
+  rallyPoint: Vector2; // Rally point where spawned units will go
   isSelected: boolean;
   laserCooldown: number;
   laserBeam?: { endTime: number; direction: Vector2 }; // Visual effect for laser
