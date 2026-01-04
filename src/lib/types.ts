@@ -90,6 +90,7 @@ export interface Unit {
   distanceCredit: number;
   abilityCooldown: number;
   dashExecuting?: boolean;
+  dashEndTime?: number; // Timestamp when dash animation should end
   lineJumpTelegraph?: { startTime: number; endPos: Vector2; direction: Vector2 };
   shieldActive?: { endTime: number; radius: number };
   cloaked?: { endTime: number };
