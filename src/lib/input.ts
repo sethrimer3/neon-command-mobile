@@ -299,8 +299,8 @@ export function handleTouchEnd(e: TouchEvent, state: GameState, canvas: HTMLCanv
       delete state.abilityCastPreview;
     }
     
-    // Always clear base ability preview when touch is released
-    delete state.baseAbilityPreview;
+    // Clear all input-related previews when touch is released
+    clearInputPreviews(state);
 
     touchStates.delete(touch.identifier);
   });
@@ -1047,10 +1047,15 @@ export function handleMouseUp(e: MouseEvent, state: GameState, canvas: HTMLCanva
     delete state.abilityCastPreview;
   }
   
-  // Always clear base ability preview when mouse is released
-  delete state.baseAbilityPreview;
+  // Clear all input-related previews when mouse is released
+  clearInputPreviews(state);
 
   mouseState = null;
+}
+
+// Helper function to clear all input-related previews
+function clearInputPreviews(state: GameState): void {
+  delete state.baseAbilityPreview;
 }
 
 export function getActiveSelectionRect(): { x1: number; y1: number; x2: number; y2: number } | null {

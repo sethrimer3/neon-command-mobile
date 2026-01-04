@@ -2956,10 +2956,10 @@ function drawAbilityCastPreview(ctx: CanvasRenderingContext2D, state: GameState)
 function drawBaseAbilityPreview(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (!state.baseAbilityPreview) return;
   
-  const { basePosition, direction } = state.baseAbilityPreview;
+  const { basePosition, direction, baseId } = state.baseAbilityPreview;
   
   // Find the base to get the player color
-  const base = state.bases.find(b => b.id === state.baseAbilityPreview!.baseId);
+  const base = state.bases.find(b => b.id === baseId);
   if (!base) return;
   
   const color = state.players[base.owner].color;
