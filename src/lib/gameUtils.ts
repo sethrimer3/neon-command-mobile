@@ -351,11 +351,12 @@ export function createMiningDepots(arenaWidth: number, arenaHeight: number): imp
   const margin = 8; // Margin from edges of arena
   
   // Define the 4 corner positions for depots
+  // 2 depots for player (owner 0) at bottom, 2 for enemy (owner 1) at top
   const corners = [
-    { x: margin, y: margin, owner: 0 }, // Top-left (player side)
-    { x: arenaWidth - margin, y: margin, owner: 0 }, // Top-right (player side)
-    { x: margin, y: arenaHeight - margin, owner: 1 }, // Bottom-left (enemy side)
-    { x: arenaWidth - margin, y: arenaHeight - margin, owner: 1 }, // Bottom-right (enemy side)
+    { x: margin, y: margin, owner: 1 }, // Top-left (enemy side)
+    { x: arenaWidth - margin, y: margin, owner: 1 }, // Top-right (enemy side)
+    { x: margin, y: arenaHeight - margin, owner: 0 }, // Bottom-left (player side)
+    { x: arenaWidth - margin, y: arenaHeight - margin, owner: 0 }, // Bottom-right (player side)
   ];
   
   corners.forEach((corner, index) => {
