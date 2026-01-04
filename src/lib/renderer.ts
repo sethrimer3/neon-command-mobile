@@ -379,9 +379,10 @@ function drawBackgroundFloaters(ctx: CanvasRenderingContext2D, state: GameState)
 function drawPlayfieldBorder(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void {
   // Use the letterboxed viewport offset so the border aligns with the arena
   const viewportOffset = getViewportOffset();
-  // Calculate the playfield bounds in pixels
-  const playfieldWidthPixels = metersToPixels(ARENA_WIDTH_METERS);
-  const playfieldHeightPixels = metersToPixels(ARENA_HEIGHT_METERS);
+  const viewportDimensions = getViewportDimensions();
+  // Use the rotated viewport dimensions so the border hugs the visible arena
+  const playfieldWidthPixels = viewportDimensions.width || metersToPixels(ARENA_WIDTH_METERS);
+  const playfieldHeightPixels = viewportDimensions.height || metersToPixels(ARENA_HEIGHT_METERS);
   
   // Border thickness is 1 meter
   const borderThickness = metersToPixels(1);

@@ -148,6 +148,7 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - **2026-01-01**: Allowed swipe-to-spawn anywhere when the base is selected and prioritized units over base selection in box select
 - **2026-01-03**: Anchored split-screen input detection to the letterboxed arena viewport center
 - **2026-01-05**: Cloned ability command origin/direction vectors to keep queued ability anchors stable
+- **2026-01-06**: Derived ability drag vectors from world-space positions to respect rotated desktop input
 
 ## Watch Out For
 - Always prevent default on touch events to avoid scrolling

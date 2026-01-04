@@ -633,12 +633,14 @@ function updateAbilityCastPreview(state: GameState, screenDx: number, screenDy: 
   
   const commandOrigin = getCommandOrigin(selectedUnit);
   
-  // Convert screen drag distance to world space vector
-  const dragVectorPixels = { x: screenDx, y: screenDy };
-  let dragVectorWorld = {
-    x: dragVectorPixels.x / PIXELS_PER_METER,
-    y: dragVectorPixels.y / PIXELS_PER_METER
+  // Convert screen drag distance to world space vector, accounting for desktop rotation
+  const screenEndPos = {
+    x: screenStartPos.x + screenDx,
+    y: screenStartPos.y + screenDy,
   };
+  const worldStartPos = pixelsToPosition(screenStartPos);
+  const worldEndPos = pixelsToPosition(screenEndPos);
+  let dragVectorWorld = subtract(worldEndPos, worldStartPos);
   
   // Apply mirroring if the setting is enabled (mirror both X and Y)
   if (state.settings.mirrorAbilityCasting) {

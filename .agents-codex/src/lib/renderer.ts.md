@@ -144,6 +144,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - **2026-01-01**: Strengthened base selection glow with a thicker outline and secondary ring
 - **2026-01-03**: Adjusted playfield borders to render with the arena viewport offset
 - **2026-01-03**: Anchored unit LOD calculations to the arena viewport center
+- **2026-01-06**: Sized playfield borders using viewport dimensions to match rotated desktop bounds
 
 ## Watch Out For
 - Always convert game positions to pixels before drawing

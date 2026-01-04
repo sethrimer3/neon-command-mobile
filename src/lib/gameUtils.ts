@@ -120,9 +120,10 @@ export function positionToPixels(pos: Vector2): Vector2 {
 
   // Rotate the playfield for desktop landscape while preserving world coordinates
   if (shouldRotatePlayfield()) {
+    // Rotate counter-clockwise so the arena's long edge spans the desktop width
     return {
-      x: center.x + dy,
-      y: center.y - dx,
+      x: center.x - dy,
+      y: center.y + dx,
     };
   }
 
@@ -147,9 +148,10 @@ export function pixelsToPosition(pixels: Vector2): Vector2 {
 
   // Undo the desktop rotation before converting back to world coordinates
   if (shouldRotatePlayfield()) {
+    // Invert the counter-clockwise rotation applied in positionToPixels
     return {
-      x: (arenaWidthPixels / 2 - dy) / scale,
-      y: (arenaHeightPixels / 2 + dx) / scale,
+      x: (arenaWidthPixels / 2 + dy) / scale,
+      y: (arenaHeightPixels / 2 - dx) / scale,
     };
   }
 

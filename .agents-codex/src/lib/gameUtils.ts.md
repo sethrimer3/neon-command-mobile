@@ -169,6 +169,7 @@ Provides core mathematical utility functions for vector operations, coordinate t
 - Coordinate conversion functions added for rendering system
 - Added viewport offset/dimension tracking to support letterboxed rendering
 - Added desktop rotation support with portrait-stable gameplay coordinates
+- **2026-01-06**: Switched desktop rotation to counter-clockwise and updated inverse coordinate mapping for rotated input
 
 ## Watch Out For
 - Always normalize vectors before using them as directions (especially for movement)
