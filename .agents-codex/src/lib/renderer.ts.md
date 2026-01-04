@@ -102,6 +102,8 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - Ability effects have distinct visual styles
 - Selection pulses using sine wave animation
 - All positions must be converted from meters to pixels before drawing
+- Playfield borders align to the letterboxed arena viewport offset
+- LOD distance calculations use the arena viewport center, not the full canvas
 
 ### Rendering Optimizations
 - Clears only once per frame
@@ -140,6 +142,8 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - Added match statistics to HUD
 - **2025-12-31**: Added particle physics rendering for marines with glowing effect
 - **2026-01-01**: Strengthened base selection glow with a thicker outline and secondary ring
+- **2026-01-03**: Adjusted playfield borders to render with the arena viewport offset
+- **2026-01-03**: Anchored unit LOD calculations to the arena viewport center
 
 ## Watch Out For
 - Always convert game positions to pixels before drawing

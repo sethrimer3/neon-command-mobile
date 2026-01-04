@@ -17,7 +17,7 @@ import {
   PIXELS_PER_METER,
   Vector2,
 } from './types';
-import { distance, normalize, scale, add, subtract, pixelsToPosition, positionToPixels } from './gameUtils';
+import { distance, normalize, scale, add, subtract, pixelsToPosition, positionToPixels, getViewportOffset, getViewportDimensions } from './gameUtils';
 import { spawnUnit } from './simulation';
 import { soundManager } from './sound';
 import { applyFormation } from './formations';
@@ -80,6 +80,25 @@ function transformCoordinates(clientX: number, clientY: number, rect: DOMRect): 
   return { x, y };
 }
 
+function getViewportCenterX(): number {
+  // Center split should match the letterboxed arena viewport
+  const viewportOffset = getViewportOffset();
+  const viewportDimensions = getViewportDimensions();
+  const fallbackWidth = typeof window !== 'undefined' ? window.innerWidth : viewportDimensions.width;
+  return viewportDimensions.width > 0
+    ? viewportOffset.x + viewportDimensions.width / 2
+    : fallbackWidth / 2;
+}
+
+function resolvePlayerIndex(state: GameState, screenX: number): number {
+  // In local vs mode, determine player side based on arena viewport center
+  if (state.vsMode !== 'player') {
+    return 0;
+  }
+  
+  return screenX > getViewportCenterX() ? 1 : 0;
+}
+
 export function handleTouchStart(e: TouchEvent, state: GameState, canvas: HTMLCanvasElement): void {
   if (state.mode !== 'game') return;
   e.preventDefault();
@@ -92,7 +111,7 @@ export function handleTouchStart(e: TouchEvent, state: GameState, canvas: HTMLCa
     // Add visual feedback for touch start
     addVisualFeedback(state, 'tap', { x, y });
 
-    const playerIndex = state.vsMode === 'player' && x > canvas.width / 2 ? 1 : 0;
+    const playerIndex = resolvePlayerIndex(state, x);
 
     const touchedBase = findTouchedBase(state, worldPos, playerIndex);
     const touchedDot = findTouchedMovementDot(state, worldPos, playerIndex);
@@ -129,7 +148,7 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
       const elapsed = Date.now() - touchState.startTime;
       // Only create selection rect if no units are selected AND no base touched
       // When units are selected, dragging will be for ability casting instead
-      const playerIndex = state.vsMode === 'player' && touchState.startPos.x > canvas.width / 2 ? 1 : 0;
+      const playerIndex = resolvePlayerIndex(state, touchState.startPos.x);
       const selectedBase = getSelectedBase(state, playerIndex);
 
       // Skip selection rects when the base is selected so swipes spawn units anywhere
@@ -171,7 +190,7 @@ export function handleTouchEnd(e: TouchEvent, state: GameState, canvas: HTMLCanv
     const dist = Math.sqrt(dx * dx + dy * dy);
     const elapsed = Date.now() - touchState.startTime;
 
-    const playerIndex = state.vsMode === 'player' && touchState.startPos.x > canvas.width / 2 ? 1 : 0;
+    const playerIndex = resolvePlayerIndex(state, touchState.startPos.x);
     
     // Add visual feedback for drag if moved significantly
     if (touchState.isDragging && dist > 10) {
@@ -728,7 +747,7 @@ export function handleMouseDown(e: MouseEvent, state: GameState, canvas: HTMLCan
   // Add visual feedback for mouse down
   addVisualFeedback(state, 'tap', { x, y });
 
-  const playerIndex = state.vsMode === 'player' && x > canvas.width / 2 ? 1 : 0;
+  const playerIndex = resolvePlayerIndex(state, x);
 
   const touchedBase = findTouchedBase(state, worldPos, playerIndex);
   const touchedDot = findTouchedMovementDot(state, worldPos, playerIndex);
@@ -791,7 +810,7 @@ export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCan
     mouseState.isDragging = true;
 
     // Only create selection rect if no units are selected AND no base touched
-    const playerIndex = state.vsMode === 'player' && mouseState.startPos.x > canvas.width / 2 ? 1 : 0;
+    const playerIndex = resolvePlayerIndex(state, mouseState.startPos.x);
     const selectedBase = getSelectedBase(state, playerIndex);
 
     // Skip selection rects when the base is selected so swipes spawn units anywhere
@@ -829,7 +848,7 @@ export function handleMouseUp(e: MouseEvent, state: GameState, canvas: HTMLCanva
   const dist = Math.sqrt(dx * dx + dy * dy);
   const elapsed = Date.now() - mouseState.startTime;
 
-  const playerIndex = state.vsMode === 'player' && mouseState.startPos.x > canvas.width / 2 ? 1 : 0;
+  const playerIndex = resolvePlayerIndex(state, mouseState.startPos.x);
   
   // Add visual feedback for drag if moved significantly
   if (mouseState.isDragging && dist > 10) {

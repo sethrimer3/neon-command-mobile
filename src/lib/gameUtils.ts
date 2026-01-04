@@ -2,12 +2,18 @@ import { Vector2, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS, PIXELS_PER_METER } fr
 
 // Calculate viewport scale to fit the fixed arena to the viewport
 let viewportScale = 1.0;
+// Track the pixel offset for the letterboxed arena viewport
+let viewportOffset: Vector2 = { x: 0, y: 0 };
+// Track the pixel size of the arena viewport for camera math
+let viewportDimensions = { width: 0, height: 0 };
 
 export function updateViewportScale(width: number, height: number): void {
   // Validate inputs to prevent division by zero or invalid scale factors
   if (width <= 0 || height <= 0) {
     console.warn('Invalid viewport dimensions:', width, height);
     viewportScale = 1.0; // Fallback to 1:1 scale
+    viewportOffset = { x: 0, y: 0 };
+    viewportDimensions = { width, height };
     return;
   }
   
@@ -17,10 +23,31 @@ export function updateViewportScale(width: number, height: number): void {
   
   // Use the smaller scale to ensure the entire arena fits in the viewport
   viewportScale = Math.min(scaleX, scaleY);
+  
+  // Calculate the letterboxed viewport size in pixels
+  const viewportWidth = ARENA_WIDTH_METERS * PIXELS_PER_METER * viewportScale;
+  const viewportHeight = ARENA_HEIGHT_METERS * PIXELS_PER_METER * viewportScale;
+  
+  // Center the arena by computing the leftover margin on each axis
+  viewportOffset = {
+    x: (width - viewportWidth) / 2,
+    y: (height - viewportHeight) / 2,
+  };
+  viewportDimensions = { width: viewportWidth, height: viewportHeight };
 }
 
 export function getViewportScale(): number {
   return viewportScale;
+}
+
+export function getViewportOffset(): Vector2 {
+  // Return a copy to prevent accidental mutation of shared state
+  return { ...viewportOffset };
+}
+
+export function getViewportDimensions(): { width: number; height: number } {
+  // Return a copy to prevent accidental mutation of shared state
+  return { ...viewportDimensions };
 }
 
 export function distance(a: Vector2, b: Vector2): number {
@@ -57,15 +84,17 @@ export function pixelsToMeters(pixels: number): number {
 
 export function positionToPixels(pos: Vector2): Vector2 {
   return {
-    x: pos.x * PIXELS_PER_METER * viewportScale,
-    y: pos.y * PIXELS_PER_METER * viewportScale,
+    // Offset by the letterboxed viewport so arena stays centered
+    x: pos.x * PIXELS_PER_METER * viewportScale + viewportOffset.x,
+    y: pos.y * PIXELS_PER_METER * viewportScale + viewportOffset.y,
   };
 }
 
 export function pixelsToPosition(pixels: Vector2): Vector2 {
   return {
-    x: pixels.x / (PIXELS_PER_METER * viewportScale),
-    y: pixels.y / (PIXELS_PER_METER * viewportScale),
+    // Remove the letterboxed viewport offset before converting to meters
+    x: (pixels.x - viewportOffset.x) / (PIXELS_PER_METER * viewportScale),
+    y: (pixels.y - viewportOffset.y) / (PIXELS_PER_METER * viewportScale),
   };
 }
 
@@ -233,4 +262,3 @@ export function generateNebulaClouds(canvasWidth: number, canvasHeight: number):
   
   return clouds;
 }
-
