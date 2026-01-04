@@ -161,13 +161,13 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
             </div>
           </div>
 
-          {/* Unit Slot Layout - Base in center with 4 slots around it */}
-          <div className="space-y-2">
+          {/* Unit Slot Layout - Base on top with 4 slots in a row below */}
+          <div className="space-y-4">
             <p className="text-sm font-medium">Unit Slots (Click to select, then choose unit):</p>
-            <div className="relative w-full max-w-[400px] mx-auto" style={{ height: '300px' }}>
-              {/* Center - Base */}
+            <div className="flex flex-col items-center gap-4 max-w-[500px] mx-auto">
+              {/* Base */}
               <div 
-                className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center gap-2 p-4 border-2 rounded-lg"
+                className="flex flex-col items-center justify-center gap-2 p-4 border-2 rounded-lg"
                 style={{
                   borderColor: playerColor || COLORS.playerDefault,
                   backgroundColor: `${playerColor || COLORS.playerDefault}20`,
@@ -179,73 +179,84 @@ export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerCol
                 <span className="text-xs font-bold capitalize">{playerBaseType}</span>
               </div>
 
-              {/* Top Slot */}
-              <button
-                onClick={() => setSelectedSlot(selectedSlot === 'up' ? null : 'up')}
-                className={`absolute left-1/2 top-0 transform -translate-x-1/2 flex flex-col items-center justify-center gap-1 p-3 border-2 rounded-lg transition-all ${
-                  selectedSlot === 'up' ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
-                }`}
-                style={{
-                  borderColor: playerColor || COLORS.playerDefault,
-                  backgroundColor: selectedSlot === 'up' ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
-                  width: '80px',
-                  height: '80px',
-                }}
-              >
-                {renderUnitIcon(unitSlots.up, 32)}
-                <span className="text-xs capitalize leading-tight">{unitSlots.up}</span>
-              </button>
+              {/* Unit Slots Row */}
+              <div className="flex gap-3 justify-center">
+                {/* Slot 1 (Left) */}
+                <button
+                  onClick={() => setSelectedSlot(selectedSlot === 'left' ? null : 'left')}
+                  className={`relative flex flex-col items-center justify-center gap-1 p-3 border-2 rounded-lg transition-all ${
+                    selectedSlot === 'left' ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
+                  }`}
+                  style={{
+                    borderColor: playerColor || COLORS.playerDefault,
+                    backgroundColor: selectedSlot === 'left' ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
+                    width: '80px',
+                    height: '80px',
+                  }}
+                >
+                  {renderUnitIcon(unitSlots.left, 32)}
+                  <span className="text-xs capitalize leading-tight">{unitSlots.left}</span>
+                  {/* Slot number in bottom right corner */}
+                  <span className="absolute bottom-1 right-1 text-xs font-bold opacity-60">1</span>
+                </button>
 
-              {/* Bottom Slot */}
-              <button
-                onClick={() => setSelectedSlot(selectedSlot === 'down' ? null : 'down')}
-                className={`absolute left-1/2 bottom-0 transform -translate-x-1/2 flex flex-col items-center justify-center gap-1 p-3 border-2 rounded-lg transition-all ${
-                  selectedSlot === 'down' ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
-                }`}
-                style={{
-                  borderColor: playerColor || COLORS.playerDefault,
-                  backgroundColor: selectedSlot === 'down' ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
-                  width: '80px',
-                  height: '80px',
-                }}
-              >
-                {renderUnitIcon(unitSlots.down, 32)}
-                <span className="text-xs capitalize leading-tight">{unitSlots.down}</span>
-              </button>
+                {/* Slot 2 (Up) */}
+                <button
+                  onClick={() => setSelectedSlot(selectedSlot === 'up' ? null : 'up')}
+                  className={`relative flex flex-col items-center justify-center gap-1 p-3 border-2 rounded-lg transition-all ${
+                    selectedSlot === 'up' ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
+                  }`}
+                  style={{
+                    borderColor: playerColor || COLORS.playerDefault,
+                    backgroundColor: selectedSlot === 'up' ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
+                    width: '80px',
+                    height: '80px',
+                  }}
+                >
+                  {renderUnitIcon(unitSlots.up, 32)}
+                  <span className="text-xs capitalize leading-tight">{unitSlots.up}</span>
+                  {/* Slot number in bottom right corner */}
+                  <span className="absolute bottom-1 right-1 text-xs font-bold opacity-60">2</span>
+                </button>
 
-              {/* Left Slot */}
-              <button
-                onClick={() => setSelectedSlot(selectedSlot === 'left' ? null : 'left')}
-                className={`absolute left-0 top-1/2 transform -translate-y-1/2 flex flex-col items-center justify-center gap-1 p-3 border-2 rounded-lg transition-all ${
-                  selectedSlot === 'left' ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
-                }`}
-                style={{
-                  borderColor: playerColor || COLORS.playerDefault,
-                  backgroundColor: selectedSlot === 'left' ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
-                  width: '80px',
-                  height: '80px',
-                }}
-              >
-                {renderUnitIcon(unitSlots.left, 32)}
-                <span className="text-xs capitalize leading-tight">{unitSlots.left}</span>
-              </button>
+                {/* Slot 3 (Down) */}
+                <button
+                  onClick={() => setSelectedSlot(selectedSlot === 'down' ? null : 'down')}
+                  className={`relative flex flex-col items-center justify-center gap-1 p-3 border-2 rounded-lg transition-all ${
+                    selectedSlot === 'down' ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
+                  }`}
+                  style={{
+                    borderColor: playerColor || COLORS.playerDefault,
+                    backgroundColor: selectedSlot === 'down' ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
+                    width: '80px',
+                    height: '80px',
+                  }}
+                >
+                  {renderUnitIcon(unitSlots.down, 32)}
+                  <span className="text-xs capitalize leading-tight">{unitSlots.down}</span>
+                  {/* Slot number in bottom right corner */}
+                  <span className="absolute bottom-1 right-1 text-xs font-bold opacity-60">3</span>
+                </button>
 
-              {/* Right Slot */}
-              <button
-                onClick={() => setSelectedSlot(selectedSlot === 'right' ? null : 'right')}
-                className={`absolute right-0 top-1/2 transform -translate-y-1/2 flex flex-col items-center justify-center gap-1 p-3 border-2 rounded-lg transition-all ${
-                  selectedSlot === 'right' ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
-                }`}
-                style={{
-                  borderColor: playerColor || COLORS.playerDefault,
-                  backgroundColor: selectedSlot === 'right' ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
-                  width: '80px',
-                  height: '80px',
-                }}
-              >
-                {renderUnitIcon(unitSlots.right, 32)}
-                <span className="text-xs capitalize leading-tight">{unitSlots.right}</span>
-              </button>
+                {/* Slot 4 (Right) */}
+                <button
+                  onClick={() => setSelectedSlot(selectedSlot === 'right' ? null : 'right')}
+                  className={`relative flex flex-col items-center justify-center gap-1 p-3 border-2 rounded-lg transition-all ${
+                    selectedSlot === 'right' ? 'ring-4 ring-primary scale-105' : 'hover:scale-105'
+                  }`}
+                  style={{
+                    borderColor: playerColor || COLORS.playerDefault,
+                    backgroundColor: selectedSlot === 'right' ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
+                    width: '80px',
+                    height: '80px',
+                  }}
+                >
+                  {renderUnitIcon(unitSlots.right, 32)}
+                  <span className="text-xs capitalize leading-tight">{unitSlots.right}</span>
+                  {/* Slot number in bottom right corner */}
+                  <span className="absolute bottom-1 right-1 text-xs font-bold opacity-60">4</span>
+                </button>
+              </div>
             </div>
           </div>
 
