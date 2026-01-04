@@ -113,6 +113,7 @@ export interface Unit {
   queueDrawStartTime?: number; // Timestamp when queue drawing animation started (for new commands)
   queueDrawReverse?: boolean; // Whether queue should un-draw in reverse (true when unit dies)
   temporaryAvoidance?: { originalPosition: Vector2; returnDelay: number }; // For friendly unit avoidance - returnDelay is time remaining in seconds
+  previousFlockingForce?: Vector2; // Previous flocking force for smoothing to prevent oscillations
   miningState?: { // Mining drone specific state
     depotId: string; // ID of the mining depot
     depositId: string; // ID of the resource deposit being mined

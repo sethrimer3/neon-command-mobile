@@ -9,17 +9,21 @@ All constants are in `src/lib/simulation.ts` at the top of the file.
 
 ### Separation (Keep Units Apart)
 ```typescript
-const SEPARATION_RADIUS = 1.5;    // How far to check for nearby units (meters)
-const SEPARATION_FORCE = 8.0;     // How strongly to push away from nearby units
+const SEPARATION_RADIUS = 1.5;         // How far to check for nearby units (meters)
+const SEPARATION_FORCE = 3.0;          // How strongly to push away from nearby units (reduced from 8.0)
+const SEPARATION_DEAD_ZONE = 0.3;      // Minimum distance before force applies (prevents jitter)
+const FLOCKING_FORCE_SMOOTHING = 0.7;  // Force smoothing factor (0.7 = 70% previous, 30% current)
 ```
 - **Increase radius** → Units start avoiding each other from farther away
-- **Increase force** → Units push away from each other more aggressively
+- **Increase force** → Units push away from each other more aggressively (be careful - values > 5.0 can cause violent oscillations)
 - **Decrease force** → Units can get closer together (tighter formations)
+- **Increase dead zone** → Reduces jitter at close range but units may overlap more
+- **Increase smoothing** → More stable but slower to respond to changes (max 0.9)
 
 ### Cohesion (Keep Groups Together)
 ```typescript
-const COHESION_RADIUS = 4.0;      // How far to look for group center (meters)
-const COHESION_FORCE = 2.0;       // How strongly to pull toward group center
+const COHESION_RADIUS = 4.0;           // How far to look for group center (meters)
+const COHESION_FORCE = 1.0;            // How strongly to pull toward group center (reduced from 2.0)
 ```
 - **Increase radius** → Larger groups stay cohesive
 - **Increase force** → Groups pack tighter together
@@ -27,14 +31,28 @@ const COHESION_FORCE = 2.0;       // How strongly to pull toward group center
 
 ### Alignment (Move in Same Direction)
 ```typescript
-const ALIGNMENT_RADIUS = 3.0;     // How far to check other units' directions (meters)
-const ALIGNMENT_FORCE = 1.5;      // How strongly to match neighbors' direction
+const ALIGNMENT_RADIUS = 3.0;          // How far to check other units' directions (meters)
+const ALIGNMENT_FORCE = 0.8;           // How strongly to match neighbors' direction (reduced from 1.5)
 ```
 - **Increase radius** → More coordinated movement over larger distances
 - **Increase force** → Units turn more sharply to match neighbors
 - **Decrease force** → More independent movement within groups
 
+### Maximum Force Cap
+```typescript
+const FLOCKING_MAX_FORCE = 3.0;        // Maximum magnitude of combined flocking forces (reduced from 5.0)
+```
+- **Increase** → Allows stronger flocking behavior but may cause instability
+- **Decrease** → More stable but less responsive flocking
+
 ## Collision Avoidance
+
+### Unit Collision
+```typescript
+const UNIT_COLLISION_SQUEEZE_FACTOR = 0.75;  // Allow overlap (reduced from 0.8 for better flow)
+```
+- **Increase** → Units require more personal space (less overlap)
+- **Decrease** → Units can squeeze through tighter spaces (more overlap allowed)
 
 ### Friendly Unit Sliding
 ```typescript
@@ -86,17 +104,31 @@ const COLLISION_DECELERATION_FACTOR = 0.5; // Speed reduction when blocked
 
 ## Common Tuning Scenarios
 
+### Problem: Units Shaking/Vibrating/Oscillating
+**Solution:**
+- Increase `FLOCKING_FORCE_SMOOTHING` to 0.75-0.8 (more smoothing)
+- Increase `SEPARATION_DEAD_ZONE` to 0.4-0.5 (larger dead zone)
+- Decrease `SEPARATION_FORCE` to 2.5 or 2.0 (gentler separation)
+- Decrease `FLOCKING_MAX_FORCE` to 2.5 or 2.0 (cap extreme forces)
+
+### Problem: Units Sliding Violently Past Each Other
+**Solution:**
+- Decrease `SEPARATION_FORCE` to 2.0-2.5 (less aggressive pushing)
+- Increase `FLOCKING_FORCE_SMOOTHING` to 0.75-0.8 (smoother transitions)
+- Increase `UNIT_COLLISION_SQUEEZE_FACTOR` to 0.8-0.85 (more personal space)
+
 ### Problem: Units Too Spread Out
 **Solution:**
-- Increase `COHESION_FORCE` to 3.0-4.0
-- Decrease `SEPARATION_RADIUS` to 1.0-1.2
+- Increase `COHESION_FORCE` to 1.2-1.5
+- Decrease `SEPARATION_RADIUS` to 1.2-1.3
 - Decrease `FRIENDLY_SLIDE_DISTANCE` to 0.2
 
 ### Problem: Units Too Cramped/Overlapping
 **Solution:**
-- Increase `SEPARATION_FORCE` to 10.0-12.0
+- Increase `SEPARATION_FORCE` to 3.5-4.0 (but not higher than 5.0 to avoid oscillations)
 - Increase `SEPARATION_RADIUS` to 2.0
-- Increase `FRIENDLY_SLIDE_DISTANCE` to 0.5
+- Increase `FRIENDLY_SLIDE_DISTANCE` to 0.4-0.5
+- Decrease `UNIT_COLLISION_SQUEEZE_FACTOR` to 0.7 (less overlap allowed)
 
 ### Problem: Groups Break Apart
 **Solution:**

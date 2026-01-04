@@ -79,18 +79,20 @@ const projectilePool = new ObjectPool<Projectile>(
 
 // Unit collision constants
 const UNIT_COLLISION_RADIUS = UNIT_SIZE_METERS / 2; // Minimum distance between unit centers
-const UNIT_COLLISION_SQUEEZE_FACTOR = 0.8; // Allow units to squeeze past each other (80% of full diameter)
+const UNIT_COLLISION_SQUEEZE_FACTOR = 0.75; // Allow units to squeeze past each other (75% of full diameter - more permissive for smoother flow)
 const FRIENDLY_SLIDE_DISTANCE = 0.3; // Distance to slide perpendicular when avoiding friendly units
 
 // Flocking/Boids constants for smooth group movement (StarCraft-like)
 const SEPARATION_RADIUS = 1.5; // Distance to maintain from nearby units
-const SEPARATION_FORCE = 8.0; // Strength of separation force
+const SEPARATION_FORCE = 3.0; // Strength of separation force (reduced from 8.0 to prevent violent oscillations)
+const SEPARATION_DEAD_ZONE = 0.3; // Minimum distance before separation force applies (prevents jitter at very close range)
 const COHESION_RADIUS = 4.0; // Distance to check for group cohesion
-const COHESION_FORCE = 2.0; // Strength of cohesion force  
+const COHESION_FORCE = 1.0; // Strength of cohesion force (reduced from 2.0 for gentler grouping)
 const ALIGNMENT_RADIUS = 3.0; // Distance to check for velocity alignment
-const ALIGNMENT_FORCE = 1.5; // Strength of alignment force
-const FLOCKING_MAX_FORCE = 5.0; // Maximum magnitude of flocking forces
+const ALIGNMENT_FORCE = 0.8; // Strength of alignment force (reduced from 1.5 for smoother alignment)
+const FLOCKING_MAX_FORCE = 3.0; // Maximum magnitude of flocking forces (reduced from 5.0 to prevent extreme forces)
 const MIN_FORCE_THRESHOLD = 0.01; // Minimum force magnitude to apply
+const FLOCKING_FORCE_SMOOTHING = 0.7; // Smoothing factor for force changes (0=instant, 1=no change) - prevents violent oscillations
 
 // Jitter/wiggle constants for stuck unit recovery
 const JITTER_ACTIVATION_RATIO = 0.5; // Activate jitter at 50% of stuck timeout
@@ -446,11 +448,14 @@ function calculateSeparation(unit: Unit, allUnits: Unit[]): Vector2 {
     if (other.id === unit.id || other.owner !== unit.owner) continue;
     
     const dist = distance(unit.position, other.position);
-    if (dist > 0 && dist < SEPARATION_RADIUS) {
+    // Apply dead zone to prevent jitter when units are very close
+    if (dist > SEPARATION_DEAD_ZONE && dist < SEPARATION_RADIUS) {
       // Calculate vector away from other unit
       const away = subtract(unit.position, other.position);
-      // Weight by inverse distance (closer = stronger force)
-      const weight = (SEPARATION_RADIUS - dist) / SEPARATION_RADIUS;
+      // Weight by inverse distance (closer = stronger force), but smoothed
+      // Use quadratic falloff for smoother force curve
+      const normalizedDist = (dist - SEPARATION_DEAD_ZONE) / (SEPARATION_RADIUS - SEPARATION_DEAD_ZONE);
+      const weight = (1 - normalizedDist) * (1 - normalizedDist); // Quadratic falloff
       const weightedAway = scale(normalize(away), weight);
       separationForce = add(separationForce, weightedAway);
       count++;
@@ -497,8 +502,12 @@ function calculateCohesion(unit: Unit, allUnits: Unit[]): Vector2 {
     centerOfMass = scale(centerOfMass, 1 / count);
     // Create force toward center
     const cohesionForce = subtract(centerOfMass, unit.position);
-    if (distance({ x: 0, y: 0 }, cohesionForce) > MIN_FORCE_THRESHOLD) {
-      return scale(normalize(cohesionForce), COHESION_FORCE);
+    const cohesionMagnitude = distance({ x: 0, y: 0 }, cohesionForce);
+    if (cohesionMagnitude > MIN_FORCE_THRESHOLD) {
+      // Apply weaker force at longer distances for gentler cohesion
+      const normalizedDist = Math.min(cohesionMagnitude / COHESION_RADIUS, 1.0);
+      const strength = COHESION_FORCE * normalizedDist; // Linear falloff
+      return scale(normalize(cohesionForce), strength);
     }
   }
   
@@ -536,11 +545,16 @@ function calculateAlignment(unit: Unit, allUnits: Unit[], currentDirection: Vect
   if (count > 0) {
     // Calculate average direction
     averageDirection = scale(averageDirection, 1 / count);
-    if (distance({ x: 0, y: 0 }, averageDirection) > MIN_FORCE_THRESHOLD) {
+    const avgMagnitude = distance({ x: 0, y: 0 }, averageDirection);
+    if (avgMagnitude > MIN_FORCE_THRESHOLD) {
       averageDirection = normalize(averageDirection);
       // Create steering force toward average direction
       const alignmentForce = subtract(averageDirection, currentDirection);
-      return scale(normalize(alignmentForce), ALIGNMENT_FORCE);
+      const alignmentMagnitude = distance({ x: 0, y: 0 }, alignmentForce);
+      if (alignmentMagnitude > MIN_FORCE_THRESHOLD) {
+        // Weaker alignment force for gentler direction changes
+        return scale(normalize(alignmentForce), ALIGNMENT_FORCE * Math.min(alignmentMagnitude, 1.0));
+      }
     }
   }
   
@@ -560,14 +574,36 @@ function applyFlockingBehavior(unit: Unit, baseDirection: Vector2, allUnits: Uni
   const cohesion = calculateCohesion(unit, allUnits);
   const alignment = calculateAlignment(unit, allUnits, baseDirection);
   
+  // Combine flocking forces
+  let flockingForce = { x: 0, y: 0 };
+  flockingForce = add(flockingForce, separation);
+  flockingForce = add(flockingForce, cohesion);
+  flockingForce = add(flockingForce, alignment);
+  
+  // Clamp flocking force to max magnitude before smoothing
+  const forceMagnitude = distance({ x: 0, y: 0 }, flockingForce);
+  if (forceMagnitude > FLOCKING_MAX_FORCE) {
+    flockingForce = scale(normalize(flockingForce), FLOCKING_MAX_FORCE);
+  }
+  
+  // Apply force smoothing to prevent oscillations
+  if (unit.previousFlockingForce) {
+    // Blend previous force with current force for smooth transitions
+    flockingForce = {
+      x: unit.previousFlockingForce.x * FLOCKING_FORCE_SMOOTHING + flockingForce.x * (1 - FLOCKING_FORCE_SMOOTHING),
+      y: unit.previousFlockingForce.y * FLOCKING_FORCE_SMOOTHING + flockingForce.y * (1 - FLOCKING_FORCE_SMOOTHING)
+    };
+  }
+  
+  // Store clamped and smoothed force for next frame
+  unit.previousFlockingForce = { ...flockingForce };
+  
   // Combine forces with base direction
   // Base direction should have stronger weight to ensure units still move toward their goal
   // Scale base direction by a factor to make it the dominant force
   const BASE_DIRECTION_WEIGHT = 10.0; // Make base direction 10x stronger than flocking forces
   let finalDirection = scale(baseDirection, BASE_DIRECTION_WEIGHT);
-  finalDirection = add(finalDirection, separation);
-  finalDirection = add(finalDirection, cohesion);
-  finalDirection = add(finalDirection, alignment);
+  finalDirection = add(finalDirection, flockingForce);
   
   // Normalize to maintain consistent speed
   if (distance({ x: 0, y: 0 }, finalDirection) > MIN_FORCE_THRESHOLD) {
