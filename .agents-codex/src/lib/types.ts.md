@@ -65,7 +65,7 @@ Represents a game unit with:
 - Basic properties: id, type, owner, position, hp
 - Command system: commandQueue for queued actions
 - Progression: damageMultiplier, distanceTraveled, distanceCredit
-- Ability states: dashExecuting, lineJumpTelegraph, shieldActive, cloaked, bombardmentActive, healPulseActive, missileBarrageActive
+- Ability states: lineJumpTelegraph, shieldActive, cloaked, bombardmentActive, healPulseActive, missileBarrageActive
 - Visual effects: particles (optional array of Particle objects, currently used for marines)
 
 ### Base Interface
@@ -90,7 +90,7 @@ Configuration for each unit type including:
 ### UNIT_DEFINITIONS
 Complete configuration object for all 8 unit types with balanced stats:
 - **Marine**: Ranged basic unit with Burst Fire ability
-- **Warrior**: Melee tank with Execute Dash
+- **Warrior**: Melee tank with Laser Beam
 - **Snaker**: Fast non-combat unit with Line Jump mobility
 - **Tank**: Heavy unit with Shield Dome
 - **Scout**: Fast reconnaissance with Cloak
@@ -155,6 +155,7 @@ None currently identified
 - Added topography lines for visual enhancement
 - **2025-12-31**: Added Particle interface and particle physics system for visual effects on marines (10 particles per marine that orbit using attraction forces)
 - **2026-01-01**: Added countdownSeconds to keep UI and audio updates in sync during match start.
+- **2026-01-07**: Updated the warrior ability name to Laser Beam to match the shared laser-only behavior and removed dash-specific unit state.
 
 ## Watch Out For
 - Always use meters for game logic, only convert to pixels for rendering

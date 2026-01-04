@@ -680,14 +680,6 @@ export function createAbilityEffect(
       createEnergyPulse(state, unit.position, color, 0.3, 1.5);
       break;
     
-    case 'execute-dash':
-      // Create dash trail with enhanced particles
-      createEnergyPulse(state, unit.position, color, 0.4, 2);
-      createParticleBurst(state, unit.position, color, 20, 10);
-      // Add delayed impact ripple by creating staggered pulses
-      createImpactRipple(state, position, color, 2.5);
-      break;
-    
     case 'line-jump':
       // Create jump telegraph with charge particles
       createAbilityCharge(state, unit.position, 'oklch(0.75 0.18 200)', 0.4);

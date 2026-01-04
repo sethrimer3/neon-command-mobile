@@ -100,6 +100,7 @@ The component does NOT automatically reflect changes from types.ts or simulation
 
 ## Change History
 - **2026-01-02:** Initial creation - comprehensive unit information screen with all 36 units across 3 factions
+- **2026-01-07:** Updated the warrior ability description to reflect the shared laser-only ability.
 
 ## Watch Out For
 - When adding new units, remember to add entries in:

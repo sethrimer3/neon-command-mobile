@@ -1851,12 +1851,6 @@ function updateAbilityEffects(unit: Unit, state: GameState, deltaTime: number): 
     unit.cloaked = undefined;
   }
 
-  // Clear dash executing flag when dash animation ends
-  if (unit.dashExecuting && unit.dashEndTime && now > unit.dashEndTime) {
-    unit.dashExecuting = false;
-    unit.dashEndTime = undefined;
-  }
-
   if (unit.bombardmentActive) {
     if (now > unit.bombardmentActive.impactTime && now < unit.bombardmentActive.endTime) {
       const enemies = state.units.filter((u) => u.owner !== unit.owner);
@@ -2099,12 +2093,10 @@ function executeAbility(state: GameState, unit: Unit, node: CommandNode): void {
   unit.abilityCooldown = def.abilityCooldown;
   
   // Keep existing specific abilities as additional effects
+  // Warriors intentionally use only the generic laser to avoid dash-related crashes.
   if (unit.type === 'marine') {
     createAbilityEffect(state, unit, node.position, 'burst-fire');
     executeBurstFire(state, unit, node.direction);
-  } else if (unit.type === 'warrior') {
-    createAbilityEffect(state, unit, node.position, 'execute-dash');
-    executeExecuteDash(state, unit, node.direction);
   } else if (unit.type === 'snaker') {
     createAbilityEffect(state, unit, node.position, 'line-jump');
     unit.lineJumpTelegraph = {
@@ -2312,74 +2304,6 @@ function executeBurstFire(state: GameState, unit: Unit, direction: { x: number; 
       }
     }
   }
-}
-
-function executeExecuteDash(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
-  // Calculate dash range based on direction vector
-  const dashRange = Math.min(distance({ x: 0, y: 0 }, direction), ABILITY_MAX_RANGE);
-  const dir = normalize(direction);
-  
-  const enemies = state.units.filter((u) => u.owner !== unit.owner);
-  
-  // Find enemies in the dash direction (within a cone/area along the direction)
-  const nearbyEnemies = enemies.filter((e) => {
-    const toEnemy = subtract(e.position, unit.position);
-    const distToEnemy = distance({ x: 0, y: 0 }, toEnemy);
-    
-    // Check if enemy is within dash range
-    if (distToEnemy > dashRange + 2) return false;
-    
-    // Check if enemy is roughly in the direction of the dash
-    const dotProduct = toEnemy.x * dir.x + toEnemy.y * dir.y;
-    return dotProduct > 0; // Enemy is in front of the unit
-  });
-
-  if (nearbyEnemies.length === 0) return;
-
-  // Find the nearest enemy in the dash direction
-  let nearest = nearbyEnemies[0];
-  let minDist = distance(unit.position, nearest.position);
-
-  nearbyEnemies.forEach((enemy) => {
-    const dist = distance(unit.position, enemy.position);
-    if (dist < minDist) {
-      minDist = dist;
-      nearest = enemy;
-    }
-  });
-
-  // Position warrior next to target, not on top of it to avoid collision issues
-  const dashDirection = normalize(subtract(nearest.position, unit.position));
-  
-  // If warrior is already at target position (shouldn't happen, but be safe), move them slightly
-  if (dashDirection.x === 0 && dashDirection.y === 0) {
-    // Default to moving warrior to the left of enemy
-    unit.position = {
-      x: nearest.position.x - 1.2,
-      y: nearest.position.y,
-    };
-  } else {
-    unit.position = {
-      x: nearest.position.x - dashDirection.x * 1.2,
-      y: nearest.position.y - dashDirection.y * 1.2,
-    };
-  }
-  
-  const def = UNIT_DEFINITIONS.warrior;
-  const damage = def.attackDamage * 5 * unit.damageMultiplier;
-  nearest.hp -= damage;
-  
-  // Create impact effect and energy pulse for dash
-  createHitSparks(state, nearest.position, state.players[unit.owner].color, 8);
-  createEnergyPulse(state, nearest.position, state.players[unit.owner].color, 2.5, 0.4);
-  
-  if (state.matchStats && unit.owner === 0) {
-    state.matchStats.damageDealtByPlayer += damage;
-  }
-  
-  // Use timestamp-based approach instead of setTimeout for consistency
-  unit.dashExecuting = true;
-  unit.dashEndTime = Date.now() + 200;
 }
 
 function executeLineJump(state: GameState, unit: Unit): void {

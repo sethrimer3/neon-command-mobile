@@ -89,8 +89,6 @@ export interface Unit {
   distanceTraveled: number;
   distanceCredit: number;
   abilityCooldown: number;
-  dashExecuting?: boolean;
-  dashEndTime?: number; // Timestamp when dash animation should end
   lineJumpTelegraph?: { startTime: number; endPos: Vector2; direction: Vector2 };
   shieldActive?: { endTime: number; radius: number };
   cloaked?: { endTime: number };
@@ -297,7 +295,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackDamage: 18,
     attackRate: 1,
     cost: 40,
-    abilityName: 'Execute Dash',
+    abilityName: 'Laser Beam',
     abilityCooldown: 5,
     canDamageStructures: true,
     modifiers: ['melee'],
