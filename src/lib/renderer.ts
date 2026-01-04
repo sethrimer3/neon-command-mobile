@@ -1099,6 +1099,45 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
         ctx.restore();
       }
       
+      // Draw rally point preview when dragging
+      if (state.rallyPointPreview && state.rallyPointPreview.baseId === base.id) {
+        const previewRallyScreen = positionToPixels(state.rallyPointPreview.rallyPoint);
+        const flagHeight = 20;
+        const flagWidth = 15;
+        
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.5; // Semi-transparent for preview
+        
+        // Draw flag pole
+        ctx.beginPath();
+        ctx.moveTo(previewRallyScreen.x, previewRallyScreen.y);
+        ctx.lineTo(previewRallyScreen.x, previewRallyScreen.y - flagHeight);
+        ctx.stroke();
+        
+        // Draw flag
+        ctx.beginPath();
+        ctx.moveTo(previewRallyScreen.x, previewRallyScreen.y - flagHeight);
+        ctx.lineTo(previewRallyScreen.x + flagWidth, previewRallyScreen.y - flagHeight + flagWidth / 3);
+        ctx.lineTo(previewRallyScreen.x, previewRallyScreen.y - flagHeight + flagWidth * 2 / 3);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Draw line from base to rally point with pulsing effect
+        ctx.globalAlpha = 0.4 + Math.sin(Date.now() / 200) * 0.1; // Pulsing animation
+        ctx.setLineDash([5, 5]);
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(screenPos.x, screenPos.y);
+        ctx.lineTo(previewRallyScreen.x, previewRallyScreen.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        ctx.restore();
+      }
+      
       drawBaseHealthBar(ctx, base, screenPos, size, color, state);
     }
     

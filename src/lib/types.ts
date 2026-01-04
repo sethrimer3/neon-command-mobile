@@ -1060,6 +1060,12 @@ export interface GameState {
     screenStartPos: Vector2; // Screen position where drag started (for display purposes)
   };
   
+  // Rally point preview for bases
+  rallyPointPreview?: {
+    baseId: string; // ID of the base being dragged from
+    rallyPoint: Vector2; // Current rally point position being previewed
+  };
+  
   // Multiplayer manager for online games (typed as any to avoid circular dependency with multiplayer.ts)
   multiplayerManager?: import('./multiplayer').MultiplayerManager;
   

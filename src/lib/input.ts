@@ -169,6 +169,24 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
       touchState.selectionRect.y2 = y;
     }
     
+    // Update rally point preview when dragging from a selected base
+    if (touchState.isDragging && touchState.touchedBase && touchState.touchedBaseWasSelected) {
+      // Convert screen space swipe delta to world space delta properly
+      const baseScreenPos = positionToPixels(touchState.touchedBase.position);
+      const swipeEndScreenPos = { x: baseScreenPos.x + dx, y: baseScreenPos.y + dy };
+      const swipeEndWorldPos = pixelsToPosition(swipeEndScreenPos);
+      const swipeWorldDelta = subtract(swipeEndWorldPos, touchState.touchedBase.position);
+      const newRallyPoint = add(touchState.touchedBase.position, swipeWorldDelta);
+      
+      state.rallyPointPreview = {
+        baseId: touchState.touchedBase.id,
+        rallyPoint: newRallyPoint
+      };
+    } else {
+      // Clear rally point preview if not dragging from base
+      delete state.rallyPointPreview;
+    }
+    
     // Update ability cast preview when units are selected and dragging
     if (touchState.isDragging && state.selectedUnits.size > 0 && !touchState.touchedBase && !touchState.touchedMovementDot) {
       updateAbilityCastPreview(state, dx, dy, touchState.startPos);
@@ -217,10 +235,14 @@ export function handleTouchEnd(e: TouchEvent, state: GameState, canvas: HTMLCanv
       // If base was not selected, dragging from it spawns units
       if (touchState.touchedBaseWasSelected) {
         handleSetRallyPoint(state, touchState.touchedBase, { x: dx, y: dy });
+        delete state.rallyPointPreview; // Clear preview after setting rally point
       } else {
         handleBaseSwipe(state, touchState.touchedBase, { x: dx, y: dy }, playerIndex);
       }
     } else if (touchState.isDragging && dist > SWIPE_THRESHOLD_PX) {
+      // Clear rally point preview if drag ended without setting rally point (and continuing to other actions)
+      delete state.rallyPointPreview;
+      
       const selectedBase = getSelectedBase(state, playerIndex);
 
       // When base is selected and drag is NOT from the base, queue the base's ability
@@ -407,7 +429,10 @@ function handleBaseAbilityDrag(state: GameState, base: Base, swipe: { x: number;
     return;
   }
 
-  const swipeDir = normalize({ x: swipe.x, y: -swipe.y });
+  // Convert screen coordinates to world coordinates properly
+  const worldStart = pixelsToPosition(startPos);
+  const worldEnd = pixelsToPosition({ x: startPos.x + swipe.x, y: startPos.y + swipe.y });
+  const swipeDir = normalize(subtract(worldEnd, worldStart));
 
   soundManager.playLaserFire();
   fireLaser(state, base, swipeDir);
@@ -426,12 +451,15 @@ function handleSetRallyPoint(state: GameState, base: Base, swipe: { x: number; y
   const swipeLen = Math.sqrt(swipe.x * swipe.x + swipe.y * swipe.y);
   if (swipeLen < SWIPE_THRESHOLD_PX) return;
 
-  // Convert swipe from pixels to world coordinates using proper scaling
-  const swipeWorldX = pixelsToMeters(swipe.x);
-  const swipeWorldY = -pixelsToMeters(swipe.y); // Flip Y since screen Y is inverted
+  // Convert screen space swipe delta to world space delta properly
+  // by using the base position as anchor point
+  const baseScreenPos = positionToPixels(base.position);
+  const swipeEndScreenPos = { x: baseScreenPos.x + swipe.x, y: baseScreenPos.y + swipe.y };
+  const swipeEndWorldPos = pixelsToPosition(swipeEndScreenPos);
+  const swipeWorldDelta = subtract(swipeEndWorldPos, base.position);
   
   // Set rally point based on swipe direction and distance
-  const newRallyPoint = add(base.position, { x: swipeWorldX, y: swipeWorldY });
+  const newRallyPoint = add(base.position, swipeWorldDelta);
   base.rallyPoint = newRallyPoint;
   
   soundManager.playUnitMove();
@@ -875,6 +903,24 @@ export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCan
     mouseState.selectionRect.y2 = y;
   }
   
+  // Update rally point preview when dragging from a selected base
+  if (mouseState.isDragging && mouseState.touchedBase && mouseState.touchedBaseWasSelected) {
+    // Convert screen space swipe delta to world space delta properly
+    const baseScreenPos = positionToPixels(mouseState.touchedBase.position);
+    const swipeEndScreenPos = { x: baseScreenPos.x + dx, y: baseScreenPos.y + dy };
+    const swipeEndWorldPos = pixelsToPosition(swipeEndScreenPos);
+    const swipeWorldDelta = subtract(swipeEndWorldPos, mouseState.touchedBase.position);
+    const newRallyPoint = add(mouseState.touchedBase.position, swipeWorldDelta);
+    
+    state.rallyPointPreview = {
+      baseId: mouseState.touchedBase.id,
+      rallyPoint: newRallyPoint
+    };
+  } else {
+    // Clear rally point preview if not dragging from base
+    delete state.rallyPointPreview;
+  }
+  
   // Update ability cast preview when units are selected and dragging
   if (mouseState.isDragging && state.selectedUnits.size > 0 && !mouseState.touchedBase && !mouseState.touchedMovementDot) {
     updateAbilityCastPreview(state, dx, dy, mouseState.startPos);
@@ -919,10 +965,14 @@ export function handleMouseUp(e: MouseEvent, state: GameState, canvas: HTMLCanva
     // If base was not selected, dragging from it spawns units
     if (mouseState.touchedBaseWasSelected) {
       handleSetRallyPoint(state, mouseState.touchedBase, { x: dx, y: dy });
+      delete state.rallyPointPreview; // Clear preview after setting rally point
     } else {
       handleBaseSwipe(state, mouseState.touchedBase, { x: dx, y: dy }, playerIndex);
     }
   } else if (mouseState.isDragging && dist > SWIPE_THRESHOLD_PX) {
+    // Clear rally point preview if drag ended without setting rally point (and continuing to other actions)
+    delete state.rallyPointPreview;
+    
     const selectedBase = getSelectedBase(state, playerIndex);
 
     // When base is selected and drag is NOT from the base, queue the base's ability

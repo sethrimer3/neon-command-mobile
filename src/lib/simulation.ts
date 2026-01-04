@@ -2019,7 +2019,13 @@ function executeExecuteDash(state: GameState, unit: Unit, targetPos: { x: number
     }
   });
 
-  unit.position = { ...nearest.position };
+  // Position warrior next to target, not on top of it to avoid collision issues
+  const direction = normalize(subtract(nearest.position, unit.position));
+  unit.position = {
+    x: nearest.position.x - direction.x * 1.2,
+    y: nearest.position.y - direction.y * 1.2,
+  };
+  
   const def = UNIT_DEFINITIONS.warrior;
   const damage = def.attackDamage * 5 * unit.damageMultiplier;
   nearest.hp -= damage;
