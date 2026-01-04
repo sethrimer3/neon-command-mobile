@@ -1126,7 +1126,8 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
         ctx.fill();
         
         // Draw line from base to rally point with pulsing effect
-        ctx.globalAlpha = 0.4 + Math.sin(Date.now() / 200) * 0.1; // Pulsing animation
+        // Use elapsedTime for consistent animation timing across different frame rates
+        ctx.globalAlpha = 0.4 + Math.sin(state.elapsedTime * 5) * 0.1; // Pulsing animation
         ctx.setLineDash([5, 5]);
         ctx.lineWidth = 3;
         ctx.beginPath();

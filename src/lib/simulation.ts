@@ -2021,10 +2021,20 @@ function executeExecuteDash(state: GameState, unit: Unit, targetPos: { x: number
 
   // Position warrior next to target, not on top of it to avoid collision issues
   const direction = normalize(subtract(nearest.position, unit.position));
-  unit.position = {
-    x: nearest.position.x - direction.x * 1.2,
-    y: nearest.position.y - direction.y * 1.2,
-  };
+  
+  // If warrior is already at target position (shouldn't happen, but be safe), move them slightly
+  if (direction.x === 0 && direction.y === 0) {
+    // Default to moving warrior to the left of enemy
+    unit.position = {
+      x: nearest.position.x - 1.2,
+      y: nearest.position.y,
+    };
+  } else {
+    unit.position = {
+      x: nearest.position.x - direction.x * 1.2,
+      y: nearest.position.y - direction.y * 1.2,
+    };
+  }
   
   const def = UNIT_DEFINITIONS.warrior;
   const damage = def.attackDamage * 5 * unit.damageMultiplier;
