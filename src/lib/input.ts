@@ -578,8 +578,8 @@ function handleAbilityDrag(state: GameState, dragVector: { x: number; y: number 
     const startPosition = getCommandOrigin(unit);
 
     // Ability should be cast from startPosition, not from a far position
-    // The direction vector already indicates where the ability aims
-    const abilityNode: CommandNode = { type: 'ability', position: startPosition, direction: clampedVector };
+    // Copy the position/vector so later queue updates don't mutate the ability anchor
+    const abilityNode: CommandNode = { type: 'ability', position: { ...startPosition }, direction: { ...clampedVector } };
 
     // In chess mode, add to pending commands instead of immediate queue
     if (state.settings.chessMode && state.chessMode) {
@@ -673,8 +673,8 @@ function handleVectorBasedAbilityDrag(state: GameState, dragVector: { x: number;
     const startPosition = getCommandOrigin(unit);
 
     // Ability should be cast from startPosition, not from a far position
-    // The direction vector already indicates where the ability aims
-    const abilityNode: CommandNode = { type: 'ability', position: startPosition, direction: clampedVector };
+    // Copy the position/vector so later queue updates don't mutate the ability anchor
+    const abilityNode: CommandNode = { type: 'ability', position: { ...startPosition }, direction: { ...clampedVector } };
 
     // In chess mode, add to pending commands instead of immediate queue
     if (state.settings.chessMode && state.chessMode) {
