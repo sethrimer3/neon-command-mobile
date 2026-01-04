@@ -1389,10 +1389,29 @@ export function updateGame(state: GameState, deltaTime: number): void {
 
 function updateIncome(state: GameState, deltaTime: number): void {
   const elapsedSeconds = Math.floor(state.elapsedTime);
-  const newIncomeRate = Math.floor(elapsedSeconds / 10) + 1;
+  const baseIncomeRate = Math.floor(elapsedSeconds / 10) + 1;
 
-  state.players.forEach((player) => {
-    player.incomeRate = newIncomeRate;
+  state.players.forEach((player, playerIndex) => {
+    // Calculate mining income from active mining drones
+    let miningIncome = 0;
+    state.miningDepots.forEach((depot) => {
+      if (depot.owner === playerIndex) {
+        depot.deposits.forEach((deposit) => {
+          if (deposit.workerId) {
+            // Check if the worker is still alive
+            const worker = state.units.find(u => u.id === deposit.workerId);
+            if (worker) {
+              miningIncome += 2; // Each drone adds +2 income
+            } else {
+              // Worker died, clear the reference
+              deposit.workerId = undefined;
+            }
+          }
+        });
+      }
+    });
+    
+    player.incomeRate = baseIncomeRate + miningIncome;
   });
 
   state.lastIncomeTime += deltaTime;
@@ -1533,6 +1552,24 @@ function updateUnits(state: GameState, deltaTime: number): void {
     }
 
     if (unit.commandQueue.length === 0) {
+      // Mining drones automatically queue back and forth between depot and deposit
+      if (unit.miningState) {
+        const depot = state.miningDepots.find(d => d.id === unit.miningState?.depotId);
+        const deposit = depot?.deposits.find(d => d.id === unit.miningState?.depositId);
+        
+        if (depot && deposit) {
+          if (unit.miningState.atDepot) {
+            // Go to deposit
+            unit.commandQueue.push({ type: 'move', position: deposit.position });
+            unit.miningState.atDepot = false;
+          } else {
+            // Go back to depot
+            unit.commandQueue.push({ type: 'move', position: depot.position });
+            unit.miningState.atDepot = true;
+          }
+        }
+      }
+      
       // Reset stuck timer when no commands
       unit.stuckTimer = 0;
       unit.lastPosition = undefined;

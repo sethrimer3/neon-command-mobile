@@ -17,11 +17,11 @@ import {
   PIXELS_PER_METER,
   Vector2,
 } from './types';
-import { distance, normalize, scale, add, subtract, pixelsToPosition, positionToPixels, getViewportOffset, getViewportDimensions, pixelsToMeters } from './gameUtils';
+import { distance, normalize, scale, add, subtract, pixelsToPosition, positionToPixels, getViewportOffset, getViewportDimensions, pixelsToMeters, generateId } from './gameUtils';
 import { spawnUnit } from './simulation';
 import { soundManager } from './sound';
 import { applyFormation } from './formations';
-import { createLaserParticles, createEnergyPulse } from './visualEffects';
+import { createLaserParticles, createEnergyPulse, createSpawnEffect } from './visualEffects';
 import { sendMoveCommand, sendAbilityCommand, sendBaseMoveCommand, sendBaseLaserCommand, sendSpawnCommand } from './multiplayerGame';
 
 interface TouchState {
@@ -33,6 +33,8 @@ interface TouchState {
   touchedBase?: Base;
   touchedBaseWasSelected?: boolean; // Track if the touched base was already selected
   touchedMovementDot?: { base: Base; dotPos: { x: number; y: number } };
+  touchedDepot?: import('./types').MiningDepot; // Track if touched a mining depot
+  touchedDepotPos?: Vector2; // World position where depot was touched
 }
 
 const touchStates = new Map<number, TouchState>();
@@ -116,6 +118,7 @@ export function handleTouchStart(e: TouchEvent, state: GameState, canvas: HTMLCa
 
     const touchedBase = findTouchedBase(state, worldPos, playerIndex);
     const touchedDot = findTouchedMovementDot(state, worldPos, playerIndex);
+    const touchedDepot = findTouchedMiningDepot(state, worldPos, playerIndex);
 
     touchStates.set(touch.identifier, {
       startPos: { x, y },
@@ -125,6 +128,8 @@ export function handleTouchStart(e: TouchEvent, state: GameState, canvas: HTMLCa
       touchedBase,
       touchedBaseWasSelected: touchedBase?.isSelected || false,
       touchedMovementDot: touchedDot,
+      touchedDepot,
+      touchedDepotPos: touchedDepot ? worldPos : undefined,
     });
   });
 }
@@ -224,6 +229,10 @@ export function handleTouchEnd(e: TouchEvent, state: GameState, canvas: HTMLCanv
       handleRectSelection(state, touchState.selectionRect, canvas, playerIndex);
     } else if (touchState.touchedMovementDot) {
       handleLaserSwipe(state, touchState.touchedMovementDot, { x: dx, y: dy });
+    } else if (touchState.touchedDepot && touchState.isDragging && dist > SWIPE_THRESHOLD_PX && touchState.touchedDepotPos) {
+      // Handle mining depot drag to create mining drone
+      const endWorldPos = pixelsToPosition({ x, y });
+      handleMiningDepotDrag(state, touchState.touchedDepot, touchState.touchedDepotPos, endWorldPos, playerIndex);
     } else if (touchState.touchedBase && !touchState.isDragging) {
       const base = touchState.touchedBase;
       if (base.isSelected) {
@@ -296,6 +305,23 @@ function findTouchedBase(state: GameState, worldPos: { x: number; y: number }, p
     if (base.owner !== playerIndex) return false;
     const dist = distance(base.position, worldPos);
     return dist < BASE_SIZE_METERS / 2;
+  });
+}
+
+function findTouchedMiningDepot(state: GameState, worldPos: { x: number; y: number }, playerIndex: number): import('./types').MiningDepot | undefined {
+  const DEPOT_SIZE = 1.5;
+  return state.miningDepots.find((depot) => {
+    if (depot.owner !== playerIndex) return false;
+    const dist = distance(depot.position, worldPos);
+    return dist < DEPOT_SIZE / 2;
+  });
+}
+
+function findTouchedResourceDeposit(depot: import('./types').MiningDepot, worldPos: { x: number; y: number }): import('./types').ResourceDeposit | undefined {
+  const DEPOSIT_SIZE = 0.6;
+  return depot.deposits.find((deposit) => {
+    const dist = distance(deposit.position, worldPos);
+    return dist < DEPOSIT_SIZE;
   });
 }
 
@@ -469,6 +495,66 @@ function handleSetRallyPoint(state: GameState, base: Base, swipe: { x: number; y
   base.rallyPoint = newRallyPoint;
   
   soundManager.playUnitMove();
+}
+
+function handleMiningDepotDrag(state: GameState, depot: import('./types').MiningDepot, startWorldPos: Vector2, endWorldPos: Vector2, playerIndex: number): void {
+  // Check if drag ended on a resource deposit
+  const targetDeposit = findTouchedResourceDeposit(depot, endWorldPos);
+  
+  if (!targetDeposit) {
+    // No valid deposit at end position
+    return;
+  }
+  
+  // Check if deposit already has a worker
+  if (targetDeposit.workerId) {
+    soundManager.playError();
+    return;
+  }
+  
+  // Check if player has enough photons
+  const miningDroneCost = 10;
+  if (state.players[playerIndex].photons < miningDroneCost) {
+    soundManager.playError();
+    return;
+  }
+  
+  // Deduct cost
+  state.players[playerIndex].photons -= miningDroneCost;
+  
+  // Create mining drone at depot position
+  const droneId = generateId();
+  const drone: Unit = {
+    id: droneId,
+    type: 'miningDrone',
+    owner: playerIndex,
+    position: { ...depot.position },
+    hp: UNIT_DEFINITIONS.miningDrone.hp,
+    maxHp: UNIT_DEFINITIONS.miningDrone.hp,
+    armor: UNIT_DEFINITIONS.miningDrone.armor,
+    commandQueue: [{ type: 'move', position: targetDeposit.position }],
+    damageMultiplier: 1.0,
+    distanceTraveled: 0,
+    distanceCredit: 0,
+    abilityCooldown: 0,
+    attackCooldown: 0,
+    miningState: {
+      depotId: depot.id,
+      depositId: targetDeposit.id,
+      atDepot: true,
+    },
+  };
+  
+  state.units.push(drone);
+  targetDeposit.workerId = droneId;
+  
+  // Income rate will be updated automatically by updateIncome function
+  
+  soundManager.playUnitTrain();
+  
+  // Create spawn effect
+  const color = state.players[playerIndex].color;
+  createSpawnEffect(state, depot.position, color);
 }
 
 function handleBaseSwipe(state: GameState, base: Base, swipe: { x: number; y: number }, playerIndex: number): void {
