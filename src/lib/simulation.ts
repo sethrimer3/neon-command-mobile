@@ -2278,10 +2278,9 @@ function executeBurstFire(state: GameState, unit: Unit, direction: { x: number; 
 }
 
 function executeExecuteDash(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
-  // Calculate target position based on direction vector (similar to other abilities)
+  // Calculate dash range based on direction vector
   const dashRange = Math.min(distance({ x: 0, y: 0 }, direction), ABILITY_MAX_RANGE);
   const dir = normalize(direction);
-  const targetPos = add(unit.position, scale(dir, dashRange));
   
   const enemies = state.units.filter((u) => u.owner !== unit.owner);
   
