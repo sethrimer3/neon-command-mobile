@@ -23,8 +23,12 @@ Defines all core type definitions, interfaces, and constants for the SoL-RTS gam
 - **PIXELS_PER_METER:** `20` - Conversion ratio between game meters and screen pixels
 - **BASE_SIZE_METERS:** `6` - Size of player bases in game units
 - **UNIT_SIZE_METERS:** `2` - Standard unit collision size
+- **MINING_DEPOT_SIZE_METERS:** `3` - Mining depot footprint used for rendering and input hit tests
+- **RESOURCE_DEPOSIT_SIZE_METERS:** `1.2` - Hex resource deposit size around each depot
+- **RESOURCE_DEPOSIT_RING_RADIUS_METERS:** `5` - Radius of the deposit ring around each depot
+- **MINING_DRONE_SIZE_MULTIPLIER:** `2` - Visual/selection scale factor for mining drones
 - **ABILITY_MAX_RANGE:** `10` - Maximum range for ability targeting
-- **QUEUE_MAX_LENGTH:** `20` - Maximum command queue size per unit
+- **QUEUE_MAX_LENGTH:** `3` - Maximum command queue size per unit
 - **LASER_RANGE:** `20` - Base laser weapon range
 - **LASER_DAMAGE_UNIT/BASE:** Unit and base damage values for laser
 - **PROMOTION_DISTANCE_THRESHOLD:** `10` - Distance units must travel to gain promotion
@@ -161,6 +165,7 @@ None currently identified
 - **2026-01-07**: Updated the warrior ability name to Laser Beam to match the shared laser-only behavior and removed dash-specific unit state.
 - **2025-03-10**: Doubled base and unit size constants to scale up all core gameplay footprints.
 - **2025-03-17**: Added mining drag preview state, deposit worker lists, and mining cadence delay fields for drones.
+- **2025-03-18**: Added mining structure/drone sizing constants to scale depots, deposits, and drones together.
 
 ## Watch Out For
 - Always use meters for game logic, only convert to pixels for rendering

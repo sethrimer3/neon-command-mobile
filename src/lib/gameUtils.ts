@@ -1,4 +1,4 @@
-import { Vector2, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS, PIXELS_PER_METER } from './types';
+import { Vector2, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS, PIXELS_PER_METER, RESOURCE_DEPOSIT_RING_RADIUS_METERS } from './types';
 
 // Calculate viewport scale to fit the fixed arena to the viewport
 let viewportScale = 1.0;
@@ -346,8 +346,7 @@ export function generateNebulaClouds(canvasWidth: number, canvasHeight: number):
 // Create mining depots in the corners of the map
 export function createMiningDepots(arenaWidth: number, arenaHeight: number): import('./types').MiningDepot[] {
   const depots: import('./types').MiningDepot[] = [];
-  const depositDistance = 2.5; // Distance from depot center to deposits
-  const depotSize = 1.5; // Size of the depot building
+  const depositDistance = RESOURCE_DEPOSIT_RING_RADIUS_METERS; // Distance from depot center to deposits
   const margin = 8; // Margin from edges of arena
   
   // Define the 4 corner positions for depots

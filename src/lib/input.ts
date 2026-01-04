@@ -13,6 +13,8 @@ import {
   LASER_COOLDOWN,
   BASE_SIZE_METERS,
   UNIT_SIZE_METERS,
+  MINING_DEPOT_SIZE_METERS,
+  MINING_DRONE_SIZE_MULTIPLIER,
   UNIT_DEFINITIONS,
   Vector2,
 } from './types';
@@ -46,7 +48,8 @@ const TAP_TIME_MS = 300;
 const HOLD_TIME_MS = 200;
 const DOUBLE_TAP_TIME_MS = 400; // Time window for double-tap detection
 const DOUBLE_TAP_DISTANCE_PX = 50; // Max distance between taps to count as double-tap
-const MINING_DEPOT_CANCEL_RADIUS = 1.0; // Meters to allow canceling mining drone creation near depot
+// Use the depot footprint so canceling feels consistent with the larger mining hub.
+const MINING_DEPOT_CANCEL_RADIUS = MINING_DEPOT_SIZE_METERS * 0.5;
 
 function addVisualFeedback(
   state: GameState,
@@ -217,13 +220,13 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
       touchState.isDragging = true;
 
       const elapsed = Date.now() - touchState.startTime;
-      // Only create selection rect if no units are selected AND no base touched
+      // Only create selection rect if no units are selected AND no base/depot touched
       // When units are selected, dragging will be for ability casting instead
       const playerIndex = resolvePlayerIndex(state, touchState.startPos.x);
       const selectedBase = getSelectedBase(state, playerIndex);
 
       // Skip selection rects when the base is selected so swipes spawn units anywhere
-      if (!touchState.touchedBase && state.selectedUnits.size === 0 && !selectedBase) {
+      if (!touchState.touchedBase && !touchState.touchedDepot && state.selectedUnits.size === 0 && !selectedBase) {
         touchState.selectionRect = {
           x1: touchState.startPos.x,
           y1: touchState.startPos.y,
@@ -392,7 +395,7 @@ function findTouchedBase(state: GameState, worldPos: { x: number; y: number }, p
 }
 
 function findTouchedMiningDepot(state: GameState, worldPos: { x: number; y: number }, playerIndex: number): import('./types').MiningDepot | undefined {
-  const DEPOT_SIZE = 1.5;
+  const DEPOT_SIZE = MINING_DEPOT_SIZE_METERS;
   return state.miningDepots.find((depot) => {
     if (depot.owner !== playerIndex) return false;
     const dist = distance(depot.position, worldPos);
@@ -788,7 +791,7 @@ function handleTap(state: GameState, screenPos: { x: number; y: number }, canvas
 
   const tappedUnit = state.units.find((unit) => {
     if (unit.owner !== playerIndex) return false;
-    return distance(unit.position, worldPos) < UNIT_SIZE_METERS / 2;
+    return distance(unit.position, worldPos) < getUnitSelectionRadius(unit);
   });
 
   if (tappedUnit) {
@@ -821,6 +824,12 @@ function handleTap(state: GameState, screenPos: { x: number; y: number }, canvas
       // Toast will be handled by the sound feedback
     }
   }
+}
+
+function getUnitSelectionRadius(unit: Unit): number {
+  // Scale mining drone selection to match their larger render footprint.
+  const sizeMultiplier = unit.type === 'miningDrone' ? MINING_DRONE_SIZE_MULTIPLIER : 1;
+  return (UNIT_SIZE_METERS * sizeMultiplier) / 2;
 }
 
 function handleAbilityDrag(state: GameState, dragVector: { x: number; y: number }, worldStart: { x: number; y: number }): void {

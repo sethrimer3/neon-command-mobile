@@ -172,6 +172,7 @@ Provides core mathematical utility functions for vector operations, coordinate t
 - Added desktop rotation support with portrait-stable gameplay coordinates
 - **2026-01-06**: Switched desktop rotation to counter-clockwise and updated inverse coordinate mapping for rotated input
 - **2025-03-17**: Initialized mining depot resource deposits with `workerIds` arrays to support multiple drones
+- **2025-03-18**: Aligned mining depot deposit ring spacing with the shared resource ring radius constant
 
 ## Watch Out For
 - Always normalize vectors before using them as directions (especially for movement)

@@ -155,6 +155,7 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - **2026-01-05**: Cloned ability command origin/direction vectors to keep queued ability anchors stable
 - **2026-01-06**: Derived ability drag vectors from world-space positions to respect rotated desktop input
 - **2025-03-17**: Added mining depot snap-to-deposit drag logic, preview state updates, and cancellation behavior near depots
+- **2025-03-18**: Disabled box selection when dragging from mining depots and scaled mining drone selection to match larger render size
 - **2026-01-04**: Added camera-aware screen/world conversions and pinch-to-zoom handling for touch input
 
 ## Watch Out For
