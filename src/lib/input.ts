@@ -191,6 +191,24 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
     if (touchState.isDragging && state.selectedUnits.size > 0 && !touchState.touchedBase && !touchState.touchedMovementDot) {
       updateAbilityCastPreview(state, dx, dy, touchState.startPos);
     }
+    
+    // Update base ability preview when base is selected and dragging (but not from the base itself)
+    const playerIndex = resolvePlayerIndex(state, touchState.startPos.x);
+    const selectedBase = getSelectedBase(state, playerIndex);
+    if (touchState.isDragging && selectedBase && state.selectedUnits.size === 0 && !touchState.touchedBase) {
+      const worldStart = pixelsToPosition(touchState.startPos);
+      const worldEnd = pixelsToPosition({ x: touchState.startPos.x + dx, y: touchState.startPos.y + dy });
+      const swipeDir = normalize(subtract(worldEnd, worldStart));
+      
+      state.baseAbilityPreview = {
+        baseId: selectedBase.id,
+        basePosition: selectedBase.position,
+        direction: swipeDir
+      };
+    } else {
+      // Clear base ability preview if not in the right state
+      delete state.baseAbilityPreview;
+    }
   });
 }
 
@@ -280,6 +298,9 @@ export function handleTouchEnd(e: TouchEvent, state: GameState, canvas: HTMLCanv
       // Clear preview if no valid action was taken
       delete state.abilityCastPreview;
     }
+    
+    // Always clear base ability preview when touch is released
+    delete state.baseAbilityPreview;
 
     touchStates.delete(touch.identifier);
   });
@@ -925,6 +946,24 @@ export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCan
   if (mouseState.isDragging && state.selectedUnits.size > 0 && !mouseState.touchedBase && !mouseState.touchedMovementDot) {
     updateAbilityCastPreview(state, dx, dy, mouseState.startPos);
   }
+  
+  // Update base ability preview when base is selected and dragging (but not from the base itself)
+  const playerIndex = resolvePlayerIndex(state, mouseState.startPos.x);
+  const selectedBase = getSelectedBase(state, playerIndex);
+  if (mouseState.isDragging && selectedBase && state.selectedUnits.size === 0 && !mouseState.touchedBase) {
+    const worldStart = pixelsToPosition(mouseState.startPos);
+    const worldEnd = pixelsToPosition({ x: mouseState.startPos.x + dx, y: mouseState.startPos.y + dy });
+    const swipeDir = normalize(subtract(worldEnd, worldStart));
+    
+    state.baseAbilityPreview = {
+      baseId: selectedBase.id,
+      basePosition: selectedBase.position,
+      direction: swipeDir
+    };
+  } else {
+    // Clear base ability preview if not in the right state
+    delete state.baseAbilityPreview;
+  }
 }
 
 export function handleMouseUp(e: MouseEvent, state: GameState, canvas: HTMLCanvasElement): void {
@@ -1007,6 +1046,9 @@ export function handleMouseUp(e: MouseEvent, state: GameState, canvas: HTMLCanva
     // Clear preview if no valid action was taken
     delete state.abilityCastPreview;
   }
+  
+  // Always clear base ability preview when mouse is released
+  delete state.baseAbilityPreview;
 
   mouseState = null;
 }

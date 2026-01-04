@@ -207,6 +207,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
         drawSelectionRect(ctx, selectionRect, state);
       }
       drawAbilityCastPreview(ctx, state);
+      drawBaseAbilityPreview(ctx, state);
       drawVisualFeedback(ctx, state);
       drawHUD(ctx, state);
       drawMinimap(ctx, state, canvas);
@@ -2948,6 +2949,99 @@ function drawAbilityCastPreview(ctx: CanvasRenderingContext2D, state: GameState)
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(`${dragLen.toFixed(1)}m`, midScreen.x, midScreen.y - 15);
+  
+  ctx.restore();
+}
+
+function drawBaseAbilityPreview(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.baseAbilityPreview) return;
+  
+  const { basePosition, direction } = state.baseAbilityPreview;
+  
+  // Find the base to get the player color
+  const base = state.bases.find(b => b.id === state.baseAbilityPreview!.baseId);
+  if (!base) return;
+  
+  const color = state.players[base.owner].color;
+  const time = Date.now() / 1000;
+  
+  ctx.save();
+  
+  // Draw a big arrow from the base in the laser direction
+  const baseScreen = positionToPixels(basePosition);
+  const endPos = add(basePosition, scale(direction, LASER_RANGE));
+  const endScreen = positionToPixels(endPos);
+  
+  // Draw laser beam preview line
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 6;
+  ctx.globalAlpha = 0.8;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 20;
+  ctx.setLineDash([12, 6]);
+  ctx.lineDashOffset = time * 30; // Animate dashes faster for laser
+  
+  ctx.beginPath();
+  ctx.moveTo(baseScreen.x, baseScreen.y);
+  ctx.lineTo(endScreen.x, endScreen.y);
+  ctx.stroke();
+  
+  ctx.setLineDash([]);
+  
+  // Draw pulsing glow at base
+  const basePulse = Math.sin(time * 4) * 0.3 + 0.7;
+  ctx.globalAlpha = 0.9 * basePulse;
+  ctx.shadowBlur = 25;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(baseScreen.x, baseScreen.y, 8 + basePulse * 3, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Draw large arrow at the end
+  const dx = endScreen.x - baseScreen.x;
+  const dy = endScreen.y - baseScreen.y;
+  const angle = Math.atan2(dy, dx);
+  
+  ctx.globalAlpha = 0.95;
+  ctx.shadowBlur = 25;
+  ctx.fillStyle = color;
+  
+  ctx.save();
+  ctx.translate(endScreen.x, endScreen.y);
+  ctx.rotate(angle);
+  
+  // Draw a bigger arrow for base ability
+  const arrowLength = 24;
+  const arrowWidth = 16;
+  ctx.beginPath();
+  ctx.moveTo(arrowLength, 0);
+  ctx.lineTo(-arrowLength * 0.3, -arrowWidth);
+  ctx.lineTo(-arrowLength * 0.3, arrowWidth);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Draw arrowhead outline for extra emphasis
+  ctx.strokeStyle = COLORS.white;
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.6;
+  ctx.stroke();
+  
+  ctx.restore();
+  
+  // Draw laser range indicator text
+  ctx.globalAlpha = 0.9;
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = COLORS.white;
+  ctx.font = 'bold 16px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  
+  const midScreen = {
+    x: (baseScreen.x + endScreen.x) / 2,
+    y: (baseScreen.y + endScreen.y) / 2
+  };
+  
+  ctx.fillText(`LASER ${LASER_RANGE.toFixed(0)}m`, midScreen.x, midScreen.y - 20);
   
   ctx.restore();
 }

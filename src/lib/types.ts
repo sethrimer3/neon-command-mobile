@@ -1067,6 +1067,13 @@ export interface GameState {
     rallyPoint: Vector2; // Current rally point position being previewed
   };
   
+  // Base ability (laser) cast preview
+  baseAbilityPreview?: {
+    baseId: string; // ID of the base casting the ability
+    basePosition: Vector2; // Position of the base
+    direction: Vector2; // Direction vector of the laser
+  };
+  
   // Multiplayer manager for online games (typed as any to avoid circular dependency with multiplayer.ts)
   multiplayerManager?: import('./multiplayer').MultiplayerManager;
   
