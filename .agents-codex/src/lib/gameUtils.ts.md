@@ -55,7 +55,7 @@ Provides core mathematical utility functions for vector operations, coordinate t
 - **Purpose:** Compute a uniform scale that fits the arena within the screen while preserving aspect ratio
 - **Parameters:** Canvas width and height in pixels
 - **Returns:** None (updates module-scoped viewport state)
-- **Notes:** Also computes letterbox offsets and viewport dimensions for centered rendering
+- **Notes:** Also computes letterbox offsets and viewport dimensions for centered rendering, swapping arena bounds when the playfield is rotated
 
 #### getViewportScale(): number
 - **Purpose:** Retrieve the current arena-to-screen scale factor
@@ -87,13 +87,18 @@ Provides core mathematical utility functions for vector operations, coordinate t
 - **Purpose:** Convert game position to screen coordinates
 - **Parameters:** Position in meters
 - **Returns:** Position in pixels
-- **Notes:** Applies conversion to both x and y components and offsets by the letterboxed viewport
+- **Notes:** Anchors on the arena center and applies a desktop rotation when active
 
 #### pixelsToPosition(pixels: Vector2): Vector2
 - **Purpose:** Convert screen coordinates to game position
 - **Parameters:** Position in pixels
 - **Returns:** Position in meters
-- **Notes:** Removes the letterboxed offset before converting to meters
+- **Notes:** Removes the letterboxed offset before converting to meters and reverses desktop rotation if present
+
+#### shouldUsePortraitCoordinates(): boolean
+- **Purpose:** Decide whether gameplay should use the portrait-oriented coordinate system
+- **Returns:** True when portrait orientation is active or when the desktop view is rotated
+- **Notes:** Keeps gameplay logic consistent while allowing the desktop view to rotate
 
 ### Numeric Utility Functions
 
@@ -141,6 +146,7 @@ Provides core mathematical utility functions for vector operations, coordinate t
 - All vector operations assume positions are in meters (game space)
 - Coordinate conversions are essential when translating between game logic and rendering
 - Viewport scale and offset keep the arena centered across varying aspect ratios
+- Viewport scale swaps arena dimensions when the playfield is rotated for desktop
 - normalize() handles zero-length vectors gracefully (returns zero vector)
 - generateId() is NOT cryptographically secure - only for game entity IDs
 
@@ -162,6 +168,7 @@ Provides core mathematical utility functions for vector operations, coordinate t
 - Added topography line generation for visual polish
 - Coordinate conversion functions added for rendering system
 - Added viewport offset/dimension tracking to support letterboxed rendering
+- Added desktop rotation support with portrait-stable gameplay coordinates
 
 ## Watch Out For
 - Always normalize vectors before using them as directions (especially for movement)

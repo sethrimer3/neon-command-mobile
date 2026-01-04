@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useKV } from './hooks/useKV';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS, FactionType, FACTION_DEFINITIONS, BASE_TYPE_DEFINITIONS, BaseType, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS } from './lib/types';
-import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, isPortraitOrientation, updateViewportScale, calculateDefaultRallyPoint } from './lib/gameUtils';
+import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, shouldUsePortraitCoordinates, updateViewportScale, calculateDefaultRallyPoint } from './lib/gameUtils';
 import { updateGame } from './lib/simulation';
 import { updateAI } from './lib/ai';
 import { renderGame } from './lib/renderer';
@@ -168,8 +168,10 @@ function App() {
                         ('ontouchstart' in window) || 
                         (window.innerWidth < 768);
       
+      // Store device context for gameplay and rendering logic
       gameStateRef.current.isMobile = isMobile;
-      gameStateRef.current.isPortrait = isPortraitOrientation();
+      // Keep gameplay coordinates portrait-based even when the desktop view rotates
+      gameStateRef.current.isPortrait = shouldUsePortraitCoordinates();
     };
 
     const resizeCanvas = () => {
@@ -1667,7 +1669,8 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
   const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
   const obstacles = [...mapObstacles, ...boundaryObstacles];
   
-  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
+  // Keep base placement aligned to the shared portrait coordinate system
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, shouldUsePortraitCoordinates());
   
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
   const stars = generateStarfield(canvas.width, canvas.height);
@@ -1743,7 +1746,8 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
     nebulaClouds,
     stars,
     floaters: initializeFloaters(),
-    isPortrait: isPortraitOrientation(),
+    // Keep gameplay coordinates consistent across devices
+    isPortrait: shouldUsePortraitCoordinates(),
   };
 }
 
@@ -1795,7 +1799,8 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
   const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
   const obstacles = [...mapObstacles, ...boundaryObstacles];
   
-  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
+  // Keep base placement aligned to the shared portrait coordinate system
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, shouldUsePortraitCoordinates());
   
   // Generate topography lines and starfield for this level
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
@@ -1875,7 +1880,8 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     nebulaClouds,
     stars,
     floaters: initializeFloaters(),
-    isPortrait: isPortraitOrientation(),
+    // Keep gameplay coordinates consistent across devices
+    isPortrait: shouldUsePortraitCoordinates(),
   };
 }
 
@@ -1890,7 +1896,8 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
   const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
   const obstacles = [...mapObstacles, ...boundaryObstacles];
   
-  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
+  // Keep base placement aligned to the shared portrait coordinate system
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, shouldUsePortraitCoordinates());
 
   const playerBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.playerBaseType || 'standard'];
   const enemyBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.enemyBaseType || 'standard'];
@@ -1952,7 +1959,8 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
       startTime: Date.now(),
       phase: 'bases-sliding',
     },
-    isPortrait: isPortraitOrientation(),
+    // Keep gameplay coordinates consistent across devices
+    isPortrait: shouldUsePortraitCoordinates(),
     floaters: initializeFloaters(),
   };
 }
@@ -1968,7 +1976,8 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
   const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
   const obstacles = [...mapObstacles, ...boundaryObstacles];
   
-  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
+  // Keep base placement aligned to the shared portrait coordinate system
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, shouldUsePortraitCoordinates());
 
   // For online games, use standard base type for now
   const playerBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
@@ -2042,7 +2051,8 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
       startTime: Date.now(),
       phase: 'bases-sliding',
     },
-    isPortrait: isPortraitOrientation(),
+    // Keep gameplay coordinates consistent across devices
+    isPortrait: shouldUsePortraitCoordinates(),
     floaters: initializeFloaters(),
   };
 }
@@ -2058,7 +2068,8 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
   const boundaryObstacles = createBoundaryObstacles(arenaWidth, arenaHeight);
   const obstacles = [...mapObstacles, ...boundaryObstacles];
   
-  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, isPortraitOrientation());
+  // Keep base placement aligned to the shared portrait coordinate system
+  const basePositions = getValidBasePositions(arenaWidth, arenaHeight, obstacles, shouldUsePortraitCoordinates());
   
   // Generate topography lines and starfield for this level
   const topographyLines = generateTopographyLines(canvas.width, canvas.height);
@@ -2150,7 +2161,8 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
     nebulaClouds,
     stars,
     floaters: initializeFloaters(),
-    isPortrait: isPortraitOrientation(),
+    // Keep gameplay coordinates consistent across devices
+    isPortrait: shouldUsePortraitCoordinates(),
   };
 }
 

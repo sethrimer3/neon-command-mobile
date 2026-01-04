@@ -7,6 +7,26 @@ let viewportOffset: Vector2 = { x: 0, y: 0 };
 // Track the pixel size of the arena viewport for camera math
 let viewportDimensions = { width: 0, height: 0 };
 
+// Detect whether we should rotate the playfield for desktop landscape setups
+function shouldRotatePlayfield(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const isLandscape = window.innerWidth >= window.innerHeight;
+  const hasFinePointer = window.matchMedia?.('(pointer: fine)').matches ?? false;
+  return isLandscape && hasFinePointer;
+}
+
+// Use portrait-oriented gameplay coordinates even when the playfield is rotated
+export function shouldUsePortraitCoordinates(): boolean {
+  if (shouldRotatePlayfield()) {
+    return true;
+  }
+
+  return isPortraitOrientation();
+}
+
 export function updateViewportScale(width: number, height: number): void {
   // Validate inputs to prevent division by zero or invalid scale factors
   if (width <= 0 || height <= 0) {
@@ -17,16 +37,21 @@ export function updateViewportScale(width: number, height: number): void {
     return;
   }
   
+  // Swap arena dimensions when the playfield is rotated to keep it fully visible
+  const shouldRotate = shouldRotatePlayfield();
+  const arenaWidthMeters = shouldRotate ? ARENA_HEIGHT_METERS : ARENA_WIDTH_METERS;
+  const arenaHeightMeters = shouldRotate ? ARENA_WIDTH_METERS : ARENA_HEIGHT_METERS;
+
   // Calculate scale factors for both dimensions
-  const scaleX = width / (ARENA_WIDTH_METERS * PIXELS_PER_METER);
-  const scaleY = height / (ARENA_HEIGHT_METERS * PIXELS_PER_METER);
+  const scaleX = width / (arenaWidthMeters * PIXELS_PER_METER);
+  const scaleY = height / (arenaHeightMeters * PIXELS_PER_METER);
   
   // Use the smaller scale to ensure the entire arena fits in the viewport
   viewportScale = Math.min(scaleX, scaleY);
   
-  // Calculate the letterboxed viewport size in pixels
-  const viewportWidth = ARENA_WIDTH_METERS * PIXELS_PER_METER * viewportScale;
-  const viewportHeight = ARENA_HEIGHT_METERS * PIXELS_PER_METER * viewportScale;
+  // Calculate the letterboxed viewport size in pixels (post-rotation bounds)
+  const viewportWidth = arenaWidthMeters * PIXELS_PER_METER * viewportScale;
+  const viewportHeight = arenaHeightMeters * PIXELS_PER_METER * viewportScale;
   
   // Center the arena by computing the leftover margin on each axis
   viewportOffset = {
@@ -83,18 +108,55 @@ export function pixelsToMeters(pixels: number): number {
 }
 
 export function positionToPixels(pos: Vector2): Vector2 {
+  // Anchor positions around the center so rotation stays aligned to the viewport
+  const center = {
+    x: viewportOffset.x + viewportDimensions.width / 2,
+    y: viewportOffset.y + viewportDimensions.height / 2,
+  };
+  const arenaWidthPixels = ARENA_WIDTH_METERS * PIXELS_PER_METER * viewportScale;
+  const arenaHeightPixels = ARENA_HEIGHT_METERS * PIXELS_PER_METER * viewportScale;
+  const dx = pos.x * PIXELS_PER_METER * viewportScale - arenaWidthPixels / 2;
+  const dy = pos.y * PIXELS_PER_METER * viewportScale - arenaHeightPixels / 2;
+
+  // Rotate the playfield for desktop landscape while preserving world coordinates
+  if (shouldRotatePlayfield()) {
+    return {
+      x: center.x + dy,
+      y: center.y - dx,
+    };
+  }
+
   return {
     // Offset by the letterboxed viewport so arena stays centered
-    x: pos.x * PIXELS_PER_METER * viewportScale + viewportOffset.x,
-    y: pos.y * PIXELS_PER_METER * viewportScale + viewportOffset.y,
+    x: center.x + dx,
+    y: center.y + dy,
   };
 }
 
 export function pixelsToPosition(pixels: Vector2): Vector2 {
+  // Anchor positions around the center so rotation stays aligned to the viewport
+  const center = {
+    x: viewportOffset.x + viewportDimensions.width / 2,
+    y: viewportOffset.y + viewportDimensions.height / 2,
+  };
+  const arenaWidthPixels = ARENA_WIDTH_METERS * PIXELS_PER_METER * viewportScale;
+  const arenaHeightPixels = ARENA_HEIGHT_METERS * PIXELS_PER_METER * viewportScale;
+  const dx = pixels.x - center.x;
+  const dy = pixels.y - center.y;
+  const scale = PIXELS_PER_METER * viewportScale;
+
+  // Undo the desktop rotation before converting back to world coordinates
+  if (shouldRotatePlayfield()) {
+    return {
+      x: (arenaWidthPixels / 2 - dy) / scale,
+      y: (arenaHeightPixels / 2 + dx) / scale,
+    };
+  }
+
   return {
     // Remove the letterboxed viewport offset before converting to meters
-    x: (pixels.x - viewportOffset.x) / (PIXELS_PER_METER * viewportScale),
-    y: (pixels.y - viewportOffset.y) / (PIXELS_PER_METER * viewportScale),
+    x: (dx + arenaWidthPixels / 2) / scale,
+    y: (dy + arenaHeightPixels / 2) / scale,
   };
 }
 
