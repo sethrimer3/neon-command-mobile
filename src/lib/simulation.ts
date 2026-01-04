@@ -1462,31 +1462,13 @@ function updateUnits(state: GameState, deltaTime: number): void {
       unit.distanceTraveled += moveDist;
     } else if (currentNode.type === 'ability') {
       const dist = distance(unit.position, currentNode.position);
-      if (dist > 0.1) {
-        const def = UNIT_DEFINITIONS[unit.type];
-        const direction = normalize(subtract(currentNode.position, unit.position));
-        const movement = scale(direction, def.moveSpeed * deltaTime);
-        
-        // Update unit rotation to face movement direction
-        updateUnitRotation(unit, direction, deltaTime);
-        
-        unit.position = add(unit.position, movement);
-
-        const queueMovementNodes = unit.commandQueue.filter((n) => n.type === 'move').length;
-        const creditMultiplier = 1.0 + QUEUE_BONUS_PER_NODE * queueMovementNodes;
-        const moveDist = Math.min(distance({ x: 0, y: 0 }, movement), dist);
-        unit.distanceCredit += moveDist * creditMultiplier;
-
-        while (unit.distanceCredit >= PROMOTION_DISTANCE_THRESHOLD) {
-          unit.distanceCredit -= PROMOTION_DISTANCE_THRESHOLD;
-          unit.damageMultiplier *= PROMOTION_MULTIPLIER;
-        }
-
-        unit.distanceTraveled += moveDist;
-      } else {
-        executeAbility(state, unit, currentNode);
-        unit.commandQueue.shift();
-      }
+      
+      // Abilities should execute even if the unit drifted away from the queued anchor
+      const abilityOrigin = dist > 0.1 ? { ...unit.position } : currentNode.position;
+      const abilityNode: CommandNode = { ...currentNode, position: abilityOrigin };
+      
+      executeAbility(state, unit, abilityNode);
+      unit.commandQueue.shift();
     } else if (currentNode.type === 'patrol') {
       // Patrol: move to patrol point, then add return command to create loop
       const dist = distance(unit.position, currentNode.position);

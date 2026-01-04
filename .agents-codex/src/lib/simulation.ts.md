@@ -108,6 +108,7 @@ Multiple functions for unit abilities:
 - Combat uses attack rate to determine damage intervals
 - Bases can move but slowly (for gameplay balance)
 - Spawn rally points are clamped inside the 1m boundary to prevent off-screen movement targets
+- Ability commands execute immediately when dequeued, using current position if the unit drifted from the queued anchor
 
 ### Known Issues
 - None currently identified
@@ -131,6 +132,7 @@ Multiple functions for unit abilities:
 - Added time limit support
 - **2025-12-31**: Added particle physics system for marines with 10 particles per unit that orbit using attraction forces
 - **2026-01-01**: Clamped spawn rally points to playable bounds to prevent stuck units
+- **2026-01-05**: Executed queued abilities from current position to avoid stalled ability commands
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds

@@ -97,6 +97,7 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - Unit spawning shows menu on hold (200ms+)
 - Swipe distance and direction determines command type
 - Command queue respects QUEUE_MAX_LENGTH
+- Ability command queue nodes clone their origin/direction vectors to avoid later mutation
 - Coordinates converted from pixels to game meters
 - Touch events prevented to avoid browser scrolling
 
@@ -113,6 +114,14 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 
 ### Known Issues
 - None currently identified
+
+## Potential Issues
+
+### Unused Code
+- **Location:** `src/lib/input.ts` (handleAbilityDrag)
+- **Description:** Vector-based ability drag helper is defined but not referenced
+- **Reason:** No call sites found in touch/mouse handlers
+- **Recommendation:** Remove if obsolete or wire it into input handling
 
 ## Future Changes
 
@@ -138,6 +147,7 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - **2025-12-31**: Fixed mobile selection box to create immediately when no units are selected (removed hold time requirement for empty selection)
 - **2026-01-01**: Allowed swipe-to-spawn anywhere when the base is selected and prioritized units over base selection in box select
 - **2026-01-03**: Anchored split-screen input detection to the letterboxed arena viewport center
+- **2026-01-05**: Cloned ability command origin/direction vectors to keep queued ability anchors stable
 
 ## Watch Out For
 - Always prevent default on touch events to avoid scrolling
