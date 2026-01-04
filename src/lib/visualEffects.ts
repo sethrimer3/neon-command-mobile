@@ -678,12 +678,14 @@ export function createAbilityEffect(
       // Create rapid fire effect with charge-up
       createAbilityCharge(state, unit.position, color, 0.3);
       createEnergyPulse(state, unit.position, color, 0.3, 1.5);
+      triggerBackgroundPush(unit.position, 8);
       break;
     
     case 'line-jump':
       // Create jump telegraph with charge particles
       createAbilityCharge(state, unit.position, 'oklch(0.75 0.18 200)', 0.4);
       createEnergyPulse(state, unit.position, 'oklch(0.75 0.18 200)', 0.5, 1);
+      triggerBackgroundPush(unit.position, 6);
       break;
     
     case 'shield-dome':
@@ -691,18 +693,21 @@ export function createAbilityEffect(
       createEnergyPulse(state, unit.position, color, 0.5, 4);
       createEnergyPulse(state, unit.position, color, 0.7, 3.5);
       createParticleBurst(state, unit.position, color, 16, 4);
+      triggerBackgroundPush(unit.position, 10);
       break;
     
     case 'cloak':
       // Create cloaking shimmer with inward particles
       createAbilityCharge(state, unit.position, color, 0.5);
       createParticleBurst(state, unit.position, color, 25, 3);
+      triggerBackgroundPush(unit.position, 5);
       break;
     
     case 'bombardment':
       // Create targeting reticle effect with charge particles
       createAbilityCharge(state, position, 'oklch(0.70 0.30 25)', 0.6);
       createEnergyPulse(state, position, 'oklch(0.70 0.30 25)', 0.8, 3);
+      triggerBackgroundPush(position, 12);
       break;
     
     case 'heal-pulse':
@@ -710,6 +715,7 @@ export function createAbilityEffect(
       createEnergyPulse(state, unit.position, 'oklch(0.70 0.20 140)', 0.6, 5);
       createEnergyPulse(state, unit.position, 'oklch(0.80 0.18 150)', 0.8, 4.5);
       createHealSparkles(state, unit.position, 3);
+      triggerBackgroundPush(unit.position, 8);
       break;
     
     case 'missile-barrage':
@@ -717,24 +723,45 @@ export function createAbilityEffect(
       createEnergyPulse(state, unit.position, color, 0.4, 2);
       createParticleBurst(state, unit.position, color, 18, 8);
       createAbilityCharge(state, unit.position, color, 0.3);
+      triggerBackgroundPush(unit.position, 10);
       break;
       
     case 'precision-shot':
       // Sniper-like charging effect
       createAbilityCharge(state, unit.position, color, 0.5);
       createEnergyPulse(state, unit.position, color, 0.3, 1.2);
+      triggerBackgroundPush(unit.position, 7);
       break;
       
     case 'ground-slam':
       // Heavy impact effect
       createEnergyPulse(state, unit.position, color, 0.5, 3);
       createParticleBurst(state, unit.position, color, 30, 12);
+      triggerBackgroundPush(unit.position, 15);
       break;
       
     case 'whirlwind':
       // Spinning particle effect
       createParticleBurst(state, unit.position, color, 25, 8);
       createEnergyPulse(state, unit.position, color, 0.6, 2.5);
+      triggerBackgroundPush(unit.position, 9);
       break;
+  }
+}
+
+/**
+ * Trigger background particle push effect for menu screens
+ * This will push galaxy formations and free particles when abilities are activated
+ * Note: Only works when AnimatedBackground component is mounted (menu screens)
+ */
+export function triggerBackgroundPush(position: Vector2, force: number = 10): void {
+  // Convert game coordinates to screen coordinates if needed
+  // For now, we'll use the position as-is since this is primarily for menu effects
+  // In the future, this could be enhanced to work with game-to-screen coordinate conversion
+  
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('backgroundPush', {
+      detail: { x: position.x, y: position.y, force }
+    }));
   }
 }
