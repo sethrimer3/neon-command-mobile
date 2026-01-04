@@ -101,6 +101,16 @@ const GLOW_PULSE_FREQUENCY = 1.5; // Hz for glow pulsing
 const ABILITY_READY_PULSE_INTENSITY = 0.4; // Intensity of ability ready pulse
 const MOTION_BLUR_SPEED_THRESHOLD = 1.5; // Minimum speed for motion blur to appear
 const ABILITY_ARROW_LENGTH = 12; // Arrow length for ability command visualization
+// Scale projectile visuals alongside unit sizing so bullets track the larger silhouettes.
+const PROJECTILE_SIZE_METERS = UNIT_SIZE_METERS * 1.2;
+const PROJECTILE_TRAIL_LENGTH_METERS = UNIT_SIZE_METERS * 0.9;
+const PROJECTILE_OUTER_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.3;
+const PROJECTILE_INNER_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.15;
+const PROJECTILE_CORE_RADIUS_METERS = UNIT_SIZE_METERS * 0.25;
+const PROJECTILE_CORE_INNER_RADIUS_METERS = UNIT_SIZE_METERS * 0.125;
+// Scale unit-attached particle visuals with unit size for consistent glow and trails.
+const UNIT_PARTICLE_BASE_SIZE_METERS = UNIT_SIZE_METERS * 0.15;
+const UNIT_PARTICLE_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.125;
 
 // Helper function to get bright highlight color for team
 function getTeamHighlightColor(owner: number): string {
@@ -1361,9 +1371,10 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     const pulseIntensity = 0.8 + Math.sin(age * 30) * 0.2; // Fast pulse
     
     // Draw outer glow layer
-    const trailLength = 18;
+    // Convert trail length from meters so projectile visuals scale with unit size.
+    const trailLength = PROJECTILE_TRAIL_LENGTH_METERS;
     const direction = normalize(projectile.velocity);
-    const trailStart = subtract(projectile.position, scale(direction, trailLength / 20));
+    const trailStart = subtract(projectile.position, scale(direction, trailLength));
     const trailScreenPos = positionToPixels(trailStart);
     
     // Create multi-layer gradient for trail
@@ -1373,7 +1384,8 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     outerGradient.addColorStop(1, addAlphaToColor(projectile.color, 0.6));
     
     ctx.strokeStyle = outerGradient;
-    ctx.lineWidth = 6;
+    // Scale trail widths in meters to keep bullets proportionate to units.
+    ctx.lineWidth = metersToPixels(PROJECTILE_OUTER_TRAIL_WIDTH_METERS);
     ctx.lineCap = 'round';
     ctx.shadowColor = projectile.color;
     ctx.shadowBlur = 25 * pulseIntensity;
@@ -1390,7 +1402,7 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     gradient.addColorStop(1, projectile.color);
     
     ctx.strokeStyle = gradient;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = metersToPixels(PROJECTILE_INNER_TRAIL_WIDTH_METERS);
     ctx.shadowBlur = 18 * pulseIntensity;
     
     ctx.beginPath();
@@ -1408,14 +1420,16 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
       
       // Set glow effect for the sprite
       ctx.shadowColor = projectile.color;
-      ctx.shadowBlur = 20 * pulseIntensity;
+      // Scale glow with projectile size to match larger units.
+      ctx.shadowBlur = metersToPixels(UNIT_SIZE_METERS * 0.8) * pulseIntensity;
       
       // Draw sprite rotated in the direction of travel
       ctx.translate(screenPos.x, screenPos.y);
       ctx.rotate(angle);
       
       // Draw the sprite centered and scaled appropriately
-      const spriteSize = 24; // Size in pixels
+      // Use meter-based sizing so projectile sprites scale with unit size.
+      const spriteSize = metersToPixels(PROJECTILE_SIZE_METERS);
       ctx.drawImage(projectileSprite, -spriteSize / 2, -spriteSize / 2, spriteSize, spriteSize);
       
       // Restore context state (resets transformations and shadow)
@@ -1423,16 +1437,17 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     } else {
       // Fallback to original circle rendering if sprite not loaded
       ctx.fillStyle = projectile.color;
-      ctx.shadowBlur = 20 * pulseIntensity;
+      // Scale the fallback glow with unit size for consistent projectile weight.
+      ctx.shadowBlur = metersToPixels(UNIT_SIZE_METERS * 0.8) * pulseIntensity;
       ctx.beginPath();
-      ctx.arc(screenPos.x, screenPos.y, 5, 0, Math.PI * 2);
+      ctx.arc(screenPos.x, screenPos.y, metersToPixels(PROJECTILE_CORE_RADIUS_METERS), 0, Math.PI * 2);
       ctx.fill();
       
       // Draw bright center with appropriate team color
       ctx.fillStyle = getTeamHighlightColor(projectile.owner);
-      ctx.shadowBlur = 25 * pulseIntensity;
+      ctx.shadowBlur = metersToPixels(UNIT_SIZE_METERS * 1.0) * pulseIntensity;
       ctx.beginPath();
-      ctx.arc(screenPos.x, screenPos.y, 2.5, 0, Math.PI * 2);
+      ctx.arc(screenPos.x, screenPos.y, metersToPixels(PROJECTILE_CORE_INNER_RADIUS_METERS), 0, Math.PI * 2);
       ctx.fill();
     }
     
@@ -1868,6 +1883,9 @@ function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
   if (!unit.particles || unit.particles.length === 0) return;
   
   const time = Date.now() / 1000;
+  // Convert unit-relative particle sizing into pixels for consistent scaling.
+  const baseParticleSize = metersToPixels(UNIT_PARTICLE_BASE_SIZE_METERS);
+  const baseTrailWidth = metersToPixels(UNIT_PARTICLE_TRAIL_WIDTH_METERS);
   
   unit.particles.forEach((particle, index) => {
     const screenPos = positionToPixels(particle.position);
@@ -1889,9 +1907,10 @@ function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
         // Safe division: trail.length is guaranteed to be > 1 from the outer check
         const alpha = 1 - (i / Math.max(particle.trail.length, 1));
         ctx.globalAlpha = alpha * 0.8;
-        ctx.lineWidth = 2.5 * alpha;
+        // Scale trail width with unit size so particle trails match larger units.
+        ctx.lineWidth = baseTrailWidth * alpha;
         ctx.shadowColor = particle.color;
-        ctx.shadowBlur = 6 * alpha;
+        ctx.shadowBlur = baseParticleSize * 2 * alpha;
         
         ctx.beginPath();
         ctx.moveTo(trailPos1.x, trailPos1.y);
@@ -1905,12 +1924,13 @@ function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
     
     // Add subtle size variation based on orbital position
     const sizeVariation = Math.sin(time * 3 + index * 0.5) * 0.3 + 1;
-    const particleSize = 3 * sizeVariation;
+    // Scale particle size with unit size while preserving the shimmer animation.
+    const particleSize = baseParticleSize * sizeVariation;
     
     // Draw particle with enhanced glow effect and color variation
     ctx.fillStyle = particle.color;
     ctx.shadowColor = particle.color;
-    ctx.shadowBlur = 14;
+    ctx.shadowBlur = baseParticleSize * 4.5;
     
     // Outer glow layer
     ctx.globalAlpha = 0.3;
@@ -1920,13 +1940,13 @@ function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
     
     // Main particle circle
     ctx.globalAlpha = 1.0;
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = baseParticleSize * 4;
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, particleSize, 0, Math.PI * 2);
     ctx.fill();
     
     // Draw brighter inner core with stronger glow
-    ctx.shadowBlur = 22;
+    ctx.shadowBlur = baseParticleSize * 7;
     ctx.globalAlpha = 0.9;
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, particleSize * 0.6, 0, Math.PI * 2);
@@ -1937,13 +1957,16 @@ function drawParticles(ctx: CanvasRenderingContext2D, unit: Unit): void {
 }
 
 function drawSnaker(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
-  const segmentSize = 6;
+  // Scale snaker segments with unit size to keep the silhouette consistent.
+  const segmentSize = metersToPixels(UNIT_SIZE_METERS * 0.3);
+  const segmentSpacing = metersToPixels(UNIT_SIZE_METERS * 0.4);
+  const wobbleAmplitude = metersToPixels(UNIT_SIZE_METERS * 0.15);
   const segments = 5;
 
   for (let i = 0; i < segments; i++) {
-    const offset = i * 8;
+    const offset = i * segmentSpacing;
     const angle = (unit.distanceTraveled * 2 + i * 0.5) % (Math.PI * 2);
-    const wobble = Math.sin(angle) * 3;
+    const wobble = Math.sin(angle) * wobbleAmplitude;
 
     ctx.fillStyle = color;
     ctx.beginPath();

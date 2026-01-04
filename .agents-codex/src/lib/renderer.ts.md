@@ -64,7 +64,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 #### drawParticles(ctx, unit): void
 - **Purpose:** Renders particle physics effects for units
 - **Notes:**
-  - Small glowing circles (2px radius)
+  - Uses meter-based sizing to scale particle glow/trails with unit size
   - Uses unit's color with shadow blur for glow effect
   - Currently used only for marines (10 particles per marine)
 
@@ -145,6 +145,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - **2026-01-03**: Adjusted playfield borders to render with the arena viewport offset
 - **2026-01-03**: Anchored unit LOD calculations to the arena viewport center
 - **2026-01-06**: Sized playfield borders using viewport dimensions to match rotated desktop bounds
+- **2025-03-10**: Scaled projectile and unit-attached particle rendering using meter-based sizing tied to unit size constants
 
 ## Watch Out For
 - Always convert game positions to pixels before drawing

@@ -73,7 +73,7 @@ Contains the core game simulation loop and logic. Handles unit movement, combat,
 - **updateParticles(unit, deltaTime):** Updates particle positions using attraction forces
   - Particles attracted to unit center with spring-like force
   - Damping applied to prevent excessive velocity
-  - Maintains desired orbit distance of 0.8 meters
+  - Maintains desired orbit distance scaled to unit size (0.8 × unit size)
 
 ### executeLineJump(state: GameState, unit: Unit): void
 - **Purpose:** Executes the Snaker's line jump ability
@@ -134,6 +134,7 @@ Multiple functions for unit abilities:
 - **2026-01-01**: Clamped spawn rally points to playable bounds to prevent stuck units
 - **2026-01-05**: Executed queued abilities from current position to avoid stalled ability commands
 - **2026-01-07**: Removed the warrior's execute dash extra effect so warriors only trigger the shared laser ability and cleaned up dash timing logic
+- **2025-03-10**: Scaled particle orbit distance and orbital forces with unit size to keep unit-following particles proportional after size changes
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds

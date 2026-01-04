@@ -101,10 +101,13 @@ const JITTER_MOVEMENT_DISTANCE = 0.1; // Distance to move per jitter attempt
 // Particle physics constants
 const PARTICLE_ATTRACTION_STRENGTH = 6.0; // How strongly particles are attracted to their unit
 const PARTICLE_DAMPING = 0.92; // Velocity damping factor - reduces velocity to prevent excessive speeds
-const PARTICLE_ORBIT_DISTANCE = 0.8; // Desired orbit distance from unit center
-const PARTICLE_MIN_VELOCITY = 2.5; // Minimum velocity to keep particles moving
+// Scale orbit distance with unit size so particles stay proportionate to unit silhouettes.
+const PARTICLE_ORBIT_DISTANCE = UNIT_SIZE_METERS * 0.8; // Desired orbit distance from unit center
+// Scale minimum velocity to keep particles moving proportionally around larger units.
+const PARTICLE_MIN_VELOCITY = 2.5 * UNIT_SIZE_METERS; // Minimum velocity to keep particles moving
 const PARTICLE_ORBITAL_SPEED = 2.0; // Speed of orbital rotation around unit
-const PARTICLE_ORBITAL_FORCE = 1.2; // Force applied for orbital motion
+// Scale orbital force with unit size to maintain similar orbital tension at larger radii.
+const PARTICLE_ORBITAL_FORCE = 1.2 * UNIT_SIZE_METERS; // Force applied for orbital motion
 const PARTICLE_ORBITAL_VELOCITY_SCALE = 0.5; // Scale factor for orbital velocity contribution
 const PARTICLE_TRAIL_LENGTH = 6; // Number of trail positions to keep
 const PARTICLE_MIN_SPEED_THRESHOLD = 0.01; // Threshold for detecting nearly stationary particles

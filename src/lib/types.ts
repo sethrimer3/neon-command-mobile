@@ -1,6 +1,8 @@
 export const PIXELS_PER_METER = 20;
-export const BASE_SIZE_METERS = 3;
-export const UNIT_SIZE_METERS = 1;
+// Double the base footprint so structures read larger in-world.
+export const BASE_SIZE_METERS = 6;
+// Double the unit footprint so all unit rendering/collision scales up.
+export const UNIT_SIZE_METERS = 2;
 
 // Fixed arena dimensions in meters for consistent gameplay across all devices
 export const ARENA_WIDTH_METERS = 60;  // Fixed logical width in meters

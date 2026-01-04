@@ -21,8 +21,8 @@ Defines all core type definitions, interfaces, and constants for the SoL-RTS gam
 
 ### Constants
 - **PIXELS_PER_METER:** `20` - Conversion ratio between game meters and screen pixels
-- **BASE_SIZE_METERS:** `3` - Size of player bases in game units
-- **UNIT_SIZE_METERS:** `1` - Standard unit collision size
+- **BASE_SIZE_METERS:** `6` - Size of player bases in game units
+- **UNIT_SIZE_METERS:** `2` - Standard unit collision size
 - **ABILITY_MAX_RANGE:** `10` - Maximum range for ability targeting
 - **QUEUE_MAX_LENGTH:** `20` - Maximum command queue size per unit
 - **LASER_RANGE:** `20` - Base laser weapon range
@@ -156,6 +156,7 @@ None currently identified
 - **2025-12-31**: Added Particle interface and particle physics system for visual effects on marines (10 particles per marine that orbit using attraction forces)
 - **2026-01-01**: Added countdownSeconds to keep UI and audio updates in sync during match start.
 - **2026-01-07**: Updated the warrior ability name to Laser Beam to match the shared laser-only behavior and removed dash-specific unit state.
+- **2025-03-10**: Doubled base and unit size constants to scale up all core gameplay footprints.
 
 ## Watch Out For
 - Always use meters for game logic, only convert to pixels for rendering
