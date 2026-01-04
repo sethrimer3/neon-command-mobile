@@ -28,6 +28,7 @@ import { StatisticsScreen } from './components/StatisticsScreen';
 import { ModifierHelpScreen } from './components/ModifierHelpScreen';
 import { UnitInformationScreen } from './components/UnitInformationScreen';
 import { VictoryScreen } from './components/VictoryScreen';
+import { AnimatedBackground } from './components/AnimatedBackground';
 import { getMapById, getValidBasePositions, createBoundaryObstacles } from './lib/maps';
 import { MultiplayerManager, LobbyData } from './lib/multiplayer';
 import { createRealtimeStore } from './lib/realtimeStore';
@@ -1135,6 +1136,15 @@ function App() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-background" onClick={handleCanvasSurrenderReset}>
+      {/* Animated background for menu screens */}
+      {gameState.mode !== 'game' && gameState.mode !== 'countdown' && (
+        <AnimatedBackground 
+          particleCount={60} 
+          color={playerColor || COLORS.playerDefault}
+          galaxyCount={3}
+        />
+      )}
+      
       <canvas 
         ref={canvasRef} 
         className="absolute inset-0 transition-opacity duration-300"
