@@ -191,6 +191,9 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
     if (touchState.isDragging && state.selectedUnits.size > 0 && !touchState.touchedBase && !touchState.touchedMovementDot) {
       updateAbilityCastPreview(state, dx, dy, touchState.startPos);
     }
+    
+    // Update base ability preview when base is selected and dragging (but not from the base itself)
+    updateBaseAbilityPreview(state, touchState.isDragging, touchState.touchedBase, touchState.startPos, dx, dy);
   });
 }
 
@@ -280,6 +283,9 @@ export function handleTouchEnd(e: TouchEvent, state: GameState, canvas: HTMLCanv
       // Clear preview if no valid action was taken
       delete state.abilityCastPreview;
     }
+    
+    // Clear all input-related previews when touch is released
+    clearBaseAbilityPreview(state);
 
     touchStates.delete(touch.identifier);
   });
@@ -925,6 +931,9 @@ export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCan
   if (mouseState.isDragging && state.selectedUnits.size > 0 && !mouseState.touchedBase && !mouseState.touchedMovementDot) {
     updateAbilityCastPreview(state, dx, dy, mouseState.startPos);
   }
+  
+  // Update base ability preview when base is selected and dragging (but not from the base itself)
+  updateBaseAbilityPreview(state, mouseState.isDragging, mouseState.touchedBase, mouseState.startPos, dx, dy);
 }
 
 export function handleMouseUp(e: MouseEvent, state: GameState, canvas: HTMLCanvasElement): void {
@@ -1007,8 +1016,44 @@ export function handleMouseUp(e: MouseEvent, state: GameState, canvas: HTMLCanva
     // Clear preview if no valid action was taken
     delete state.abilityCastPreview;
   }
+  
+  // Clear all input-related previews when mouse is released
+  clearBaseAbilityPreview(state);
 
   mouseState = null;
+}
+
+// Helper function to update base ability preview when dragging
+function updateBaseAbilityPreview(
+  state: GameState,
+  isDragging: boolean,
+  touchedBase: Base | undefined,
+  startPos: { x: number; y: number },
+  dx: number,
+  dy: number
+): void {
+  const playerIndex = resolvePlayerIndex(state, startPos.x);
+  const selectedBase = getSelectedBase(state, playerIndex);
+  
+  if (isDragging && selectedBase && state.selectedUnits.size === 0 && !touchedBase) {
+    const worldStart = pixelsToPosition(startPos);
+    const worldEnd = pixelsToPosition({ x: startPos.x + dx, y: startPos.y + dy });
+    const swipeDir = normalize(subtract(worldEnd, worldStart));
+    
+    state.baseAbilityPreview = {
+      baseId: selectedBase.id,
+      basePosition: selectedBase.position,
+      direction: swipeDir
+    };
+  } else {
+    // Clear base ability preview if not in the right state
+    delete state.baseAbilityPreview;
+  }
+}
+
+// Helper function to clear base ability preview
+function clearBaseAbilityPreview(state: GameState): void {
+  delete state.baseAbilityPreview;
 }
 
 export function getActiveSelectionRect(): { x1: number; y1: number; x2: number; y2: number } | null {

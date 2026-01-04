@@ -558,7 +558,10 @@ function applyFlockingBehavior(unit: Unit, baseDirection: Vector2, allUnits: Uni
   const alignment = calculateAlignment(unit, allUnits, baseDirection);
   
   // Combine forces with base direction
-  let finalDirection = { ...baseDirection };
+  // Base direction should have stronger weight to ensure units still move toward their goal
+  // Scale base direction by a factor to make it the dominant force
+  const BASE_DIRECTION_WEIGHT = 10.0; // Make base direction 10x stronger than flocking forces
+  let finalDirection = scale(baseDirection, BASE_DIRECTION_WEIGHT);
   finalDirection = add(finalDirection, separation);
   finalDirection = add(finalDirection, cohesion);
   finalDirection = add(finalDirection, alignment);
