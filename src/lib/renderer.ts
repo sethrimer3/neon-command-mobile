@@ -18,7 +18,7 @@ import {
   ARENA_HEIGHT_METERS,
   Floater,
 } from './types';
-import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract } from './gameUtils';
+import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract, getViewportOffset, getViewportDimensions } from './gameUtils';
 import { Obstacle } from './maps';
 import { MOTION_TRAIL_DURATION, QUEUE_FADE_DURATION, QUEUE_DRAW_DURATION, QUEUE_UNDRAW_DURATION } from './simulation';
 import { getFormationName } from './formations';
@@ -377,6 +377,8 @@ function drawBackgroundFloaters(ctx: CanvasRenderingContext2D, state: GameState)
 }
 
 function drawPlayfieldBorder(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void {
+  // Use the letterboxed viewport offset so the border aligns with the arena
+  const viewportOffset = getViewportOffset();
   // Calculate the playfield bounds in pixels
   const playfieldWidthPixels = metersToPixels(ARENA_WIDTH_METERS);
   const playfieldHeightPixels = metersToPixels(ARENA_HEIGHT_METERS);
@@ -390,29 +392,42 @@ function drawPlayfieldBorder(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasEl
   ctx.fillStyle = COLORS.borderMain;
   
   // Top border
-  ctx.fillRect(0, 0, playfieldWidthPixels, borderThickness);
+  ctx.fillRect(viewportOffset.x, viewportOffset.y, playfieldWidthPixels, borderThickness);
   
   // Bottom border
-  ctx.fillRect(0, playfieldHeightPixels - borderThickness, playfieldWidthPixels, borderThickness);
+  ctx.fillRect(
+    viewportOffset.x,
+    viewportOffset.y + playfieldHeightPixels - borderThickness,
+    playfieldWidthPixels,
+    borderThickness,
+  );
   
   // Left border
-  ctx.fillRect(0, 0, borderThickness, playfieldHeightPixels);
+  ctx.fillRect(viewportOffset.x, viewportOffset.y, borderThickness, playfieldHeightPixels);
   
   // Right border
-  ctx.fillRect(playfieldWidthPixels - borderThickness, 0, borderThickness, playfieldHeightPixels);
+  ctx.fillRect(
+    viewportOffset.x + playfieldWidthPixels - borderThickness,
+    viewportOffset.y,
+    borderThickness,
+    playfieldHeightPixels,
+  );
   
   // Add inner highlight for depth effect
   // The inner rectangle is inset by borderThickness on all sides (2 * borderThickness for width/height)
   ctx.strokeStyle = COLORS.borderHighlight;
   ctx.lineWidth = 2;
-  ctx.strokeRect(borderThickness, borderThickness, 
-                 playfieldWidthPixels - borderThickness * 2, 
-                 playfieldHeightPixels - borderThickness * 2);
+  ctx.strokeRect(
+    viewportOffset.x + borderThickness,
+    viewportOffset.y + borderThickness,
+    playfieldWidthPixels - borderThickness * 2,
+    playfieldHeightPixels - borderThickness * 2,
+  );
   
   // Add subtle outer shadow for depth effect
   ctx.strokeStyle = COLORS.borderShadow;
   ctx.lineWidth = 1;
-  ctx.strokeRect(0, 0, playfieldWidthPixels, playfieldHeightPixels);
+  ctx.strokeRect(viewportOffset.x, viewportOffset.y, playfieldWidthPixels, playfieldHeightPixels);
   
   ctx.restore();
 }
@@ -1335,13 +1350,20 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
       screenPos = { x: screenPos.x, y: screenPos.y + bobOffset };
     }
     
-    // Calculate distance from camera center for LOD
-    const cameraCenter = { x: ctx.canvas.width / 2, y: ctx.canvas.height / 2 };
+    // Calculate distance from arena viewport center for LOD
+    const viewportOffset = getViewportOffset();
+    const viewportDimensions = getViewportDimensions();
+    const cameraCenter = {
+      x: viewportOffset.x + viewportDimensions.width / 2,
+      y: viewportOffset.y + viewportDimensions.height / 2,
+    };
     const distFromCenter = Math.sqrt(
       Math.pow(screenPos.x - cameraCenter.x, 2) + 
       Math.pow(screenPos.y - cameraCenter.y, 2)
     );
-    const maxDist = Math.sqrt(Math.pow(ctx.canvas.width / 2, 2) + Math.pow(ctx.canvas.height / 2, 2));
+    const maxDist = Math.sqrt(
+      Math.pow(viewportDimensions.width / 2, 2) + Math.pow(viewportDimensions.height / 2, 2),
+    );
     const distanceRatio = distFromCenter / maxDist;
     
     // LOD: Simplify distant units

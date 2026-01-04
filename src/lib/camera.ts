@@ -3,7 +3,7 @@
  */
 
 import { GameState, Vector2, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS, PIXELS_PER_METER } from './types';
-import { getViewportScale } from './gameUtils';
+import { getViewportScale, getViewportOffset, getViewportDimensions } from './gameUtils';
 
 // Camera constants
 const MIN_ZOOM = 0.5;
@@ -109,11 +109,16 @@ export function applyCameraTransform(ctx: CanvasRenderingContext2D, state: GameS
   if (!state.camera) return;
 
   const viewportScale = getViewportScale();
+  const viewportOffset = getViewportOffset();
+  const viewportDimensions = getViewportDimensions();
+  // Use the arena viewport center so zoom/pan are consistent across aspect ratios
+  const centerX = viewportDimensions.width > 0 ? viewportOffset.x + viewportDimensions.width / 2 : canvas.width / 2;
+  const centerY = viewportDimensions.height > 0 ? viewportOffset.y + viewportDimensions.height / 2 : canvas.height / 2;
   
   ctx.save();
   
-  // Translate to center of canvas
-  ctx.translate(canvas.width / 2, canvas.height / 2);
+  // Translate to center of the letterboxed arena viewport
+  ctx.translate(centerX, centerY);
   
   // Apply zoom
   ctx.scale(state.camera.zoom, state.camera.zoom);
@@ -121,8 +126,8 @@ export function applyCameraTransform(ctx: CanvasRenderingContext2D, state: GameS
   // Apply camera offset (convert meters to pixels with viewport scale)
   ctx.translate(state.camera.offset.x * PIXELS_PER_METER * viewportScale, state.camera.offset.y * PIXELS_PER_METER * viewportScale);
   
-  // Translate back from center
-  ctx.translate(-canvas.width / 2, -canvas.height / 2);
+  // Translate back from viewport center
+  ctx.translate(-centerX, -centerY);
 }
 
 /**
@@ -141,8 +146,11 @@ export function screenToWorld(screenPos: Vector2, state: GameState, canvas: HTML
   }
 
   const viewportScale = getViewportScale();
-  const centerX = canvas.width / 2;
-  const centerY = canvas.height / 2;
+  const viewportOffset = getViewportOffset();
+  const viewportDimensions = getViewportDimensions();
+  // Anchor the camera conversion on the arena viewport center
+  const centerX = viewportDimensions.width > 0 ? viewportOffset.x + viewportDimensions.width / 2 : canvas.width / 2;
+  const centerY = viewportDimensions.height > 0 ? viewportOffset.y + viewportDimensions.height / 2 : canvas.height / 2;
 
   // Reverse the transformations
   const x = (screenPos.x - centerX) / state.camera.zoom - state.camera.offset.x * PIXELS_PER_METER * viewportScale + centerX;
@@ -160,8 +168,11 @@ export function worldToScreen(worldPos: Vector2, state: GameState, canvas: HTMLC
   }
 
   const viewportScale = getViewportScale();
-  const centerX = canvas.width / 2;
-  const centerY = canvas.height / 2;
+  const viewportOffset = getViewportOffset();
+  const viewportDimensions = getViewportDimensions();
+  // Anchor the camera conversion on the arena viewport center
+  const centerX = viewportDimensions.width > 0 ? viewportOffset.x + viewportDimensions.width / 2 : canvas.width / 2;
+  const centerY = viewportDimensions.height > 0 ? viewportOffset.y + viewportDimensions.height / 2 : canvas.height / 2;
 
   const x = (worldPos.x - centerX + state.camera.offset.x * PIXELS_PER_METER * viewportScale) * state.camera.zoom + centerX;
   const y = (worldPos.y - centerY + state.camera.offset.y * PIXELS_PER_METER * viewportScale) * state.camera.zoom + centerY;

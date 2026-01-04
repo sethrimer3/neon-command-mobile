@@ -51,6 +51,26 @@ Provides core mathematical utility functions for vector operations, coordinate t
 
 ### Coordinate Conversion Functions
 
+#### updateViewportScale(width: number, height: number): void
+- **Purpose:** Compute a uniform scale that fits the arena within the screen while preserving aspect ratio
+- **Parameters:** Canvas width and height in pixels
+- **Returns:** None (updates module-scoped viewport state)
+- **Notes:** Also computes letterbox offsets and viewport dimensions for centered rendering
+
+#### getViewportScale(): number
+- **Purpose:** Retrieve the current arena-to-screen scale factor
+- **Returns:** Scale multiplier for converting meters to pixels
+
+#### getViewportOffset(): Vector2
+- **Purpose:** Retrieve the pixel offset applied to the letterboxed arena
+- **Returns:** Vector2 offset in pixels
+- **Notes:** Used to center the arena and align input conversions
+
+#### getViewportDimensions(): { width: number; height: number }
+- **Purpose:** Retrieve the pixel size of the letterboxed arena viewport
+- **Returns:** Width/height in pixels
+- **Notes:** Used by camera conversions to anchor on the arena center
+
 #### metersToPixels(meters: number): number
 - **Purpose:** Convert game distance to screen pixels
 - **Parameters:** Distance in meters
@@ -67,13 +87,13 @@ Provides core mathematical utility functions for vector operations, coordinate t
 - **Purpose:** Convert game position to screen coordinates
 - **Parameters:** Position in meters
 - **Returns:** Position in pixels
-- **Notes:** Applies conversion to both x and y components
+- **Notes:** Applies conversion to both x and y components and offsets by the letterboxed viewport
 
 #### pixelsToPosition(pixels: Vector2): Vector2
 - **Purpose:** Convert screen coordinates to game position
 - **Parameters:** Position in pixels
 - **Returns:** Position in meters
-- **Notes:** Used for mouse/touch input handling
+- **Notes:** Removes the letterboxed offset before converting to meters
 
 ### Numeric Utility Functions
 
@@ -120,6 +140,7 @@ Provides core mathematical utility functions for vector operations, coordinate t
 ### Critical Details
 - All vector operations assume positions are in meters (game space)
 - Coordinate conversions are essential when translating between game logic and rendering
+- Viewport scale and offset keep the arena centered across varying aspect ratios
 - normalize() handles zero-length vectors gracefully (returns zero vector)
 - generateId() is NOT cryptographically secure - only for game entity IDs
 
@@ -140,6 +161,7 @@ Provides core mathematical utility functions for vector operations, coordinate t
 - Initial creation with basic vector math
 - Added topography line generation for visual polish
 - Coordinate conversion functions added for rendering system
+- Added viewport offset/dimension tracking to support letterboxed rendering
 
 ## Watch Out For
 - Always normalize vectors before using them as directions (especially for movement)

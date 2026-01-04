@@ -89,8 +89,9 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 
 ### Critical Details
 - Multi-touch support via Map of touch identifiers
-- Split-screen: left half for player 0, right half for player 1
-- Player ownership determined by screen position in two-player mode
+- Split-screen: left half for player 0, right half for player 1 within the arena viewport
+- Player ownership determined by screen position relative to the arena viewport center in two-player mode
+- Falls back to window width for split detection if viewport dimensions are not initialized
 - Selection is shift-additive with modifier key
 - Base dragging only works for own bases
 - Unit spawning shows menu on hold (200ms+)
@@ -106,7 +107,7 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 4. **Drag**: Box select or move base
 
 ### Two-Player Split Screen
-- Screen divided vertically at center
+- Screen divided vertically at the arena viewport center
 - Each player controls only their side
 - Input position determines player ownership
 
@@ -136,6 +137,7 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - Added unit spawn hold mechanic
 - **2025-12-31**: Fixed mobile selection box to create immediately when no units are selected (removed hold time requirement for empty selection)
 - **2026-01-01**: Allowed swipe-to-spawn anywhere when the base is selected and prioritized units over base selection in box select
+- **2026-01-03**: Anchored split-screen input detection to the letterboxed arena viewport center
 
 ## Watch Out For
 - Always prevent default on touch events to avoid scrolling
