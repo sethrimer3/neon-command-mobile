@@ -150,6 +150,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - **2026-01-06**: Sized playfield borders using viewport dimensions to match rotated desktop bounds
 - **2025-03-10**: Scaled projectile and unit-attached particle rendering using meter-based sizing tied to unit size constants
 - **2025-03-17**: Added mining drag preview lines and updated deposit colors for two-worker occupancy states
+- **2025-03-18**: Scaled mining depots, deposits, and mining drone rendering to match the larger resource loop visuals
 - **2026-01-04**: Applied camera transforms to world rendering and added off-screen zoom indicators for units and bases
 
 ## Watch Out For

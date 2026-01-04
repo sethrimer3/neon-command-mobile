@@ -3,6 +3,14 @@ export const PIXELS_PER_METER = 20;
 export const BASE_SIZE_METERS = 6;
 // Double the unit footprint so all unit rendering/collision scales up.
 export const UNIT_SIZE_METERS = 2;
+// Scale mining depots to read as large structures in the resource loop.
+export const MINING_DEPOT_SIZE_METERS = 3;
+// Scale resource deposits so their hex tiles feel substantial on the map.
+export const RESOURCE_DEPOSIT_SIZE_METERS = 1.2;
+// Expand the deposit ring radius to keep doubled deposits from overlapping the depot.
+export const RESOURCE_DEPOSIT_RING_RADIUS_METERS = 5;
+// Make mining drones render and select at a larger footprint than standard units.
+export const MINING_DRONE_SIZE_MULTIPLIER = 2;
 
 // Fixed arena dimensions in meters for consistent gameplay across all devices
 export const ARENA_WIDTH_METERS = 60;  // Fixed logical width in meters

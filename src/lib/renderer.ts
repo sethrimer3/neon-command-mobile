@@ -5,6 +5,9 @@ import {
   COLORS,
   UNIT_SIZE_METERS,
   BASE_SIZE_METERS,
+  MINING_DEPOT_SIZE_METERS,
+  RESOURCE_DEPOSIT_SIZE_METERS,
+  MINING_DRONE_SIZE_MULTIPLIER,
   UNIT_DEFINITIONS,
   Projectile,
   LASER_RANGE,
@@ -33,6 +36,15 @@ let projectileSpriteLoaded = false;
 projectileSprite.onload = () => {
   projectileSpriteLoaded = true;
 };
+
+function getUnitSizeMeters(unit: Unit): number {
+  // Expand mining drones so their visuals match the larger resource structures.
+  if (unit.type === 'miningDrone') {
+    return UNIT_SIZE_METERS * MINING_DRONE_SIZE_MULTIPLIER;
+  }
+
+  return UNIT_SIZE_METERS;
+}
 
 // Helper function to get modifier icon emoji
 function getModifierIcon(modifier: UnitModifier): string {
@@ -621,8 +633,8 @@ function drawObstacles(ctx: CanvasRenderingContext2D, state: GameState): void {
 }
 
 function drawMiningDepots(ctx: CanvasRenderingContext2D, state: GameState): void {
-  const DEPOT_SIZE = 1.5; // meters
-  const DEPOSIT_SIZE = 0.6; // meters
+  const DEPOT_SIZE = MINING_DEPOT_SIZE_METERS; // meters
+  const DEPOSIT_SIZE = RESOURCE_DEPOSIT_SIZE_METERS; // meters
   
   state.miningDepots.forEach((depot) => {
     const depotScreenPos = positionToPixels(depot.position);
@@ -663,10 +675,10 @@ function drawMiningDepots(ctx: CanvasRenderingContext2D, state: GameState): void
     ctx.strokeRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
     clearGlowEffect(ctx, state);
     
-    // Draw a center marker
+    // Draw a center marker scaled to the depot footprint
     ctx.fillStyle = depotColor;
     ctx.beginPath();
-    ctx.arc(depotScreenPos.x, depotScreenPos.y, metersToPixels(0.3), 0, Math.PI * 2);
+    ctx.arc(depotScreenPos.x, depotScreenPos.y, metersToPixels(DEPOT_SIZE * 0.2), 0, Math.PI * 2);
     ctx.fill();
     
     ctx.restore();
@@ -1523,7 +1535,10 @@ function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos:
   const barWidth = 24;
   const barHeight = 4;
   const barX = screenPos.x - barWidth / 2;
-  const barY = screenPos.y - 18;
+  const unitSizeMeters = getUnitSizeMeters(unit);
+  // Offset the bar to avoid overlapping larger-than-normal unit silhouettes.
+  const unitSizeOffset = metersToPixels(unitSizeMeters / 2) - metersToPixels(UNIT_SIZE_METERS / 2);
+  const barY = screenPos.y - 18 - unitSizeOffset;
   
   // Use display HP for smooth interpolation
   const displayHp = unit.displayHp !== undefined ? unit.displayHp : unit.hp;
@@ -1637,7 +1652,8 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     } else if (unit.type === 'interceptor') {
       drawInterceptor(ctx, unit, screenPos, color);
     } else {
-      const radius = metersToPixels(UNIT_SIZE_METERS / 2);
+      const unitSizeMeters = getUnitSizeMeters(unit);
+      const radius = metersToPixels(unitSizeMeters / 2);
 
       // Health-based glow intensity
       const healthPercent = unit.hp / unit.maxHp;
@@ -1833,7 +1849,7 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
       const iconSpacing = 14;
       const totalWidth = unitDef.modifiers.length * iconSpacing - 2;
       const startX = screenPos.x - totalWidth / 2;
-      const iconY = screenPos.y - metersToPixels(UNIT_SIZE_METERS / 2) - 30;
+      const iconY = screenPos.y - metersToPixels(getUnitSizeMeters(unit) / 2) - 30;
       
       ctx.save();
       ctx.font = `${iconSize}px Arial`;
