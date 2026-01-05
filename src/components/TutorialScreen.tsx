@@ -4,7 +4,7 @@
  */
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { ArrowLeft, GameController, MouseSimple, HandSwipeRight, Target, Lightning, Shield, Flag, ChartLine, Users, KeyReturn } from '@phosphor-icons/react';
+import { ArrowLeft, GameController, MouseSimple, HandSwipeRight, Target, Lightning, Shield, Flag, ChartLine, Users, KeyReturn, TrendUp } from '@phosphor-icons/react';
 import { ScrollArea } from './ui/scroll-area';
 
 interface TutorialScreenProps {
@@ -105,7 +105,7 @@ export function TutorialScreen({ onBack }: TutorialScreenProps) {
       ]
     },
     {
-      icon: <ChartLine size={32} className="text-orange-400" />,
+      icon: <TrendUp size={32} className="text-orange-400" />,
       title: "Distance Promotion System",
       content: [
         "Units gain damage bonuses as they travel long distances",
