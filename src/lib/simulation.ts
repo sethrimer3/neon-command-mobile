@@ -80,7 +80,6 @@ const projectilePool = new ObjectPool<Projectile>(
 // Unit collision constants
 const UNIT_COLLISION_RADIUS = UNIT_SIZE_METERS / 2; // Minimum distance between unit centers
 const UNIT_COLLISION_SQUEEZE_FACTOR = 0.75; // Allow units to squeeze past each other (75% of full diameter - more permissive for smoother flow)
-const FRIENDLY_SLIDE_DISTANCE = 0.3; // Distance to slide perpendicular when avoiding friendly units
 const ARRIVAL_DISTANCE_THRESHOLD = 0.1; // Distance threshold for considering a unit has arrived at destination
 
 // Helper function to calculate effective collision radius
@@ -312,14 +311,14 @@ function hasUnitArrivedAtPosition(
   return false;
 }
 
-// Enhanced collision check that attempts to find a slide path for friendly units
-// Returns { blocked: boolean, alternativePosition?: Vector2 }
-function checkUnitCollisionWithSliding(
+// Collision check that blocks movement when any unit or obstacle overlap is detected
+// Returns { blocked: boolean }
+function checkUnitCollisionBlocking(
   unit: Unit,
   desiredPosition: Vector2,
   allUnits: Unit[],
   obstacles: import('./maps').Obstacle[]
-): { blocked: boolean; alternativePosition?: Vector2 } {
+): { blocked: boolean } {
   const collisionRadius = getCollisionRadius();
   
   // Check obstacle collision first
@@ -327,70 +326,20 @@ function checkUnitCollisionWithSliding(
     return { blocked: true };
   }
   
-  // Check unit collisions
-  let hasEnemyCollision = false;
-  let hasFriendlyCollision = false;
+  // Check unit collisions against all other units
+  let hasUnitCollision = false;
   
   for (const otherUnit of allUnits) {
     if (otherUnit.id === unit.id) continue;
     
     const dist = distance(desiredPosition, otherUnit.position);
     if (dist < collisionRadius) {
-      if (otherUnit.owner === unit.owner) {
-        hasFriendlyCollision = true;
-      } else {
-        hasEnemyCollision = true;
-      }
+      hasUnitCollision = true;
+      break;
     }
   }
   
-  // If blocked by enemy, return blocked status
-  if (hasEnemyCollision) {
-    return { blocked: true };
-  }
-  
-  // If only friendly collisions, try to find a sliding path
-  if (hasFriendlyCollision) {
-    const movementDirection = normalize(subtract(desiredPosition, unit.position));
-    
-    // Calculate perpendicular directions for sliding
-    const rightPerpendicular = { x: -movementDirection.y, y: movementDirection.x };
-    const leftPerpendicular = { x: movementDirection.y, y: -movementDirection.x };
-    
-    // Calculate diagonal directions (45-degree rotations)
-    // Diagonal right: rotate movement direction 45° clockwise
-    const sqrt2 = Math.sqrt(2);
-    const diagonalRight = { 
-      x: (-movementDirection.y + movementDirection.x) / sqrt2, 
-      y: (movementDirection.x + movementDirection.y) / sqrt2 
-    };
-    // Diagonal left: rotate movement direction 45° counter-clockwise
-    const diagonalLeft = { 
-      x: (movementDirection.y + movementDirection.x) / sqrt2, 
-      y: (-movementDirection.x + movementDirection.y) / sqrt2 
-    };
-    
-    // Try multiple slide distances and angles for better pathfinding
-    const slideDistances = [FRIENDLY_SLIDE_DISTANCE, FRIENDLY_SLIDE_DISTANCE * 1.5, FRIENDLY_SLIDE_DISTANCE * 0.5];
-    const slideAngles = [rightPerpendicular, leftPerpendicular, diagonalRight, diagonalLeft];
-    
-    // Try each combination of slide distance and angle
-    for (const slideDistance of slideDistances) {
-      for (const slideAngle of slideAngles) {
-        const slidePos = add(desiredPosition, scale(slideAngle, slideDistance));
-        if (!checkObstacleCollision(slidePos, UNIT_SIZE_METERS / 2, obstacles) &&
-            !checkUnitCollision(slidePos, unit.id, allUnits)) {
-          return { blocked: false, alternativePosition: slidePos };
-        }
-      }
-    }
-    
-    // If no slide path found, return blocked but still friendly collision
-    return { blocked: true };
-  }
-  
-  // No collision
-  return { blocked: false };
+  return { blocked: hasUnitCollision };
 }
 
 // Helper function to mark unit's queue for cancellation due to being stuck
@@ -1729,12 +1678,12 @@ function updateUnits(state: GameState, deltaTime: number): void {
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
       
-      // Check for collisions with sliding for friendly units
-      const collisionResult = checkUnitCollisionWithSliding(unit, newPosition, state.units, state.obstacles);
+      // Check for collisions with any units or obstacles
+      const collisionResult = checkUnitCollisionBlocking(unit, newPosition, state.units, state.obstacles);
       
       if (!collisionResult.blocked) {
-        // Use alternative position if sliding found a path, otherwise use desired position
-        unit.position = collisionResult.alternativePosition || newPosition;
+        // Use the desired position when clear
+        unit.position = newPosition;
         
         // Reset stuck timer and jitter - unit is making progress
         unit.stuckTimer = 0;
@@ -1830,12 +1779,12 @@ function updateUnits(state: GameState, deltaTime: number): void {
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
       
-      // Check for collisions with sliding for friendly units
-      const collisionResult = checkUnitCollisionWithSliding(unit, newPosition, state.units, state.obstacles);
+      // Check for collisions with any units or obstacles
+      const collisionResult = checkUnitCollisionBlocking(unit, newPosition, state.units, state.obstacles);
       
       if (!collisionResult.blocked) {
-        // Use alternative position if sliding found a path
-        unit.position = collisionResult.alternativePosition || newPosition;
+        // Use the desired position when clear
+        unit.position = newPosition;
         // Reset stuck timer and jitter
         unit.stuckTimer = 0;
         unit.lastPosition = { ...unit.position };
@@ -1917,11 +1866,11 @@ function updateUnits(state: GameState, deltaTime: number): void {
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
       
-      // Check for collisions with sliding for friendly units
-      const collisionResult = checkUnitCollisionWithSliding(unit, newPosition, state.units, state.obstacles);
+      // Check for collisions with any units or obstacles
+      const collisionResult = checkUnitCollisionBlocking(unit, newPosition, state.units, state.obstacles);
       
       if (!collisionResult.blocked) {
-        unit.position = collisionResult.alternativePosition || newPosition;
+        unit.position = newPosition;
         // Reset stuck timer and jitter
         unit.stuckTimer = 0;
         unit.lastPosition = { ...unit.position };

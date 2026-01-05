@@ -33,6 +33,7 @@ Contains the core game simulation loop and logic. Handles unit movement, combat,
   - Updates particle physics for marines (attraction-based orbital motion)
   - Processes line jump telegraphs (0.5s delay before execution)
   - Executes movement from command queues
+  - Blocks movement on any unit overlap or obstacle collision (no friendly sliding)
   - Applies promotion system based on distance traveled
   - Queue bonus grants extra distance credit (10% per queued move node)
 
@@ -111,6 +112,7 @@ Multiple functions for unit abilities:
 - Ability commands execute immediately when dequeued, using current position if the unit drifted from the queued anchor
 - Mining income now counts every active worker id per deposit, and dead drones are pruned from deposit worker lists
 - Mining drones can wait briefly using cadence delays so paired drones alternate between depot and deposit
+- Unit movement collision checks now block on any unit overlap without attempting friendly sliding paths
 
 ### Known Issues
 - None currently identified
@@ -138,6 +140,7 @@ Multiple functions for unit abilities:
 - **2026-01-07**: Removed the warrior's execute dash extra effect so warriors only trigger the shared laser ability and cleaned up dash timing logic
 - **2025-03-10**: Scaled particle orbit distance and orbital forces with unit size to keep unit-following particles proportional after size changes
 - **2025-03-17**: Updated mining income and mining drone cadence handling to support two drones per deposit
+- **2025-03-19**: Removed friendly sliding collision resolution so units block on overlap instead of shifting around each other
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds

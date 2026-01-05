@@ -1,7 +1,7 @@
 # Agents Documentation Guidelines
 
 ## Build Information
-**Current Build Number:** 19
+**Current Build Number:** 20
 
 **Note:** With each pull request, increment the build number by one.
 
