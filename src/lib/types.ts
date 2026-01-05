@@ -856,7 +856,7 @@ export interface Floater {
 }
 
 export interface GameState {
-  mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection' | 'multiplayerLobby' | 'countdown' | 'statistics' | 'levelSelection' | 'onlineMode' | 'modifierHelp' | 'unitInformation' | 'lanMode';
+  mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection' | 'multiplayerLobby' | 'countdown' | 'statistics' | 'levelSelection' | 'onlineMode' | 'modifierHelp' | 'unitInformation' | 'lanMode' | 'tutorial';
   backgroundBattle?: GameState; // Background AI battle for menu
   vsMode: 'ai' | 'player' | 'online' | null;
   

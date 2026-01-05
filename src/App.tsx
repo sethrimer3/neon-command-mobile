@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Label } from './components/ui/label';
 import { Switch } from './components/ui/switch';
 import { Slider } from './components/ui/slider';
-import { GameController, Robot, ListChecks, GearSix, ArrowLeft, Flag, MapPin, WifiHigh, ChartBar, SpeakerHigh, SpeakerSlash, Info, Book } from '@phosphor-icons/react';
+import { GameController, Robot, ListChecks, GearSix, ArrowLeft, Flag, MapPin, WifiHigh, ChartBar, SpeakerHigh, SpeakerSlash, Info, Book, GraduationCap } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { UnitSelectionScreen } from './components/UnitSelectionScreen';
 import { MapSelectionScreen } from './components/MapSelectionScreen';
@@ -27,6 +27,7 @@ import { MultiplayerLobbyScreen } from './components/MultiplayerLobbyScreen';
 import { StatisticsScreen } from './components/StatisticsScreen';
 import { ModifierHelpScreen } from './components/ModifierHelpScreen';
 import { UnitInformationScreen } from './components/UnitInformationScreen';
+import { TutorialScreen } from './components/TutorialScreen';
 import { VictoryScreen } from './components/VictoryScreen';
 import { AnimatedBackground } from './components/AnimatedBackground';
 import { getMapById, getValidBasePositions, createBoundaryObstacles } from './lib/maps';
@@ -786,6 +787,12 @@ function App() {
     setRenderTrigger(prev => prev + 1);
   };
 
+  const goToTutorial = () => {
+    soundManager.playButtonClick();
+    gameStateRef.current.mode = 'tutorial';
+    setRenderTrigger(prev => prev + 1);
+  };
+
   const goToLANMode = () => {
     soundManager.playButtonClick();
     // Disconnect any existing LAN store
@@ -1232,6 +1239,15 @@ function App() {
             </Button>
 
             <Button
+              onClick={goToTutorial}
+              className="h-12 text-base orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/50"
+              variant="secondary"
+            >
+              <GraduationCap className="mr-2" size={24} />
+              Tutorial
+            </Button>
+
+            <Button
               onClick={goToOnlineMode}
               className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/50"
               variant="default"
@@ -1632,6 +1648,12 @@ function App() {
 
       {gameState.mode === 'unitInformation' && (
         <UnitInformationScreen
+          onBack={backToMenu}
+        />
+      )}
+
+      {gameState.mode === 'tutorial' && (
+        <TutorialScreen
           onBack={backToMenu}
         />
       )}
