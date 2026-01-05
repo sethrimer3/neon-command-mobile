@@ -272,10 +272,8 @@ function checkUnitCollision(position: Vector2, currentUnitId: string, allUnits: 
 }
 
 // Check if a friendly unit is occupying a target position
-// Returns true if a friendly unit is within collision distance of the target
+// Returns true if a friendly unit is within arrival distance of the target
 function isFriendlyUnitAtPosition(unit: Unit, targetPosition: Vector2, allUnits: Unit[]): boolean {
-  const collisionRadius = getCollisionRadius();
-  
   for (const otherUnit of allUnits) {
     // Skip checking against self
     if (otherUnit.id === unit.id) continue;
@@ -283,9 +281,9 @@ function isFriendlyUnitAtPosition(unit: Unit, targetPosition: Vector2, allUnits:
     // Only check friendly units
     if (otherUnit.owner !== unit.owner) continue;
     
-    // Check if the other unit is at the target position
+    // Check if the other unit is "on top of" the target position (has arrived there)
     const distToTarget = distance(otherUnit.position, targetPosition);
-    if (distToTarget < collisionRadius) {
+    if (distToTarget < ARRIVAL_DISTANCE_THRESHOLD) {
       return true;
     }
   }
