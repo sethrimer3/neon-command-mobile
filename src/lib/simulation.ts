@@ -81,6 +81,12 @@ const projectilePool = new ObjectPool<Projectile>(
 const UNIT_COLLISION_RADIUS = UNIT_SIZE_METERS / 2; // Minimum distance between unit centers
 const UNIT_COLLISION_SQUEEZE_FACTOR = 0.75; // Allow units to squeeze past each other (75% of full diameter - more permissive for smoother flow)
 const FRIENDLY_SLIDE_DISTANCE = 0.3; // Distance to slide perpendicular when avoiding friendly units
+const ARRIVAL_DISTANCE_THRESHOLD = 0.1; // Distance threshold for considering a unit has arrived at destination
+
+// Helper function to calculate effective collision radius
+function getCollisionRadius(): number {
+  return (UNIT_COLLISION_RADIUS * 2) * UNIT_COLLISION_SQUEEZE_FACTOR;
+}
 
 // Flocking/Boids constants for smooth group movement (StarCraft-like)
 const SEPARATION_RADIUS = 1.5; // Distance to maintain from nearby units
@@ -248,7 +254,7 @@ function getSafeRallyPosition(
 // Check if a position would collide with any existing unit
 function checkUnitCollision(position: Vector2, currentUnitId: string, allUnits: Unit[]): boolean {
   // Use a slightly smaller collision radius to allow units to squeeze past each other
-  const collisionRadius = (UNIT_COLLISION_RADIUS * 2) * UNIT_COLLISION_SQUEEZE_FACTOR;
+  const collisionRadius = getCollisionRadius();
   
   for (const otherUnit of allUnits) {
     // Skip checking against self
@@ -265,6 +271,47 @@ function checkUnitCollision(position: Vector2, currentUnitId: string, allUnits: 
   return false; // No collision
 }
 
+// Check if a friendly unit is occupying a target position
+// Returns true if a friendly unit is within arrival distance of the target
+function isFriendlyUnitAtPosition(unit: Unit, targetPosition: Vector2, allUnits: Unit[]): boolean {
+  for (const otherUnit of allUnits) {
+    // Skip checking against self
+    if (otherUnit.id === unit.id) continue;
+    
+    // Only check friendly units
+    if (otherUnit.owner !== unit.owner) continue;
+    
+    // Check if the other unit is "on top of" the target position (has arrived there)
+    const distToTarget = distance(otherUnit.position, targetPosition);
+    if (distToTarget < ARRIVAL_DISTANCE_THRESHOLD) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Check if a unit has arrived at its target position
+// Considers both direct arrival and arrival when a friendly unit is blocking the target
+function hasUnitArrivedAtPosition(
+  unit: Unit,
+  targetPosition: Vector2,
+  currentDistance: number,
+  allUnits: Unit[]
+): boolean {
+  // Standard arrival: within threshold distance of target
+  if (currentDistance < ARRIVAL_DISTANCE_THRESHOLD) {
+    return true;
+  }
+  
+  // Alternative arrival: close enough to a friendly unit occupying the target
+  if (isFriendlyUnitAtPosition(unit, targetPosition, allUnits) && 
+      currentDistance < getCollisionRadius()) {
+    return true;
+  }
+  
+  return false;
+}
+
 // Enhanced collision check that attempts to find a slide path for friendly units
 // Returns { blocked: boolean, alternativePosition?: Vector2 }
 function checkUnitCollisionWithSliding(
@@ -273,7 +320,7 @@ function checkUnitCollisionWithSliding(
   allUnits: Unit[],
   obstacles: import('./maps').Obstacle[]
 ): { blocked: boolean; alternativePosition?: Vector2 } {
-  const collisionRadius = (UNIT_COLLISION_RADIUS * 2) * UNIT_COLLISION_SQUEEZE_FACTOR;
+  const collisionRadius = getCollisionRadius();
   
   // Check obstacle collision first
   if (checkObstacleCollision(desiredPosition, UNIT_SIZE_METERS / 2, obstacles)) {
@@ -1642,7 +1689,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
       const dist = distance(unit.position, currentNode.position);
       const def = UNIT_DEFINITIONS[unit.type];
 
-      if (dist < 0.1) {
+      if (hasUnitArrivedAtPosition(unit, currentNode.position, dist, state.units)) {
         unit.commandQueue.shift();
         // Decelerate when reaching destination
         unit.currentSpeed = 0;
@@ -1744,7 +1791,8 @@ function updateUnits(state: GameState, deltaTime: number): void {
       
       // Continue moving towards destination
       const dist = distance(unit.position, currentNode.position);
-      if (dist < 0.1) {
+      
+      if (hasUnitArrivedAtPosition(unit, currentNode.position, dist, state.units)) {
         unit.commandQueue.shift();
         unit.currentSpeed = 0;
         unit.stuckTimer = 0;
@@ -1823,7 +1871,8 @@ function updateUnits(state: GameState, deltaTime: number): void {
     } else if (currentNode.type === 'patrol') {
       // Patrol: move to patrol point, then add return command to create loop
       const dist = distance(unit.position, currentNode.position);
-      if (dist < 0.1) {
+      
+      if (hasUnitArrivedAtPosition(unit, currentNode.position, dist, state.units)) {
         // Reached patrol point - add return command and remove current
         unit.commandQueue.shift();
         // Add return patrol command if queue isn't full
