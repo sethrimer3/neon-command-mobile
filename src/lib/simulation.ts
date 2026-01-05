@@ -81,6 +81,8 @@ const projectilePool = new ObjectPool<Projectile>(
 const UNIT_COLLISION_RADIUS = UNIT_SIZE_METERS / 2; // Minimum distance between unit centers
 const UNIT_COLLISION_SQUEEZE_FACTOR = 0.75; // Allow units to squeeze past each other (75% of full diameter - more permissive for smoother flow)
 const ARRIVAL_DISTANCE_THRESHOLD = 0.1; // Distance threshold for considering a unit has arrived at destination
+const COLLISION_PUSH_STRENGTH = 0.6; // Strength of local collision push to keep units from stacking
+const COLLISION_PUSH_MAX_DISTANCE = 0.25; // Maximum push distance per update for gentle separation
 
 // Helper function to calculate effective collision radius
 function getCollisionRadius(): number {
@@ -325,21 +327,57 @@ function checkUnitCollisionBlocking(
   if (checkObstacleCollision(desiredPosition, UNIT_SIZE_METERS / 2, obstacles)) {
     return { blocked: true };
   }
-  
-  // Check unit collisions against all other units
-  let hasUnitCollision = false;
-  
+
+  // Unit collisions are handled via local avoidance rather than hard blocking.
+  return { blocked: false };
+}
+
+/**
+ * Nudges a desired position away from nearby units to prevent stacking.
+ * Uses a capped push force so units can still flow past each other smoothly.
+ * @param unit - Unit attempting to move
+ * @param desiredPosition - Proposed new position for the unit
+ * @param allUnits - All units in the simulation for local avoidance
+ * @returns Adjusted position that is gently pushed away from neighbors
+ */
+function applyLocalCollisionPush(
+  unit: Unit,
+  desiredPosition: Vector2,
+  allUnits: Unit[]
+): Vector2 {
+  const collisionRadius = getCollisionRadius();
+  let pushVector = { x: 0, y: 0 };
+  let pushCount = 0;
+
   for (const otherUnit of allUnits) {
     if (otherUnit.id === unit.id) continue;
-    
+
     const dist = distance(desiredPosition, otherUnit.position);
-    if (dist < collisionRadius) {
-      hasUnitCollision = true;
-      break;
+    if (dist > 0 && dist < collisionRadius) {
+      // Push away more strongly the closer the units are.
+      const overlap = collisionRadius - dist;
+      const away = normalize(subtract(desiredPosition, otherUnit.position));
+      pushVector = add(pushVector, scale(away, overlap));
+      pushCount += 1;
     }
   }
-  
-  return { blocked: hasUnitCollision };
+
+  if (pushCount === 0) {
+    return desiredPosition;
+  }
+
+  // Average and clamp the push so adjustments remain smooth.
+  pushVector = scale(pushVector, 1 / pushCount);
+  const pushMagnitude = Math.min(
+    COLLISION_PUSH_MAX_DISTANCE,
+    distance({ x: 0, y: 0 }, pushVector) * COLLISION_PUSH_STRENGTH
+  );
+
+  if (pushMagnitude < MIN_FORCE_THRESHOLD) {
+    return desiredPosition;
+  }
+
+  return add(desiredPosition, scale(normalize(pushVector), pushMagnitude));
 }
 
 // Helper function to mark unit's queue for cancellation due to being stuck
@@ -1677,13 +1715,16 @@ function updateUnits(state: GameState, deltaTime: number): void {
 
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
-      
-      // Check for collisions with any units or obstacles
-      const collisionResult = checkUnitCollisionBlocking(unit, newPosition, state.units, state.obstacles);
+
+      // Apply local collision push to keep units from stacking at shared goals.
+      const adjustedPosition = applyLocalCollisionPush(unit, newPosition, state.units);
+
+      // Check for collisions with any obstacles (unit overlap handled by local push)
+      const collisionResult = checkUnitCollisionBlocking(unit, adjustedPosition, state.units, state.obstacles);
       
       if (!collisionResult.blocked) {
         // Use the desired position when clear
-        unit.position = newPosition;
+        unit.position = adjustedPosition;
         
         // Reset stuck timer and jitter - unit is making progress
         unit.stuckTimer = 0;
@@ -1778,13 +1819,16 @@ function updateUnits(state: GameState, deltaTime: number): void {
 
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
-      
-      // Check for collisions with any units or obstacles
-      const collisionResult = checkUnitCollisionBlocking(unit, newPosition, state.units, state.obstacles);
+
+      // Apply local collision push to keep attack-move units flowing through crowds.
+      const adjustedPosition = applyLocalCollisionPush(unit, newPosition, state.units);
+
+      // Check for collisions with any obstacles (unit overlap handled by local push)
+      const collisionResult = checkUnitCollisionBlocking(unit, adjustedPosition, state.units, state.obstacles);
       
       if (!collisionResult.blocked) {
         // Use the desired position when clear
-        unit.position = newPosition;
+        unit.position = adjustedPosition;
         // Reset stuck timer and jitter
         unit.stuckTimer = 0;
         unit.lastPosition = { ...unit.position };
@@ -1865,12 +1909,15 @@ function updateUnits(state: GameState, deltaTime: number): void {
       
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
-      
-      // Check for collisions with any units or obstacles
-      const collisionResult = checkUnitCollisionBlocking(unit, newPosition, state.units, state.obstacles);
+
+      // Apply local collision push to keep patrol units from clumping.
+      const adjustedPosition = applyLocalCollisionPush(unit, newPosition, state.units);
+
+      // Check for collisions with any obstacles (unit overlap handled by local push)
+      const collisionResult = checkUnitCollisionBlocking(unit, adjustedPosition, state.units, state.obstacles);
       
       if (!collisionResult.blocked) {
-        unit.position = newPosition;
+        unit.position = adjustedPosition;
         // Reset stuck timer and jitter
         unit.stuckTimer = 0;
         unit.lastPosition = { ...unit.position };

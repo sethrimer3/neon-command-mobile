@@ -33,7 +33,8 @@ Contains the core game simulation loop and logic. Handles unit movement, combat,
   - Updates particle physics for marines (attraction-based orbital motion)
   - Processes line jump telegraphs (0.5s delay before execution)
   - Executes movement from command queues
-  - Blocks movement on any unit overlap or obstacle collision (no friendly sliding)
+  - Applies local collision push to keep units from stacking while still moving
+  - Blocks movement only on obstacle collisions (unit overlap handled by avoidance)
   - Applies promotion system based on distance traveled
   - Queue bonus grants extra distance credit (10% per queued move node)
 
@@ -113,6 +114,8 @@ Multiple functions for unit abilities:
 - Mining income now counts every active worker id per deposit, and dead drones are pruned from deposit worker lists
 - Mining drones can wait briefly using cadence delays so paired drones alternate between depot and deposit
 - Unit movement collision checks now block on any unit overlap without attempting friendly sliding paths
+- Local collision push keeps units from overlapping while allowing them to keep moving through crowds
+- Obstacle collisions still block movement to prevent clipping through walls
 
 ### Known Issues
 - None currently identified
@@ -141,6 +144,7 @@ Multiple functions for unit abilities:
 - **2025-03-10**: Scaled particle orbit distance and orbital forces with unit size to keep unit-following particles proportional after size changes
 - **2025-03-17**: Updated mining income and mining drone cadence handling to support two drones per deposit
 - **2025-03-19**: Removed friendly sliding collision resolution so units block on overlap instead of shifting around each other
+- **2025-03-20**: Replaced hard unit blocking with local collision pushes so group movement stays smooth while still respecting obstacles
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds
