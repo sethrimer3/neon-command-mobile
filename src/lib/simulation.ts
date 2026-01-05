@@ -2101,6 +2101,10 @@ function updateBases(state: GameState, deltaTime: number): void {
       if (base.shieldActive) {
         base.shieldActive = undefined;
       }
+      // Reset speed when not moving
+      if (base.currentSpeed !== undefined && base.currentSpeed > 0) {
+        base.currentSpeed = Math.max(0, base.currentSpeed - DECELERATION_RATE * deltaTime);
+      }
       return;
     }
 
@@ -2111,6 +2115,8 @@ function updateBases(state: GameState, deltaTime: number): void {
       if (base.shieldActive) {
         base.shieldActive = undefined;
       }
+      // Reset speed when reaching target
+      base.currentSpeed = 0;
       return;
     }
 
@@ -2119,6 +2125,7 @@ function updateBases(state: GameState, deltaTime: number): void {
     if (!baseTypeDef.canMove) {
       // Stationary base cannot move
       base.movementTarget = null;
+      base.currentSpeed = 0;
       return;
     }
 
@@ -2130,7 +2137,32 @@ function updateBases(state: GameState, deltaTime: number): void {
     const direction = normalize(subtract(base.movementTarget, base.position));
     // Use baseTypeDef moveSpeed if > 0, otherwise use faction baseMoveSpeed
     const moveSpeed = baseTypeDef.moveSpeed > 0 ? baseTypeDef.moveSpeed : FACTION_DEFINITIONS[base.faction].baseMoveSpeed;
-    const movement = scale(direction, moveSpeed * deltaTime);
+    
+    // Initialize base current speed if needed
+    if (base.currentSpeed === undefined) {
+      base.currentSpeed = 0;
+    }
+    
+    // Apply acceleration/deceleration to base movement
+    const targetSpeed = moveSpeed;
+    const speedDiff = targetSpeed - base.currentSpeed;
+    
+    if (speedDiff > 0) {
+      // Accelerating
+      const acceleration = Math.min(ACCELERATION_RATE * deltaTime, speedDiff);
+      base.currentSpeed += acceleration;
+    } else if (speedDiff < 0) {
+      // Decelerating (shouldn't happen while moving, but for completeness)
+      const deceleration = Math.max(-DECELERATION_RATE * deltaTime, speedDiff);
+      base.currentSpeed += deceleration;
+    }
+    
+    // Apply minimum speed threshold
+    if (base.currentSpeed < MIN_SPEED_THRESHOLD) {
+      base.currentSpeed = 0;
+    }
+    
+    const movement = scale(direction, base.currentSpeed * deltaTime);
     base.position = add(base.position, movement);
     
     // Update shield endTime to keep it active while moving (assault base)

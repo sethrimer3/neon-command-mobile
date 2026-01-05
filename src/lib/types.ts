@@ -6,11 +6,11 @@ export const UNIT_SIZE_METERS = 2;
 // Scale mining depots to read as large structures in the resource loop.
 export const MINING_DEPOT_SIZE_METERS = 3;
 // Scale resource deposits so their hex tiles feel substantial on the map.
-export const RESOURCE_DEPOSIT_SIZE_METERS = 1.2;
+export const RESOURCE_DEPOSIT_SIZE_METERS = 2.4; // 2x larger for better visibility
 // Expand the deposit ring radius to keep doubled deposits from overlapping the depot.
 export const RESOURCE_DEPOSIT_RING_RADIUS_METERS = 5;
-// Make mining drones render and select at a larger footprint than standard units.
-export const MINING_DRONE_SIZE_MULTIPLIER = 2;
+// Make mining drones render and select at a smaller footprint than standard units.
+export const MINING_DRONE_SIZE_MULTIPLIER = 0.67; // 3x smaller than before
 
 // Fixed arena dimensions in meters for consistent gameplay across all devices
 export const ARENA_WIDTH_METERS = 60;  // Fixed logical width in meters
@@ -246,6 +246,7 @@ export interface Base {
   shieldActive?: { endTime: number }; // Shield ability for aurum faction
   autoAttackCooldown?: number; // Cooldown for auto-attack (defense base)
   regenerationPulse?: { endTime: number; radius: number }; // Visual effect for regeneration pulse
+  currentSpeed?: number; // Current movement speed for acceleration/deceleration
 }
 
 // Mining depot for resource gathering
