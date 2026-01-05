@@ -110,7 +110,8 @@ Multiple functions for unit abilities:
 - Combat uses attack rate to determine damage intervals
 - Bases can move but slowly (for gameplay balance)
 - Spawn rally points are clamped inside the 1m boundary to prevent off-screen movement targets
-- Ability commands execute immediately when dequeued, using current position if the unit drifted from the queued anchor
+- Ability commands execute after the unit reaches the queued anchor, moving the unit toward that point if needed
+- Ability cooldowns are temporarily disabled, so ability use is no longer blocked by cooldown timers
 - Mining income now counts every active worker id per deposit, and dead drones are pruned from deposit worker lists
 - Mining drones can wait briefly using cadence delays so paired drones alternate between depot and deposit
 - Unit movement collision checks now block on any unit overlap without attempting friendly sliding paths
@@ -145,6 +146,7 @@ Multiple functions for unit abilities:
 - **2025-03-17**: Updated mining income and mining drone cadence handling to support two drones per deposit
 - **2025-03-19**: Removed friendly sliding collision resolution so units block on overlap instead of shifting around each other
 - **2025-03-20**: Replaced hard unit blocking with local collision pushes so group movement stays smooth while still respecting obstacles
+- **2025-03-21**: Moved ability execution to fire on arrival at the queued anchor and disabled cooldown enforcement
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds

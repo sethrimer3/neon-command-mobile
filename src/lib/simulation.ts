@@ -313,6 +313,77 @@ function hasUnitArrivedAtPosition(
   return false;
 }
 
+/**
+ * Move a unit toward a target position using standard movement logic.
+ * Mirrors regular move behavior so ability anchors behave like normal commands.
+ * @param state - Current game state for collision/pathing context
+ * @param unit - Unit to move
+ * @param targetPosition - Destination to move toward
+ * @param deltaTime - Elapsed time in seconds for this frame
+ */
+function moveUnitTowardPosition(
+  state: GameState,
+  unit: Unit,
+  targetPosition: Vector2,
+  deltaTime: number
+): void {
+  const dist = distance(unit.position, targetPosition);
+  const def = UNIT_DEFINITIONS[unit.type];
+
+  // Determine a movement direction, factoring in flocking and obstacle avoidance.
+  let direction = normalize(subtract(targetPosition, unit.position));
+  direction = applyFlockingBehavior(unit, direction, state.units);
+
+  const alternativePath = findPathAroundObstacle(unit, targetPosition, state.obstacles);
+  if (alternativePath) {
+    direction = alternativePath;
+  }
+
+  if (unit.jitterOffset !== undefined) {
+    const jitteredDirection = applyJitterMovement(unit, direction, state.units, state.obstacles);
+    if (jitteredDirection) {
+      direction = jitteredDirection;
+    }
+  }
+
+  // Align unit orientation with its travel direction for consistent visuals.
+  updateUnitRotation(unit, direction, deltaTime);
+
+  // Apply acceleration so movement feels consistent with standard move commands.
+  const currentSpeed = applyMovementAcceleration(unit, direction, def.moveSpeed, deltaTime);
+  const movement = scale(direction, currentSpeed * deltaTime);
+  const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
+  const newPosition = add(unit.position, scale(direction, moveDist));
+
+  // Apply local collision push to prevent stacking while moving to the anchor.
+  const adjustedPosition = applyLocalCollisionPush(unit, newPosition, state.units);
+  const collisionResult = checkUnitCollisionBlocking(unit, adjustedPosition, state.units, state.obstacles);
+
+  if (!collisionResult.blocked) {
+    unit.position = adjustedPosition;
+    unit.stuckTimer = 0;
+    unit.lastPosition = { ...unit.position };
+    unit.jitterOffset = undefined;
+  } else {
+    // Slow down when blocked and track stuck state to enable jitter recovery.
+    unit.currentSpeed = Math.max(0, (unit.currentSpeed || 0) * COLLISION_DECELERATION_FACTOR);
+    updateStuckDetection(unit, deltaTime);
+    return;
+  }
+
+  // Reward movement distance so ability positioning still contributes to promotions.
+  const queueMovementNodes = unit.commandQueue.filter((n) => n.type === 'move' || n.type === 'attack-move').length;
+  const creditMultiplier = 1.0 + QUEUE_BONUS_PER_NODE * queueMovementNodes;
+  unit.distanceCredit += moveDist * creditMultiplier;
+
+  while (unit.distanceCredit >= PROMOTION_DISTANCE_THRESHOLD) {
+    unit.distanceCredit -= PROMOTION_DISTANCE_THRESHOLD;
+    unit.damageMultiplier *= PROMOTION_MULTIPLIER;
+  }
+
+  unit.distanceTraveled += moveDist;
+}
+
 // Collision check that blocks movement when any unit or obstacle overlap is detected
 // Returns { blocked: boolean }
 function checkUnitCollisionBlocking(
@@ -1854,11 +1925,20 @@ function updateUnits(state: GameState, deltaTime: number): void {
       unit.distanceTraveled += moveDist;
     } else if (currentNode.type === 'ability') {
       const dist = distance(unit.position, currentNode.position);
-      
-      // Abilities should execute even if the unit drifted away from the queued anchor
-      const abilityOrigin = dist > 0.1 ? { ...unit.position } : currentNode.position;
-      const abilityNode: CommandNode = { ...currentNode, position: abilityOrigin };
-      
+
+      // Only execute the ability once the unit reaches the queued anchor.
+      if (!hasUnitArrivedAtPosition(unit, currentNode.position, dist, state.units)) {
+        moveUnitTowardPosition(state, unit, currentNode.position, deltaTime);
+        return;
+      }
+
+      // Reset movement state once the unit reaches its ability anchor.
+      unit.currentSpeed = 0;
+      unit.stuckTimer = 0;
+      unit.lastPosition = undefined;
+      unit.jitterOffset = undefined;
+
+      const abilityNode: CommandNode = { ...currentNode, position: currentNode.position };
       executeAbility(state, unit, abilityNode);
       unit.commandQueue.shift();
     } else if (currentNode.type === 'patrol') {
@@ -2219,15 +2299,13 @@ function updateBases(state: GameState, deltaTime: number): void {
 
 function executeAbility(state: GameState, unit: Unit, node: CommandNode): void {
   if (node.type !== 'ability') return;
-  if (unit.abilityCooldown > 0) return;
-
-  const def = UNIT_DEFINITIONS[unit.type];
 
   soundManager.playAbility();
 
   // Execute generic laser ability for all units
   executeGenericLaser(state, unit, node.direction);
-  unit.abilityCooldown = def.abilityCooldown;
+  // Ability cooldowns are temporarily disabled, so keep cooldown cleared.
+  unit.abilityCooldown = 0;
   
   // Keep existing specific abilities as additional effects
   // Warriors intentionally use only the generic laser to avoid dash-related crashes.

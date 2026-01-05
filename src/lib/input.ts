@@ -840,9 +840,6 @@ function handleAbilityDrag(state: GameState, dragVector: { x: number; y: number 
 
   state.units.forEach((unit) => {
     if (!state.selectedUnits.has(unit.id)) return;
-    
-    // Check if unit's ability is on cooldown - can only queue if cooldown is 0
-    if (unit.abilityCooldown > 0) return;
 
     // Use the command origin helper for consistency (last movement node)
     const startPosition = getCommandOrigin(unit);
@@ -944,9 +941,6 @@ function handleVectorBasedAbilityDrag(state: GameState, dragVector: { x: number;
 
   // Apply ability command to all selected units
   selectedUnitsArray.forEach((unit) => {
-    // Check if unit's ability is on cooldown - can only queue if cooldown is 0
-    if (unit.abilityCooldown > 0) return;
-
     // Use the command origin (last movement node or current position)
     const startPosition = getCommandOrigin(unit);
 
