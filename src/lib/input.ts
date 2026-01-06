@@ -758,7 +758,7 @@ function isDoubleTap(state: GameState, screenPos: { x: number; y: number }): boo
   return false;
 }
 
-// Handle double-tap: deselect all units and remove last move command
+// Handle double-tap: deselect all units and bases
 function handleDoubleTap(state: GameState): void {
   // Deselect all units and bases
   state.selectedUnits.clear();
