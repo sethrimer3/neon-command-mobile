@@ -41,6 +41,7 @@ Explains unit modifier categories (melee, ranged, flying, small, healing) and pr
 
 ## Change History
 - **2025-03-22:** Updated melee examples to use Blade instead of Warrior.
+- **2026-01-08:** Updated modifier example lists to use Dagger instead of Scout.
 
 ## Watch Out For
 - Keep modifier descriptions aligned with combat logic in `simulation.ts`.

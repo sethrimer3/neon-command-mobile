@@ -109,6 +109,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - Resource deposits adjust glow/brightness based on 0/1/2 assigned worker drones
 - Camera transforms are applied to world layers and removed before drawing screen-space UI
 - Off-screen indicators render at arena viewport edges when zoomed in to keep units/bases visible
+- Cloaked enemy units are culled from rendering (including the minimap), while cloaked friendly units render at reduced opacity
 
 ### Rendering Optimizations
 - Clears only once per frame
@@ -153,6 +154,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - **2025-03-18**: Scaled mining depots, deposits, and mining drone rendering to match the larger resource loop visuals
 - **2026-01-04**: Applied camera transforms to world rendering and added off-screen zoom indicators for units and bases
 - **2025-03-22**: Added Blade sword particle rendering, knife projectile visuals, and marine shell casing rendering
+- **2026-01-08**: Hid cloaked enemy units in the main unit render pass while keeping friendly cloaked opacity
 
 ## Watch Out For
 - Always convert game positions to pixels before drawing

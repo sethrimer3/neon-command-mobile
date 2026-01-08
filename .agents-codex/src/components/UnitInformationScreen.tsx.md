@@ -102,6 +102,7 @@ The component does NOT automatically reflect changes from types.ts or simulation
 - **2026-01-02:** Initial creation - comprehensive unit information screen with all 36 units across 3 factions
 - **2026-01-07:** Updated the warrior ability description to reflect the shared laser-only ability.
 - **2025-03-22:** Updated the Blade (warrior) ability description to the new knife volley behavior and damage.
+- **2026-01-08:** Updated tank shield and Dagger ambush descriptions plus the Dagger icon to match new gameplay behavior
 
 ## Watch Out For
 - When adding new units, remember to add entries in:

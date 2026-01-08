@@ -27,7 +27,7 @@ const MODIFIERS: ModifierInfo[] = [
     description: 'Long-range combat units that are affected by enemy armor. Can attack from a distance but damage is reduced by target armor.',
     icon: '🏹',
     color: 'text-blue-500',
-    examples: ['Marine', 'Tank', 'Scout', 'Artillery', 'Interceptor', 'Flare', 'Eclipse', 'Corona', 'Supernova'],
+    examples: ['Marine', 'Tank', 'Dagger', 'Artillery', 'Interceptor', 'Flare', 'Eclipse', 'Corona', 'Supernova'],
   },
   {
     name: 'Flying',
@@ -41,7 +41,7 @@ const MODIFIERS: ModifierInfo[] = [
     description: 'Compact units that are vulnerable to area damage. Takes double damage from splash attacks like Bombardment, but still protected by armor against melee.',
     icon: '🐜',
     color: 'text-yellow-500',
-    examples: ['Snaker', 'Scout', 'Flare'],
+    examples: ['Snaker', 'Dagger', 'Flare'],
   },
   {
     name: 'Healing',

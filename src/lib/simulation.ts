@@ -48,6 +48,19 @@ const BLADE_KNIFE_LIFETIME = 1.4; // seconds knives persist before disappearing
 const BLADE_KNIFE_DAMAGE = 6; // base damage per knife before multiplier
 const BLADE_KNIFE_START_OFFSET = UNIT_SIZE_METERS * 0.4; // offset from unit center for knife spawn
 
+// Dagger ability constants
+const DAGGER_KNIFE_DELAY = 2.0; // seconds before the knife is thrown after reveal
+const DAGGER_REVEAL_AFTER_THROW = 1.0; // seconds visible after throwing before recloaking
+const DAGGER_KNIFE_RANGE = 10; // distance the knife travels
+const DAGGER_KNIFE_SPEED = 18; // knife travel speed
+const DAGGER_KNIFE_DAMAGE = 8; // base damage per knife before multiplier
+const DAGGER_KNIFE_LIFETIME = 1.4; // seconds knives persist before disappearing
+const DAGGER_KNIFE_START_OFFSET = UNIT_SIZE_METERS * 0.35; // offset from unit center for knife spawn
+
+// Tank projectile attraction constants
+const TANK_PROJECTILE_ATTRACTION_RADIUS = 6; // meters within which tanks attract enemy projectiles
+const TANK_PROJECTILE_ATTRACTION_STRENGTH = 6; // velocity pull strength toward tanks
+
 // Shell ejection constants for marine firing
 const SHELL_EJECTION_SPEED = 3.8; // meters per second
 const SHELL_EJECTION_OFFSET = UNIT_SIZE_METERS * 0.4; // offset from unit center
@@ -71,6 +84,33 @@ function calculateDamageWithArmor(baseDamage: number, armor: number, isMelee: bo
     const armorReduction = armor / (armor + 100);
     return baseDamage * (1 - armorReduction);
   }
+}
+
+// Apply shield dome modifiers for melee/ranged damage when allies are inside active shields.
+function getShieldDamageMultiplier(state: GameState, targetUnit: Unit, attackType: 'melee' | 'ranged'): number {
+  const shieldProviders = state.units.filter((ally) => 
+    ally.owner === targetUnit.owner &&
+    ally.shieldActive &&
+    distance(ally.position, targetUnit.position) <= ally.shieldActive.radius
+  );
+
+  if (shieldProviders.length === 0) {
+    return 1;
+  }
+
+  const multipliers = shieldProviders.map((ally) => {
+    if (attackType === 'ranged') {
+      return ally.shieldActive?.rangedDamageMultiplier ?? 1;
+    }
+    return ally.shieldActive?.meleeDamageMultiplier ?? 1;
+  });
+
+  return Math.min(...multipliers, 1);
+}
+
+// Helper to filter out cloaked enemies for auto-targeted abilities.
+function getTargetableEnemies(state: GameState, unit: Unit): Unit[] {
+  return state.units.filter((enemy) => enemy.owner !== unit.owner && !enemy.cloaked);
 }
 
 // Object pool for projectiles - reuse projectiles instead of creating/destroying
@@ -1289,7 +1329,7 @@ function updateMotionTrails(state: GameState): void {
   
   // Update trails for each unit
   state.units.forEach((unit) => {
-    // Only create trails for fast units (scout, interceptor, snaker)
+    // Only create trails for fast units (dagger, interceptor, snaker)
     if (unit.type !== 'scout' && unit.type !== 'interceptor' && unit.type !== 'snaker') {
       return;
     }
@@ -1323,12 +1363,40 @@ function updateMotionTrails(state: GameState): void {
   state.motionTrails = state.motionTrails.filter(t => unitIds.has(t.unitId));
 }
 
+// Pull enemy projectiles toward nearby tanks to simulate passive magnetic defense.
+function applyTankProjectileAttraction(state: GameState, projectile: Projectile, deltaTime: number): void {
+  const enemyTanks = state.units.filter((unit) => unit.type === 'tank' && unit.owner !== projectile.owner && unit.hp > 0);
+
+  let closestTank: Unit | null = null;
+  let closestDistance = Infinity;
+
+  enemyTanks.forEach((tank) => {
+    const dist = distance(projectile.position, tank.position);
+    if (dist < closestDistance) {
+      closestDistance = dist;
+      closestTank = tank;
+    }
+  });
+
+  if (!closestTank || closestDistance > TANK_PROJECTILE_ATTRACTION_RADIUS) {
+    return;
+  }
+
+  const pullStrength = TANK_PROJECTILE_ATTRACTION_STRENGTH * (1 - closestDistance / TANK_PROJECTILE_ATTRACTION_RADIUS);
+  const pullDirection = normalize(subtract(closestTank.position, projectile.position));
+  const pull = scale(pullDirection, pullStrength * deltaTime);
+
+  projectile.velocity.x += pull.x;
+  projectile.velocity.y += pull.y;
+}
+
 // Update projectiles - movement and collision
 function updateProjectiles(state: GameState, deltaTime: number): void {
   const now = Date.now();
   
   // Update positions
   state.projectiles.forEach((projectile) => {
+    applyTankProjectileAttraction(state, projectile, deltaTime);
     projectile.position.x += projectile.velocity.x * deltaTime;
     projectile.position.y += projectile.velocity.y * deltaTime;
   });
@@ -1352,7 +1420,8 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
           const target = state.units.find((u) => u.id === projectile.targetUnit);
           if (target && target.hp > 0) {
             const def = UNIT_DEFINITIONS[target.type];
-            const finalDamage = calculateDamageWithArmor(projectile.damage, target.armor, false, def.modifiers);
+            const shieldMultiplier = getShieldDamageMultiplier(state, target, 'ranged');
+            const finalDamage = calculateDamageWithArmor(projectile.damage, target.armor, false, def.modifiers) * shieldMultiplier;
             target.hp -= finalDamage;
             createDamageNumber(state, projectile.position, finalDamage, projectile.color);
             createHitSparks(state, projectile.position, projectile.color, 6);
@@ -1375,7 +1444,8 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
           for (const enemy of enemies) {
             if (distance(enemy.position, projectile.position) < UNIT_SIZE_METERS / 2) {
               const def = UNIT_DEFINITIONS[enemy.type];
-              const finalDamage = calculateDamageWithArmor(projectile.damage, enemy.armor, false, def.modifiers);
+              const shieldMultiplier = getShieldDamageMultiplier(state, enemy, 'ranged');
+              const finalDamage = calculateDamageWithArmor(projectile.damage, enemy.armor, false, def.modifiers) * shieldMultiplier;
               enemy.hp -= finalDamage;
               createDamageNumber(state, projectile.position, finalDamage, projectile.color);
               createHitSparks(state, projectile.position, projectile.color, 6);
@@ -2171,6 +2241,22 @@ function updateAbilityEffects(unit: Unit, state: GameState, deltaTime: number): 
     }
   }
 
+  if (unit.daggerAmbush) {
+    const ambush = unit.daggerAmbush;
+
+    if (!ambush.knifeFired && now >= ambush.throwTime) {
+      // Throw the ambush knife after the reveal delay.
+      fireDaggerKnife(state, unit, ambush.direction);
+      ambush.knifeFired = true;
+    }
+
+    if (now >= ambush.recloakTime) {
+      // Reapply permanent cloak after the post-throw reveal window.
+      unit.daggerAmbush = undefined;
+      unit.cloaked = { endTime: Number.POSITIVE_INFINITY };
+    }
+  }
+
   if (unit.bombardmentActive) {
     if (now > unit.bombardmentActive.impactTime && now < unit.bombardmentActive.endTime) {
       const enemies = state.units.filter((u) => u.owner !== unit.owner);
@@ -2185,7 +2271,8 @@ function updateAbilityEffects(unit: Unit, state: GameState, deltaTime: number): 
           }
           
           // Bombardment is a ranged attack, so it respects armor
-          const finalDamage = calculateDamageWithArmor(damage, enemy.armor, false, def.modifiers);
+          const shieldMultiplier = getShieldDamageMultiplier(state, enemy, 'ranged');
+          const finalDamage = calculateDamageWithArmor(damage, enemy.armor, false, def.modifiers) * shieldMultiplier;
           enemy.hp -= finalDamage;
           
           if (state.matchStats && unit.owner === 0) {
@@ -2230,7 +2317,8 @@ function updateAbilityEffects(unit: Unit, state: GameState, deltaTime: number): 
         const target = enemies.find((e) => distance(e.position, missile.target) < 0.5);
         if (target) {
           const def = UNIT_DEFINITIONS[target.type];
-          const finalDamage = calculateDamageWithArmor(missile.damage, target.armor, false, def.modifiers);
+          const shieldMultiplier = getShieldDamageMultiplier(state, target, 'ranged');
+          const finalDamage = calculateDamageWithArmor(missile.damage, target.armor, false, def.modifiers) * shieldMultiplier;
           target.hp -= finalDamage;
           
           if (state.matchStats && unit.owner === 0) {
@@ -2463,7 +2551,7 @@ function executeAbility(state: GameState, unit: Unit, node: CommandNode): void {
     executeShieldDome(state, unit);
   } else if (unit.type === 'scout') {
     createAbilityEffect(state, unit, node.position, 'cloak');
-    executeCloak(state, unit);
+    executeDaggerAmbush(state, unit, node.direction);
   } else if (unit.type === 'artillery') {
     createAbilityEffect(state, unit, node.position, 'bombardment');
     executeArtilleryBombardment(state, unit, node.position);
@@ -2592,11 +2680,13 @@ function executeGenericLaser(state: GameState, unit: Unit, direction: { x: numbe
     const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x); // 2D cross product for perpendicular distance
     
     if (projectedDist > 0 && projectedDist < laserRange && perpDist < laserWidthHalf) {
-      enemy.hp -= damage;
+      const shieldMultiplier = getShieldDamageMultiplier(state, enemy, 'ranged');
+      const finalDamage = damage * shieldMultiplier;
+      enemy.hp -= finalDamage;
       createHitSparks(state, enemy.position, laserColor, 6);
       
       if (state.matchStats && unit.owner === 0) {
-        state.matchStats.damageDealtByPlayer += damage;
+        state.matchStats.damageDealtByPlayer += finalDamage;
       }
     }
   });
@@ -2656,6 +2746,22 @@ function fireBladeKnife(state: GameState, unit: Unit, direction: Vector2, magnit
   state.projectiles.push(projectile);
 }
 
+// Spawn a single throwing knife projectile for the Dagger ambush ability.
+function fireDaggerKnife(state: GameState, unit: Unit, direction: Vector2): void {
+  const throwDirection = direction.x === 0 && direction.y === 0 ? { x: 1, y: 0 } : normalize(direction);
+  const targetPos = add(unit.position, scale(throwDirection, DAGGER_KNIFE_RANGE));
+  const damage = DAGGER_KNIFE_DAMAGE * unit.damageMultiplier;
+  const projectile = createProjectile(state, unit, targetPos, undefined, {
+    speed: DAGGER_KNIFE_SPEED,
+    damage,
+    kind: 'knife',
+    lifetime: DAGGER_KNIFE_LIFETIME,
+    startOffset: DAGGER_KNIFE_START_OFFSET,
+  });
+
+  state.projectiles.push(projectile);
+}
+
 function executeBurstFire(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
   const def = UNIT_DEFINITIONS.marine;
   const shotDamage = 2 * unit.damageMultiplier;
@@ -2690,13 +2796,16 @@ function executeBurstFire(state: GameState, unit: Unit, direction: { x: number; 
     });
 
     if (hitTarget) {
-      (hitTarget as Unit).hp -= shotDamage;
+      const targetUnit = hitTarget as Unit;
+      const shieldMultiplier = getShieldDamageMultiplier(state, targetUnit, 'ranged');
+      const finalDamage = shotDamage * shieldMultiplier;
+      targetUnit.hp -= finalDamage;
       
       // Create hit spark effect
       createHitSparks(state, hitTarget.position, state.players[unit.owner].color, 4);
       
       if (state.matchStats && unit.owner === 0) {
-        state.matchStats.damageDealtByPlayer += shotDamage;
+        state.matchStats.damageDealtByPlayer += finalDamage;
       }
     }
   }
@@ -2742,12 +2851,21 @@ function executeShieldDome(state: GameState, unit: Unit): void {
   unit.shieldActive = {
     endTime: Date.now() + 5000,
     radius: 4,
+    rangedDamageMultiplier: 0.5,
+    meleeDamageMultiplier: 1,
   };
 }
 
-function executeCloak(state: GameState, unit: Unit): void {
-  unit.cloaked = {
-    endTime: Date.now() + 6000,
+function executeDaggerAmbush(state: GameState, unit: Unit, direction: Vector2): void {
+  const now = Date.now();
+
+  // Reveal immediately, then schedule the delayed knife throw and recloak.
+  unit.cloaked = undefined;
+  unit.daggerAmbush = {
+    throwTime: now + DAGGER_KNIFE_DELAY * 1000,
+    recloakTime: now + (DAGGER_KNIFE_DELAY + DAGGER_REVEAL_AFTER_THROW) * 1000,
+    direction: normalize(direction),
+    knifeFired: false,
   };
 }
 
@@ -2784,7 +2902,7 @@ function executeHealPulse(state: GameState, unit: Unit): void {
 }
 
 function executeMissileBarrage(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
-  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  const enemies = getTargetableEnemies(state, unit);
   const dir = normalize(direction);
   
   const missiles: Array<{ position: Vector2; target: Vector2; damage: number }> = [];
@@ -2815,8 +2933,7 @@ function executeMissileBarrage(state: GameState, unit: Unit, direction: { x: num
 // Radiant faction abilities
 function executePrecisionShot(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
   const dir = normalize(direction);
-  const enemies = state.units.filter((u) => u.owner !== unit.owner);
-  const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
+  const enemies = getTargetableEnemies(state, unit);
   
   let target: Unit | Base | null = null;
   let maxDist = 0;
@@ -2837,13 +2954,16 @@ function executePrecisionShot(state: GameState, unit: Unit, direction: { x: numb
   });
   
   if (target) {
+    const targetUnit = target as Unit;
     const damage = 50 * unit.damageMultiplier;
-    (target as Unit).hp -= damage;
+    const shieldMultiplier = getShieldDamageMultiplier(state, targetUnit, 'ranged');
+    const finalDamage = damage * shieldMultiplier;
+    targetUnit.hp -= finalDamage;
     createHitSparks(state, target.position, state.players[unit.owner].color, 8);
     createEnergyPulse(state, target.position, state.players[unit.owner].color, 1.5, 0.3);
     
     if (state.matchStats && unit.owner === 0) {
-      state.matchStats.damageDealtByPlayer += damage;
+      state.matchStats.damageDealtByPlayer += finalDamage;
     }
   }
 }
@@ -2919,7 +3039,7 @@ function executeHolyStrike(state: GameState, unit: Unit, direction: { x: number;
 // Aurum faction abilities
 function executeLethalStrike(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
   const dir = normalize(direction);
-  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  const enemies = getTargetableEnemies(state, unit);
   
   let target: Unit | null = null;
   let minDist = Infinity;
@@ -2995,6 +3115,7 @@ function executeRiposte(state: GameState, unit: Unit): void {
   unit.shieldActive = {
     endTime: Date.now() + 2000,
     radius: 2,
+    meleeDamageMultiplier: 0.3,
   };
   
   // Damage nearby enemies
@@ -3051,6 +3172,7 @@ function executeCosmicBarrier(state: GameState, unit: Unit, targetPos: { x: numb
   unit.shieldActive = {
     endTime: Date.now() + 6000,
     radius: 3,
+    meleeDamageMultiplier: 0.3,
   };
   
   createEnergyPulse(state, targetPos, state.players[unit.owner].color, 3, 0.5);
@@ -3369,6 +3491,7 @@ function executeProtectAllies(state: GameState, unit: Unit): void {
       ally.shieldActive = {
         endTime: Date.now() + 6000,
         radius: 3,
+        meleeDamageMultiplier: 0.3,
       };
       createEnergyPulse(state, ally.position, state.players[unit.owner].color, 2, 0.3);
     }
@@ -3661,16 +3784,8 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
     if ('type' in target) {
       const targetUnit = target as Unit;
       
-      if (targetUnit.shieldActive) {
-        const allies = state.units.filter((u) => 
-          u.owner === targetUnit.owner && 
-          u.shieldActive && 
-          distance(u.position, targetUnit.position) <= u.shieldActive.radius
-        );
-        if (allies.length > 0) {
-          damage *= 0.3;
-        }
-      }
+      // Apply any active shield dome modifiers for melee hits.
+      damage *= getShieldDamageMultiplier(state, targetUnit, 'melee');
 
       targetUnit.hp -= damage;
       
@@ -3918,6 +4033,11 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
     attackCooldown: 0, // Initialize attack cooldown
   };
   
+  // Dagger units start permanently cloaked until they reveal for ambush attacks.
+  if (type === 'scout') {
+    unit.cloaked = { endTime: Number.POSITIVE_INFINITY };
+  }
+
   // Initialize particles only for Solari faction units
   const solariUnits: Set<UnitType> = new Set(['flare', 'nova', 'eclipse', 'corona', 'supernova', 'zenith', 'pulsar', 'celestial', 'voidwalker', 'chronomancer', 'nebula', 'quasar']);
   

@@ -1679,6 +1679,11 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     if (!isOnScreen(unit.position, ctx.canvas, state, OFFSCREEN_CULLING_MARGIN)) {
       return;
     }
+
+    // Hide cloaked enemy units from the player's view.
+    if (unit.cloaked && unit.owner !== 0) {
+      return;
+    }
     
     let screenPos = positionToPixels(unit.position);
     const color = state.players[unit.owner].color;
@@ -3923,6 +3928,11 @@ function drawMinimap(ctx: CanvasRenderingContext2D, state: GameState, canvas: HT
   
   // Draw units with slight glow
   state.units.forEach(unit => {
+    // Hide cloaked enemy units from the player's minimap view.
+    if (unit.cloaked && unit.owner !== 0) {
+      return;
+    }
+
     const pos = toMinimapPos(unit.position);
     const color = state.players[unit.owner].color;
     

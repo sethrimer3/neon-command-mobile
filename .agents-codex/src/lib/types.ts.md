@@ -70,6 +70,7 @@ Represents a game unit with:
 - Command system: commandQueue for queued actions
 - Progression: damageMultiplier, distanceTraveled, distanceCredit
 - Ability states: lineJumpTelegraph, shieldActive, cloaked, bombardmentActive, healPulseActive, missileBarrageActive
+- Ability states: lineJumpTelegraph, shieldActive (with damage multipliers), cloaked, daggerAmbush, bombardmentActive, healPulseActive, missileBarrageActive
 - Visual effects: particles (optional array of Particle objects, currently used for marines)
 - Mining state: depot/deposit identifiers with cadence delays for alternating mining drone behavior
 
@@ -98,7 +99,7 @@ Complete configuration object for all 8 unit types with balanced stats:
 - **Blade**: Melee unit with Blade Volley
 - **Snaker**: Fast non-combat unit with Line Jump mobility
 - **Tank**: Heavy unit with Shield Dome
-- **Scout**: Fast reconnaissance with Cloak
+- **Dagger**: Fast reconnaissance unit with Ambush Throw and permanent cloak
 - **Artillery**: Long-range siege with Bombardment
 - **Medic**: Support unit with Heal Pulse
 - **Interceptor**: Air superiority with Missile Barrage
@@ -141,6 +142,7 @@ The complete game state structure containing:
 - Promotion system rewards long-distance movement with damage buffs
 - Queue bonus system encourages strategic planning (more queued moves = faster promotions)
 - Optional properties (with `?`) indicate temporary ability states
+- Shield domes can now specify ranged/melee damage multipliers per source unit
 - Resource deposits now track up to two mining drones via `workerIds`
 
 ### Known Issues
@@ -167,6 +169,7 @@ None currently identified
 - **2025-03-17**: Added mining drag preview state, deposit worker lists, and mining cadence delay fields for drones.
 - **2025-03-18**: Added mining structure/drone sizing constants to scale depots, deposits, and drones together.
 - **2025-03-19**: Added projectile variants, marine shell casings, and Blade volley/swing state while renaming the warrior unit to Blade.
+- **2026-01-08**: Renamed Scout to Dagger, added dagger ambush timing state, and extended shield definitions with damage multipliers
 
 ## Watch Out For
 - Always use meters for game logic, only convert to pixels for rendering

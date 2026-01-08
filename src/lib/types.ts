@@ -119,7 +119,12 @@ export interface Unit {
   distanceCredit: number;
   abilityCooldown: number;
   lineJumpTelegraph?: { startTime: number; endPos: Vector2; direction: Vector2 };
-  shieldActive?: { endTime: number; radius: number };
+  shieldActive?: {
+    endTime: number;
+    radius: number;
+    rangedDamageMultiplier?: number;
+    meleeDamageMultiplier?: number;
+  };
   cloaked?: { endTime: number };
   bombardmentActive?: { endTime: number; targetPos: Vector2; impactTime: number };
   healPulseActive?: { endTime: number; radius: number };
@@ -149,6 +154,12 @@ export interface Unit {
     scrunchEndTime: number;
     nextShotTime: number;
     shotsFired: number;
+  };
+  daggerAmbush?: {
+    throwTime: number;
+    recloakTime: number;
+    direction: Vector2;
+    knifeFired: boolean;
   };
   miningState?: { // Mining drone specific state
     depotId: string; // ID of the mining depot
@@ -372,7 +383,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     modifiers: ['ranged'],
   },
   scout: {
-    name: 'Scout',
+    name: 'Dagger',
     hp: 30,
     armor: 1,
     moveSpeed: 6,
@@ -381,7 +392,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackDamage: 4,
     attackRate: 3,
     cost: 20,
-    abilityName: 'Cloak',
+    abilityName: 'Ambush Throw',
     abilityCooldown: 5,
     canDamageStructures: false,
     modifiers: ['ranged', 'small'],

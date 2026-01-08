@@ -83,8 +83,8 @@ Contains the core game simulation loop and logic. Handles unit movement, combat,
 
 ### Ability System Functions
 Multiple functions for unit abilities:
-- `executeScoutCloak()` - Scout invisibility
-- `executeTankShield()` - Tank's protective dome
+- `executeDaggerAmbush()` - Dagger reveal timing and delayed knife throw
+- `executeTankShield()` - Tank's protective dome with ranged damage reduction
 - `executeArtilleryBombardment()` - Artillery siege attack
 - `executeMedicHeal()` - Medic's healing pulse
 - `executeInterceptorMissiles()` - Interceptor's missile barrage
@@ -112,6 +112,8 @@ Multiple functions for unit abilities:
 - Spawn rally points are clamped inside the 1m boundary to prevent off-screen movement targets
 - Ability commands execute after the unit reaches the queued anchor, moving the unit toward that point if needed
 - Ability cooldowns are temporarily disabled, so ability use is no longer blocked by cooldown timers
+- Tank shield domes now reduce ranged damage for allies in range and projectiles curve toward nearby enemy tanks
+- Dagger units remain cloaked by default, revealing briefly to throw an ambush knife before recloaking
 - Mining income now counts every active worker id per deposit, and dead drones are pruned from deposit worker lists
 - Mining drones can wait briefly using cadence delays so paired drones alternate between depot and deposit
 - Unit movement collision checks now block on any unit overlap without attempting friendly sliding paths
@@ -148,6 +150,7 @@ Multiple functions for unit abilities:
 - **2025-03-20**: Replaced hard unit blocking with local collision pushes so group movement stays smooth while still respecting obstacles
 - **2025-03-21**: Moved ability execution to fire on arrival at the queued anchor and disabled cooldown enforcement
 - **2025-03-22**: Added Blade knife volley ability logic, marine projectile speed boost, and shell casing physics with field particle bounces
+- **2026-01-08**: Added tank projectile attraction, ranged-only shield dome mitigation, and Dagger ambush reveal/knife timing with permanent cloak
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds

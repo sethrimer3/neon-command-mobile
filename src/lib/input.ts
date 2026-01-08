@@ -758,24 +758,51 @@ function isDoubleTap(state: GameState, screenPos: { x: number; y: number }): boo
   return false;
 }
 
-// Handle double-tap: deselect all units and bases
-function handleDoubleTap(state: GameState): void {
-  // Deselect all units and bases
+// Determine whether a unit should be visible/selectable to the given player.
+function isUnitVisibleToPlayer(unit: Unit, playerIndex: number): boolean {
+  if (unit.owner === playerIndex) {
+    return true;
+  }
+
+  return !unit.cloaked;
+}
+
+// Find the first visible unit under the cursor for selection and double-tap logic.
+function getVisibleUnitAtPosition(state: GameState, worldPos: { x: number; y: number }, playerIndex: number): Unit | undefined {
+  return state.units.find((unit) => {
+    if (!isUnitVisibleToPlayer(unit, playerIndex)) return false;
+    return distance(unit.position, worldPos) < getUnitSelectionRadius(unit);
+  });
+}
+
+// Handle double-tap: select same-type friendly units or deselect everything
+function handleDoubleTap(state: GameState, worldPos: { x: number; y: number }, playerIndex: number): void {
+  const tappedUnit = getVisibleUnitAtPosition(state, worldPos, playerIndex);
+
+  // Clear current selections either way
   state.selectedUnits.clear();
   state.bases.forEach((b) => (b.isSelected = false));
-  
+
+  if (tappedUnit && tappedUnit.owner === playerIndex) {
+    state.units.forEach((unit) => {
+      if (unit.owner === playerIndex && unit.type === tappedUnit.type) {
+        state.selectedUnits.add(unit.id);
+      }
+    });
+  }
+
   soundManager.playUnitSelect(); // Play feedback sound
 }
 
 function handleTap(state: GameState, screenPos: { x: number; y: number }, canvas: HTMLCanvasElement, playerIndex: number): void {
+  const worldPos = screenToWorldPosition(state, canvas, screenPos);
+
   // Check for double-tap first
   if (isDoubleTap(state, screenPos)) {
-    handleDoubleTap(state);
+    handleDoubleTap(state, worldPos, playerIndex);
     return;
   }
   
-  const worldPos = screenToWorldPosition(state, canvas, screenPos);
-
   const tappedUnit = state.units.find((unit) => {
     if (unit.owner !== playerIndex) return false;
     return distance(unit.position, worldPos) < getUnitSelectionRadius(unit);

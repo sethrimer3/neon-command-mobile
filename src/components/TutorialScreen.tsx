@@ -163,7 +163,7 @@ export function TutorialScreen({ onBack }: TutorialScreenProps) {
       content: [
         "Economy: Collect photons from mining depots in the corners for bonus income",
         "Composition: Mix melee and ranged units for balanced army",
-        "Scouting: Use fast/cloaked units to see enemy movements",
+        "Scouting: Use fast/cloaked Dagger units to see enemy movements",
         "Abilities: Save powerful abilities for key moments",
         "Positioning: Use terrain obstacles for cover and flanking",
         "Camera: Pan and zoom to maintain battlefield awareness",
