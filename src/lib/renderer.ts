@@ -121,7 +121,7 @@ const PROJECTILE_TRAIL_LENGTH_METERS = UNIT_SIZE_METERS * 0.9;
 const PROJECTILE_OUTER_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.3;
 
 // Blade sword particle visuals
-const BLADE_SWORD_PARTICLE_RADIUS_METERS = UNIT_SIZE_METERS * 0.18; // Increased from 0.15 for better visibility as floating magnets
+const BLADE_SWORD_PARTICLE_RADIUS_METERS = UNIT_SIZE_METERS * 0.18; // Increased from 0.12 for better visibility as floating magnets
 const BLADE_SWORD_SWING_ARC = Math.PI * 1.2; // Wider arc for more visible swings
 const BLADE_SWORD_WHIP_DELAY = 0.04; // seconds of delay per particle index for whip effect
 const PROJECTILE_INNER_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.15;
@@ -1621,7 +1621,7 @@ function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { 
     
     // Draw a very subtle glow for each particle separately to maintain distinction
     ctx.shadowColor = color;
-    ctx.shadowBlur = 2; // Reduced from 3 to 2 to make particles even more distinct
+    ctx.shadowBlur = 2; // Reduced from 6 to 2 to make particles distinctly separated
     
     ctx.beginPath();
     ctx.arc(particlePos.x, particlePos.y, particleRadius, 0, Math.PI * 2);
