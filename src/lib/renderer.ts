@@ -121,9 +121,9 @@ const PROJECTILE_TRAIL_LENGTH_METERS = UNIT_SIZE_METERS * 0.9;
 const PROJECTILE_OUTER_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.3;
 
 // Blade sword particle visuals
-const BLADE_SWORD_PARTICLE_RADIUS_METERS = UNIT_SIZE_METERS * 0.12;
-const BLADE_SWORD_SWING_ARC = Math.PI * 0.9;
-const BLADE_SWORD_WHIP_DELAY = 0.03; // seconds of delay per particle index for whip effect
+const BLADE_SWORD_PARTICLE_RADIUS_METERS = UNIT_SIZE_METERS * 0.18; // Increased from 0.12 for better visibility as floating magnets
+const BLADE_SWORD_SWING_ARC = Math.PI * 1.2; // Wider arc for more visible swings
+const BLADE_SWORD_WHIP_DELAY = 0.04; // seconds of delay per particle index for whip effect
 const PROJECTILE_INNER_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.15;
 const PROJECTILE_CORE_RADIUS_METERS = UNIT_SIZE_METERS * 0.25;
 const PROJECTILE_CORE_INNER_RADIUS_METERS = UNIT_SIZE_METERS * 0.125;
@@ -1591,8 +1591,6 @@ function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { 
 
   ctx.save();
   ctx.fillStyle = color;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 6;
 
   for (let i = 0; i < BLADE_SWORD_PARTICLE_COUNT; i++) {
     let angle = baseRotation;
@@ -1602,7 +1600,13 @@ function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { 
       const elapsed = (now - swing.startTime) / 1000;
       const delayedElapsed = Math.max(0, elapsed - BLADE_SWORD_WHIP_DELAY * i);
       const progress = Math.min(1, delayedElapsed / swing.duration);
-      angle = baseRotation - BLADE_SWORD_SWING_ARC / 2 + progress * BLADE_SWORD_SWING_ARC;
+      
+      // Swing alternates between right (true) and left (false)
+      if (swing.swingRight) {
+        angle = baseRotation - BLADE_SWORD_SWING_ARC / 2 + progress * BLADE_SWORD_SWING_ARC;
+      } else {
+        angle = baseRotation + BLADE_SWORD_SWING_ARC / 2 - progress * BLADE_SWORD_SWING_ARC;
+      }
     }
 
     // Collapse particles into the first segment during the Blade volley wind-up.
@@ -1612,9 +1616,22 @@ function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { 
       y: screenPos.y + Math.sin(angle) * offset,
     };
 
+    // Draw each particle as a distinct glowing orb with minimal blur to keep them separated
     ctx.globalAlpha = collapseSword ? 0.9 : 1.0;
+    
+    // Draw a very subtle glow for each particle separately to maintain distinction
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 2; // Reduced from 6 to 2 to make particles distinctly separated
+    
     ctx.beginPath();
     ctx.arc(particlePos.x, particlePos.y, particleRadius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Add a brighter core to make the particle look more like a floating magnet
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = (collapseSword ? 0.9 : 1.0) * 0.7; // Increased from 0.6 to 0.7 for brighter core
+    ctx.beginPath();
+    ctx.arc(particlePos.x, particlePos.y, particleRadius * 0.5, 0, Math.PI * 2);
     ctx.fill();
   }
 

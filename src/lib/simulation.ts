@@ -39,7 +39,7 @@ const MELEE_EFFECT_DURATION = 0.2; // seconds for melee attack visual
 const LASER_BEAM_DURATION = 0.5; // seconds for laser beam visual
 
 // Blade ability constants
-const BLADE_SWORD_SWING_DURATION = 0.25; // seconds for sword swing arc
+const BLADE_SWORD_SWING_DURATION = 0.35; // seconds for sword swing arc (longer for more visible animation)
 const BLADE_KNIFE_ANGLES = [-10, -5, 0, 5, 10]; // degrees for volley spread
 const BLADE_KNIFE_SHOT_INTERVAL = 0.06; // seconds between knives
 const BLADE_KNIFE_SCRUNCH_DURATION = 0.12; // seconds to compress sword particles
@@ -3744,6 +3744,20 @@ function updateCombat(state: GameState, deltaTime: number): void {
   });
 }
 
+// Helper function to create Blade sword swing animation with alternating direction
+function createBladeSwing(unit: Unit, direction: Vector2): void {
+  // Alternate swing direction for back-and-forth motion
+  const swingRight = unit.lastSwingRight === undefined ? true : !unit.lastSwingRight;
+  unit.lastSwingRight = swingRight;
+  
+  unit.swordSwing = {
+    startTime: Date.now(),
+    duration: BLADE_SWORD_SWING_DURATION,
+    direction,
+    swingRight,
+  };
+}
+
 // Helper function to perform an attack
 function performAttack(state: GameState, unit: Unit, target: Unit | Base): void {
   const def = UNIT_DEFINITIONS[unit.type];
@@ -3800,11 +3814,7 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
       };
 
       if (unit.type === 'warrior') {
-        unit.swordSwing = {
-          startTime: Date.now(),
-          duration: BLADE_SWORD_SWING_DURATION,
-          direction,
-        };
+        createBladeSwing(unit, direction);
       }
     } else {
       const targetBase = target as Base;
@@ -3844,11 +3854,7 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
       };
 
       if (unit.type === 'warrior') {
-        unit.swordSwing = {
-          startTime: Date.now(),
-          duration: BLADE_SWORD_SWING_DURATION,
-          direction,
-        };
+        createBladeSwing(unit, direction);
       }
     }
     

@@ -5,7 +5,7 @@ export const BASE_SIZE_METERS = 6;
 export const UNIT_SIZE_METERS = 2;
 // Separate Blade sword particles into distinct, magnet-like segments.
 export const BLADE_SWORD_PARTICLE_COUNT = 5;
-export const BLADE_SWORD_PARTICLE_SPACING_METERS = UNIT_SIZE_METERS * 0.24 * 3.2;
+export const BLADE_SWORD_PARTICLE_SPACING_METERS = UNIT_SIZE_METERS * 0.24 * 4.5; // Increased from 3.2 to 4.5 for more visible separation
 // Keep Blade melee range aligned with the outermost sword particle radius.
 export const BLADE_SWORD_RANGE_METERS = BLADE_SWORD_PARTICLE_SPACING_METERS * BLADE_SWORD_PARTICLE_COUNT;
 // Scale mining depots to read as large structures in the resource loop.
@@ -151,7 +151,8 @@ export interface Unit {
   queueDrawReverse?: boolean; // Whether queue should un-draw in reverse (true when unit dies)
   temporaryAvoidance?: { originalPosition: Vector2; returnDelay: number }; // For friendly unit avoidance - returnDelay is time remaining in seconds
   previousFlockingForce?: Vector2; // Previous flocking force for smoothing to prevent oscillations
-  swordSwing?: { startTime: number; duration: number; direction: Vector2 }; // Blade sword swing timing data
+  swordSwing?: { startTime: number; duration: number; direction: Vector2; swingRight: boolean }; // Blade sword swing timing data - swingRight alternates for back-and-forth swings
+  lastSwingRight?: boolean; // Track last swing direction for alternating back-and-forth swings
   bladeVolley?: {
     startTime: number;
     direction: Vector2;
