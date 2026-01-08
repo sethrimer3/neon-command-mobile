@@ -67,6 +67,9 @@ export function initializeFieldParticles(arenaWidth: number, arenaHeight: number
       attempts++;
     } while (attempts < maxAttempts);
     
+    // Note: If maxAttempts is reached, the last generated position is used.
+    // This is acceptable as it still falls within the valid quartile range.
+    
     particles.push({
       id: generateId(),
       position: { x, y },
