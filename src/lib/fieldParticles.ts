@@ -20,6 +20,9 @@ const PARTICLE_DAMPING = 0.95; // Velocity damping to slow particles over time
 const PARTICLE_MAX_SPEED = 8.0; // Maximum particle speed
 const PARTICLE_MAX_SPEED_SQUARED = PARTICLE_MAX_SPEED * PARTICLE_MAX_SPEED; // Squared for optimization
 const BOUNDARY_MARGIN = 2.0; // Margin from arena edges
+const BOUNCE_DAMPING_FACTOR = 0.5; // Velocity reduction factor on boundary bounce
+const MIN_REPULSION_DISTANCE = 0.01; // Minimum distance to avoid division by zero
+const DENSITY_GRADIENT_FACTOR = 0.5; // Controls how much density increases toward center (0.5 = 50% increase)
 
 /**
  * Initialize field particles distributed in the middle 50% of the arena (between 1st and 3rd quartiles)
@@ -55,7 +58,7 @@ export function initializeFieldParticles(arenaWidth: number, arenaHeight: number
       // Accept position with probability inversely proportional to distance from center
       // This creates higher density near center
       // Using squared distance maintains the same distribution
-      const acceptProbability = 1.0 - (Math.sqrt(distFromCenterSquared) * 0.5); // 0.5 to 1.0 range
+      const acceptProbability = 1.0 - (Math.sqrt(distFromCenterSquared) * DENSITY_GRADIENT_FACTOR);
       
       if (Math.random() < acceptProbability) {
         break;
@@ -99,7 +102,7 @@ export function updateFieldParticles(state: GameState, deltaTime: number): void 
     for (const unit of state.units) {
       const dist = distance(particle.position, unit.position);
       
-      if (dist < UNIT_REPULSION_RADIUS && dist > 0.01) {
+      if (dist < UNIT_REPULSION_RADIUS && dist > MIN_REPULSION_DISTANCE) {
         const repulsionDir = normalize(subtract(particle.position, unit.position));
         const forceMagnitude = UNIT_REPULSION_FORCE * (1.0 - dist / UNIT_REPULSION_RADIUS);
         forceX += repulsionDir.x * forceMagnitude;
@@ -111,7 +114,7 @@ export function updateFieldParticles(state: GameState, deltaTime: number): void 
     for (const base of state.bases) {
       const dist = distance(particle.position, base.position);
       
-      if (dist < BASE_REPULSION_RADIUS && dist > 0.01) {
+      if (dist < BASE_REPULSION_RADIUS && dist > MIN_REPULSION_DISTANCE) {
         const repulsionDir = normalize(subtract(particle.position, base.position));
         const forceMagnitude = BASE_REPULSION_FORCE * (1.0 - dist / BASE_REPULSION_RADIUS);
         forceX += repulsionDir.x * forceMagnitude;
@@ -124,7 +127,7 @@ export function updateFieldParticles(state: GameState, deltaTime: number): void 
       for (const projectile of state.projectiles) {
         const dist = distance(particle.position, projectile.position);
         
-        if (dist < PROJECTILE_REPULSION_RADIUS && dist > 0.01) {
+        if (dist < PROJECTILE_REPULSION_RADIUS && dist > MIN_REPULSION_DISTANCE) {
           const repulsionDir = normalize(subtract(particle.position, projectile.position));
           const forceMagnitude = PROJECTILE_REPULSION_FORCE * (1.0 - dist / PROJECTILE_REPULSION_RADIUS);
           forceX += repulsionDir.x * forceMagnitude;
@@ -157,19 +160,19 @@ export function updateFieldParticles(state: GameState, deltaTime: number): void 
     // Constrain to quartile boundaries with soft bounce
     if (particle.position.y < minY) {
       particle.position.y = minY;
-      particle.velocity.y = Math.abs(particle.velocity.y) * 0.5;
+      particle.velocity.y = Math.abs(particle.velocity.y) * BOUNCE_DAMPING_FACTOR;
     } else if (particle.position.y > maxY) {
       particle.position.y = maxY;
-      particle.velocity.y = -Math.abs(particle.velocity.y) * 0.5;
+      particle.velocity.y = -Math.abs(particle.velocity.y) * BOUNCE_DAMPING_FACTOR;
     }
     
     // Constrain to arena width with soft bounce
     if (particle.position.x < BOUNDARY_MARGIN) {
       particle.position.x = BOUNDARY_MARGIN;
-      particle.velocity.x = Math.abs(particle.velocity.x) * 0.5;
+      particle.velocity.x = Math.abs(particle.velocity.x) * BOUNCE_DAMPING_FACTOR;
     } else if (particle.position.x > arenaWidth - BOUNDARY_MARGIN) {
       particle.position.x = arenaWidth - BOUNDARY_MARGIN;
-      particle.velocity.x = -Math.abs(particle.velocity.x) * 0.5;
+      particle.velocity.x = -Math.abs(particle.velocity.x) * BOUNCE_DAMPING_FACTOR;
     }
   }
 }
