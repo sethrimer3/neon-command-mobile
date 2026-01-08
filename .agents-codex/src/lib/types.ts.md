@@ -95,7 +95,7 @@ Configuration for each unit type including:
 ### UNIT_DEFINITIONS
 Complete configuration object for all 8 unit types with balanced stats:
 - **Marine**: Ranged basic unit with Burst Fire ability
-- **Warrior**: Melee tank with Laser Beam
+- **Blade**: Melee unit with Blade Volley
 - **Snaker**: Fast non-combat unit with Line Jump mobility
 - **Tank**: Heavy unit with Shield Dome
 - **Scout**: Fast reconnaissance with Cloak
@@ -166,6 +166,7 @@ None currently identified
 - **2025-03-10**: Doubled base and unit size constants to scale up all core gameplay footprints.
 - **2025-03-17**: Added mining drag preview state, deposit worker lists, and mining cadence delay fields for drones.
 - **2025-03-18**: Added mining structure/drone sizing constants to scale depots, deposits, and drones together.
+- **2025-03-19**: Added projectile variants, marine shell casings, and Blade volley/swing state while renaming the warrior unit to Blade.
 
 ## Watch Out For
 - Always use meters for game logic, only convert to pixels for rendering

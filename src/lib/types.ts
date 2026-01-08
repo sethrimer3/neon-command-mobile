@@ -66,6 +66,9 @@ export interface Particle {
   angle: number; // Orbital angle for swirling motion
 }
 
+// Projectile visual variants for ranged attacks
+export type ProjectileKind = 'standard' | 'knife';
+
 // Projectile for ranged attacks
 export interface Projectile {
   id: string;
@@ -79,6 +82,20 @@ export interface Projectile {
   createdAt: number; // timestamp
   sourceUnit: string; // unit id that created it
   targetUnit?: string; // optional specific target unit id
+  kind?: ProjectileKind; // Visual type for specialized projectiles
+}
+
+// Ejected shell casing from marine weapons
+export interface Shell {
+  id: string;
+  position: Vector2;
+  velocity: Vector2;
+  rotation: number;
+  rotationSpeed: number;
+  createdAt: number;
+  lifetime: number; // seconds
+  mass: number;
+  owner: number;
 }
 
 export type CommandNode = 
@@ -124,6 +141,15 @@ export interface Unit {
   queueDrawReverse?: boolean; // Whether queue should un-draw in reverse (true when unit dies)
   temporaryAvoidance?: { originalPosition: Vector2; returnDelay: number }; // For friendly unit avoidance - returnDelay is time remaining in seconds
   previousFlockingForce?: Vector2; // Previous flocking force for smoothing to prevent oscillations
+  swordSwing?: { startTime: number; duration: number; direction: Vector2 }; // Blade sword swing timing data
+  bladeVolley?: {
+    startTime: number;
+    direction: Vector2;
+    magnitude: number;
+    scrunchEndTime: number;
+    nextShotTime: number;
+    shotsFired: number;
+  };
   miningState?: { // Mining drone specific state
     depotId: string; // ID of the mining depot
     depositId: string; // ID of the resource deposit being mined
@@ -301,7 +327,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     modifiers: ['ranged'],
   },
   warrior: {
-    name: 'Melee Warrior',
+    name: 'Blade',
     hp: 120,
     armor: 5,
     moveSpeed: 3,
@@ -310,7 +336,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     attackDamage: 18,
     attackRate: 1,
     cost: 40,
-    abilityName: 'Laser Beam',
+    abilityName: 'Blade Volley',
     abilityCooldown: 5,
     canDamageStructures: true,
     modifiers: ['melee'],
@@ -878,6 +904,7 @@ export interface GameState {
   miningDepots: MiningDepot[]; // Mining depots for resource gathering
   obstacles: import('./maps').Obstacle[];
   projectiles: Projectile[]; // Active projectiles in the game
+  shells?: Shell[]; // Ejected shell casings from marine shots
   
   players: {
     photons: number;

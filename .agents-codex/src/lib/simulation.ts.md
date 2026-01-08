@@ -106,7 +106,7 @@ Multiple functions for unit abilities:
 - Line jump has 500ms telegraph delay before execution
 - Income rate formula: floor(elapsedSeconds / 10) + 1
 - All abilities have unique implementations and effects
-- Warrior abilities intentionally stop at the shared laser effect to avoid dash-related crashes
+- Blade (warrior) now skips the shared laser effect and triggers a knife volley instead
 - Combat uses attack rate to determine damage intervals
 - Bases can move but slowly (for gameplay balance)
 - Spawn rally points are clamped inside the 1m boundary to prevent off-screen movement targets
@@ -147,6 +147,7 @@ Multiple functions for unit abilities:
 - **2025-03-19**: Removed friendly sliding collision resolution so units block on overlap instead of shifting around each other
 - **2025-03-20**: Replaced hard unit blocking with local collision pushes so group movement stays smooth while still respecting obstacles
 - **2025-03-21**: Moved ability execution to fire on arrival at the queued anchor and disabled cooldown enforcement
+- **2025-03-22**: Added Blade knife volley ability logic, marine projectile speed boost, and shell casing physics with field particle bounces
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds

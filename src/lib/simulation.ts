@@ -18,6 +18,8 @@ import {
   ABILITY_LASER_BASE_DAMAGE_MULTIPLIER,
   Particle,
   Projectile,
+  ProjectileKind,
+  Shell,
   FACTION_DEFINITIONS,
   UnitModifier,
   QUEUE_MAX_LENGTH,
@@ -32,8 +34,30 @@ import { ObjectPool } from './objectPool';
 // Projectile constants - must be declared before object pool
 const PROJECTILE_SPEED = 15; // meters per second
 const PROJECTILE_LIFETIME = 2.0; // seconds before projectile disappears
+const MARINE_PROJECTILE_SPEED_MULTIPLIER = 3; // Marines fire faster bullets for snappier ranged pressure
 const MELEE_EFFECT_DURATION = 0.2; // seconds for melee attack visual
 const LASER_BEAM_DURATION = 0.5; // seconds for laser beam visual
+
+// Blade ability constants
+const BLADE_SWORD_SWING_DURATION = 0.25; // seconds for sword swing arc
+const BLADE_KNIFE_ANGLES = [-10, -5, 0, 5, 10]; // degrees for volley spread
+const BLADE_KNIFE_SHOT_INTERVAL = 0.06; // seconds between knives
+const BLADE_KNIFE_SCRUNCH_DURATION = 0.12; // seconds to compress sword particles
+const BLADE_KNIFE_BASE_SPEED = 20; // base knife speed before arrow magnitude scaling
+const BLADE_KNIFE_LIFETIME = 1.4; // seconds knives persist before disappearing
+const BLADE_KNIFE_DAMAGE = 6; // base damage per knife before multiplier
+const BLADE_KNIFE_START_OFFSET = UNIT_SIZE_METERS * 0.4; // offset from unit center for knife spawn
+
+// Shell ejection constants for marine firing
+const SHELL_EJECTION_SPEED = 3.8; // meters per second
+const SHELL_EJECTION_OFFSET = UNIT_SIZE_METERS * 0.4; // offset from unit center
+const SHELL_EJECTION_ANGLE_VARIANCE = 0.25; // radians for ejection wobble
+const SHELL_EJECTION_SPEED_VARIANCE = 0.35; // percent variance in speed
+const SHELL_LIFETIME = 1.2; // seconds before shell disappears
+const SHELL_COLLISION_RADIUS = 0.18; // meters for shell-field particle collision
+const SHELL_BOUNCE_DAMPING = 0.6; // velocity damping after bounce
+const SHELL_MOMENTUM_TRANSFER = 0.4; // velocity transfer factor to field particles
+const SHELL_MASS = 0.02; // small mass for shell physics
 
 // Helper function to calculate damage with armor
 // Ranged attacks are reduced by armor, melee attacks ignore armor
@@ -62,6 +86,7 @@ const projectilePool = new ObjectPool<Projectile>(
     lifetime: PROJECTILE_LIFETIME,
     createdAt: Date.now(),
     sourceUnit: '',
+    kind: 'standard',
   }),
   (projectile) => {
     // Reset projectile state when returned to pool
@@ -72,6 +97,7 @@ const projectilePool = new ObjectPool<Projectile>(
     projectile.damage = 0;
     projectile.createdAt = Date.now();
     delete projectile.targetUnit;
+    projectile.kind = 'standard';
   },
   100, // Initial pool size
   500  // Max pool size
@@ -927,28 +953,70 @@ function updateParticles(unit: Unit, deltaTime: number): void {
 }
 
 // Create a projectile for ranged attacks
-function createProjectile(state: GameState, sourceUnit: Unit, target: Vector2, targetUnit?: Unit): Projectile {
+function createProjectile(
+  state: GameState,
+  sourceUnit: Unit,
+  target: Vector2,
+  targetUnit?: Unit,
+  options?: {
+    speed?: number;
+    damage?: number;
+    kind?: ProjectileKind;
+    lifetime?: number;
+    startOffset?: number;
+  }
+): Projectile {
   const direction = normalize(subtract(target, sourceUnit.position));
   const def = UNIT_DEFINITIONS[sourceUnit.type];
-  const damage = def.attackDamage * sourceUnit.damageMultiplier;
+  const damage = options?.damage ?? (def.attackDamage * sourceUnit.damageMultiplier);
   const color = state.players[sourceUnit.owner].color;
+  const baseSpeed = options?.speed ?? PROJECTILE_SPEED;
+  // Marines get a speed multiplier on default shots to make their bullets feel snappier.
+  const projectileSpeed = options?.speed ? baseSpeed : baseSpeed * (sourceUnit.type === 'marine' ? MARINE_PROJECTILE_SPEED_MULTIPLIER : 1);
+  const startOffset = options?.startOffset ?? 0;
   
   // Acquire projectile from pool and initialize it
   const projectile = projectilePool.acquire();
   projectile.id = generateId();
-  projectile.position.x = sourceUnit.position.x;
-  projectile.position.y = sourceUnit.position.y;
-  projectile.velocity = scale(direction, PROJECTILE_SPEED);
+  projectile.position.x = sourceUnit.position.x + direction.x * startOffset;
+  projectile.position.y = sourceUnit.position.y + direction.y * startOffset;
+  projectile.velocity = scale(direction, projectileSpeed);
   projectile.target = target;
   projectile.damage = damage;
   projectile.owner = sourceUnit.owner;
   projectile.color = color;
-  projectile.lifetime = PROJECTILE_LIFETIME;
+  projectile.lifetime = options?.lifetime ?? PROJECTILE_LIFETIME;
   projectile.createdAt = Date.now();
   projectile.sourceUnit = sourceUnit.id;
   projectile.targetUnit = targetUnit?.id;
+  projectile.kind = options?.kind ?? 'standard';
   
   return projectile;
+}
+
+// Create a shell casing ejected from a marine shot
+function createEjectedShell(unit: Unit, firingDirection: Vector2): Shell {
+  const now = Date.now();
+  const fallbackDirection = firingDirection.x === 0 && firingDirection.y === 0 ? { x: 1, y: 0 } : firingDirection;
+  const forward = normalize(fallbackDirection);
+  const side = normalize({ x: -forward.y, y: forward.x });
+  const sideSign = Math.random() < 0.5 ? -1 : 1;
+  const baseEjection = normalize(add(scale(side, sideSign), scale(forward, 0.25)));
+  const baseAngle = Math.atan2(baseEjection.y, baseEjection.x);
+  const angle = baseAngle + (Math.random() - 0.5) * 2 * SHELL_EJECTION_ANGLE_VARIANCE;
+  const speed = SHELL_EJECTION_SPEED * (1 + (Math.random() - 0.5) * SHELL_EJECTION_SPEED_VARIANCE);
+
+  return {
+    id: generateId(),
+    position: add(unit.position, scale(side, sideSign * SHELL_EJECTION_OFFSET)),
+    velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
+    rotation: Math.random() * Math.PI * 2,
+    rotationSpeed: (Math.random() - 0.5) * 8,
+    createdAt: now,
+    lifetime: SHELL_LIFETIME,
+    mass: SHELL_MASS,
+    owner: unit.owner,
+  };
 }
 
 // Create an impact effect
@@ -1380,6 +1448,53 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
   state.projectiles = remainingProjectiles;
 }
 
+// Update shell casings and handle collisions with field particles
+function updateShells(state: GameState, deltaTime: number): void {
+  if (!state.shells || state.shells.length === 0) return;
+
+  const now = Date.now();
+  const remainingShells: Shell[] = [];
+
+  state.shells.forEach((shell) => {
+    shell.position.x += shell.velocity.x * deltaTime;
+    shell.position.y += shell.velocity.y * deltaTime;
+    shell.rotation += shell.rotationSpeed * deltaTime;
+
+    if (state.fieldParticles && state.fieldParticles.length > 0) {
+      for (const particle of state.fieldParticles) {
+        const dist = distance(shell.position, particle.position);
+        const collisionDist = SHELL_COLLISION_RADIUS + particle.size;
+
+        if (dist > 0 && dist < collisionDist) {
+          const normal = normalize(subtract(shell.position, particle.position));
+          const preBounceVelocity = { ...shell.velocity };
+          const dot = shell.velocity.x * normal.x + shell.velocity.y * normal.y;
+
+          // Reflect shell velocity across the collision normal
+          shell.velocity.x = shell.velocity.x - 2 * dot * normal.x;
+          shell.velocity.y = shell.velocity.y - 2 * dot * normal.y;
+          shell.velocity.x *= SHELL_BOUNCE_DAMPING;
+          shell.velocity.y *= SHELL_BOUNCE_DAMPING;
+
+          // Transfer momentum into the ambient particle
+          particle.velocity.x += preBounceVelocity.x * SHELL_MOMENTUM_TRANSFER;
+          particle.velocity.y += preBounceVelocity.y * SHELL_MOMENTUM_TRANSFER;
+
+          // Push shell out of overlap to prevent sticking
+          shell.position = add(particle.position, scale(normal, collisionDist));
+        }
+      }
+    }
+
+    const age = (now - shell.createdAt) / 1000;
+    if (age <= shell.lifetime) {
+      remainingShells.push(shell);
+    }
+  });
+
+  state.shells = remainingShells;
+}
+
 /**
  * Update chess mode turn timer and execute pending commands when turn ends
  */
@@ -1532,6 +1647,7 @@ export function updateGame(state: GameState, deltaTime: number): void {
   updateUnits(state, deltaTime);
   updateBases(state, deltaTime);
   updateProjectiles(state, deltaTime);
+  updateShells(state, deltaTime);
   updateCombat(state, deltaTime);
   cleanupDeadUnits(state); // Clean up dead units after combat
   cleanupDyingUnits(state); // Clean up dying units after animation completes
@@ -2036,6 +2152,25 @@ function updateAbilityEffects(unit: Unit, state: GameState, deltaTime: number): 
     unit.cloaked = undefined;
   }
 
+  if (unit.swordSwing && now > unit.swordSwing.startTime + unit.swordSwing.duration * 1000) {
+    unit.swordSwing = undefined;
+  }
+
+  if (unit.bladeVolley) {
+    const volley = unit.bladeVolley;
+    if (now >= volley.nextShotTime && volley.shotsFired < BLADE_KNIFE_ANGLES.length) {
+      // Emit knives in quick succession using the stored volley direction and magnitude.
+      const angleOffset = BLADE_KNIFE_ANGLES[volley.shotsFired];
+      fireBladeKnife(state, unit, volley.direction, volley.magnitude, angleOffset);
+      volley.shotsFired += 1;
+      volley.nextShotTime = now + BLADE_KNIFE_SHOT_INTERVAL * 1000;
+    }
+
+    if (volley.shotsFired >= BLADE_KNIFE_ANGLES.length && now > volley.nextShotTime) {
+      unit.bladeVolley = undefined;
+    }
+  }
+
   if (unit.bombardmentActive) {
     if (now > unit.bombardmentActive.impactTime && now < unit.bombardmentActive.endTime) {
       const enemies = state.units.filter((u) => u.owner !== unit.owner);
@@ -2302,16 +2437,20 @@ function executeAbility(state: GameState, unit: Unit, node: CommandNode): void {
 
   soundManager.playAbility();
 
-  // Execute generic laser ability for all units
-  executeGenericLaser(state, unit, node.direction);
+  // Execute generic laser ability for all units except the Blade (warrior) who throws knives instead
+  if (unit.type !== 'warrior') {
+    executeGenericLaser(state, unit, node.direction);
+  }
   // Ability cooldowns are temporarily disabled, so keep cooldown cleared.
   unit.abilityCooldown = 0;
   
   // Keep existing specific abilities as additional effects
-  // Warriors intentionally use only the generic laser to avoid dash-related crashes.
   if (unit.type === 'marine') {
     createAbilityEffect(state, unit, node.position, 'burst-fire');
     executeBurstFire(state, unit, node.direction);
+  } else if (unit.type === 'warrior') {
+    createAbilityEffect(state, unit, node.position, 'blade-volley');
+    executeBladeVolley(state, unit, node.direction);
   } else if (unit.type === 'snaker') {
     createAbilityEffect(state, unit, node.position, 'line-jump');
     unit.lineJumpTelegraph = {
@@ -2480,6 +2619,43 @@ function executeGenericLaser(state: GameState, unit: Unit, direction: { x: numbe
   });
 }
 
+function executeBladeVolley(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const now = Date.now();
+  const magnitude = distance({ x: 0, y: 0 }, direction);
+  const normalized = normalize(direction);
+
+  // Store volley timing so updateAbilityEffects can emit knives in sequence.
+  unit.bladeVolley = {
+    startTime: now,
+    direction: normalized,
+    magnitude,
+    scrunchEndTime: now + BLADE_KNIFE_SCRUNCH_DURATION * 1000,
+    nextShotTime: now + BLADE_KNIFE_SCRUNCH_DURATION * 1000,
+    shotsFired: 0,
+  };
+}
+
+// Spawn a single throwing knife projectile for the Blade volley.
+function fireBladeKnife(state: GameState, unit: Unit, direction: Vector2, magnitude: number, angleOffset: number): void {
+  const clampedMagnitude = Math.min(magnitude, ABILITY_MAX_RANGE);
+  const speedScale = clampedMagnitude / ABILITY_MAX_RANGE;
+  const baseAngle = direction.x === 0 && direction.y === 0 ? 0 : Math.atan2(direction.y, direction.x);
+  const angle = baseAngle + (angleOffset * Math.PI) / 180;
+  const throwDirection = { x: Math.cos(angle), y: Math.sin(angle) };
+  const throwRange = Math.max(0.5, clampedMagnitude);
+  const targetPos = add(unit.position, scale(throwDirection, throwRange));
+  const damage = BLADE_KNIFE_DAMAGE * unit.damageMultiplier;
+  const projectile = createProjectile(state, unit, targetPos, undefined, {
+    speed: BLADE_KNIFE_BASE_SPEED * speedScale,
+    damage,
+    kind: 'knife',
+    lifetime: BLADE_KNIFE_LIFETIME,
+    startOffset: BLADE_KNIFE_START_OFFSET,
+  });
+
+  state.projectiles.push(projectile);
+}
+
 function executeBurstFire(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
   const def = UNIT_DEFINITIONS.marine;
   const shotDamage = 2 * unit.damageMultiplier;
@@ -2491,6 +2667,11 @@ function executeBurstFire(state: GameState, unit: Unit, direction: { x: number; 
   const dir = normalize(direction);
 
   for (let i = 0; i < 10; i++) {
+    if (!state.shells) {
+      state.shells = [];
+    }
+    state.shells.push(createEjectedShell(unit, dir));
+
     let hitTarget: Unit | Base | null = null;
     let minDist = Infinity;
 
@@ -3458,6 +3639,13 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
     const targetUnit = 'type' in target ? (target as Unit) : undefined;
     const projectile = createProjectile(state, unit, targetPos, targetUnit);
     state.projectiles.push(projectile);
+
+    if (unit.type === 'marine') {
+      if (!state.shells) {
+        state.shells = [];
+      }
+      state.shells.push(createEjectedShell(unit, direction));
+    }
     
     // Create muzzle flash effect for visual feedback
     const color = state.players[unit.owner].color;
@@ -3495,6 +3683,14 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
         endTime: Date.now() + MELEE_EFFECT_DURATION * 1000,
         targetPos: { ...targetUnit.position },
       };
+
+      if (unit.type === 'warrior') {
+        unit.swordSwing = {
+          startTime: Date.now(),
+          duration: BLADE_SWORD_SWING_DURATION,
+          direction,
+        };
+      }
     } else {
       const targetBase = target as Base;
       // Check if base has active shield (mobile faction)
@@ -3531,6 +3727,14 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
         endTime: Date.now() + MELEE_EFFECT_DURATION * 1000,
         targetPos: { ...targetBase.position },
       };
+
+      if (unit.type === 'warrior') {
+        unit.swordSwing = {
+          startTime: Date.now(),
+          duration: BLADE_SWORD_SWING_DURATION,
+          direction,
+        };
+      }
     }
     
     if (unit.owner === 0 && Math.random() < 0.3) {

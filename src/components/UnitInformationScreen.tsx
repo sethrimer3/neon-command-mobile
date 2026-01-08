@@ -23,7 +23,7 @@ function getAbilityDescription(unitType: UnitType): string {
   const abilityDescriptions: Record<UnitType, string> = {
     // Radiant faction
     marine: 'Fires 10 rapid shots in a cone, each dealing 2 damage (affected by damage multiplier) to enemies in the target direction (max range: 8m). Also fires a laser dealing 10 damage.',
-    warrior: 'Fires a laser dealing 10 damage in the target direction.',
+    warrior: 'Compresses the sword into one point, then throws five knives at -10°, -5°, 0°, 5°, and 10° in quick succession. Knife speed scales with the drag distance and each knife deals 6 damage (affected by damage multiplier).',
     tank: 'Creates a protective shield dome with 4m radius for 5 seconds, reducing incoming damage by 70%. Also fires a laser dealing 10 damage.',
     scout: 'Becomes invisible for 6 seconds, avoiding enemy detection and attacks. Also fires a laser dealing 10 damage.',
     artillery: 'Launches a bombardment at target location after 1.5s delay, dealing area damage. Also fires a laser dealing 10 damage.',

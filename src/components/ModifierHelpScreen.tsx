@@ -20,7 +20,7 @@ const MODIFIERS: ModifierInfo[] = [
     description: 'Close-range combat units that ignore enemy armor. Must get close to attack but deal full damage regardless of armor value.',
     icon: '⚔️',
     color: 'text-red-500',
-    examples: ['Warrior', 'Berserker', 'Assassin', 'Juggernaut', 'Striker', 'Nova'],
+    examples: ['Blade', 'Berserker', 'Assassin', 'Juggernaut', 'Striker', 'Nova'],
   },
   {
     name: 'Ranged',

@@ -166,6 +166,7 @@ Main application component that orchestrates the entire game. Manages game state
 - **2026-01-01**: Added tracked countdown seconds for UI refreshes and bumped the visible build number.
 - **2026-01-01**: Removed the main menu build badge so only the loading overlay displays build metadata.
 - Added portrait-stable coordinate usage so desktop rotation does not change gameplay layout.
+- **2025-03-22**: Initialized shell casing arrays alongside projectiles in game state setup.
 
 ## Watch Out For
 - Game state ref vs React state - use correctly for performance

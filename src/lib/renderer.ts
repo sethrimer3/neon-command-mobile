@@ -9,7 +9,6 @@ import {
   RESOURCE_DEPOSIT_SIZE_METERS,
   MINING_DRONE_SIZE_MULTIPLIER,
   UNIT_DEFINITIONS,
-  Projectile,
   LASER_RANGE,
   ABILITY_MAX_RANGE,
   ABILITY_LASER_DURATION,
@@ -118,6 +117,13 @@ const ABILITY_ARROW_LENGTH = 12; // Arrow length for ability command visualizati
 const PROJECTILE_SIZE_METERS = UNIT_SIZE_METERS * 1.2;
 const PROJECTILE_TRAIL_LENGTH_METERS = UNIT_SIZE_METERS * 0.9;
 const PROJECTILE_OUTER_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.3;
+
+// Blade sword particle visuals
+const BLADE_SWORD_PARTICLE_COUNT = 5;
+const BLADE_SWORD_PARTICLE_SPACING_METERS = UNIT_SIZE_METERS * 0.24;
+const BLADE_SWORD_PARTICLE_RADIUS_METERS = UNIT_SIZE_METERS * 0.12;
+const BLADE_SWORD_SWING_ARC = Math.PI * 0.9;
+const BLADE_SWORD_WHIP_DELAY = 0.03; // seconds of delay per particle index for whip effect
 const PROJECTILE_INNER_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.15;
 const PROJECTILE_CORE_RADIUS_METERS = UNIT_SIZE_METERS * 0.25;
 const PROJECTILE_CORE_INNER_RADIUS_METERS = UNIT_SIZE_METERS * 0.125;
@@ -238,6 +244,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
       drawCommandQueues(ctx, state);
       drawMotionTrails(ctx, state);
       drawProjectiles(ctx, state);
+      drawShells(ctx, state);
       drawFieldParticles(ctx, state);
       drawUnits(ctx, state);
       drawExplosionParticles(ctx, state);
@@ -1520,16 +1527,98 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     ctx.translate(screenPos.x, screenPos.y);
     ctx.rotate(angle);
     
-    // Draw tiny rectangle bullet (4px x 2px)
-    const bulletWidth = 4;
-    const bulletHeight = 2;
-    
-    // Draw the rectangle centered
-    ctx.fillStyle = projectile.color;
-    ctx.fillRect(-bulletWidth / 2, -bulletHeight / 2, bulletWidth, bulletHeight);
+    if (projectile.kind === 'knife') {
+      // Draw slim knife silhouette with a pointed tip
+      const bladeLength = 6;
+      const bladeWidth = 2;
+      ctx.fillStyle = projectile.color;
+      ctx.beginPath();
+      ctx.moveTo(bladeLength / 2, 0);
+      ctx.lineTo(-bladeLength / 2, -bladeWidth / 2);
+      ctx.lineTo(-bladeLength / 2, bladeWidth / 2);
+      ctx.closePath();
+      ctx.fill();
+      
+      ctx.strokeStyle = projectile.color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-bladeLength / 2, 0);
+      ctx.lineTo(-bladeLength / 2 - 2, 0);
+      ctx.stroke();
+    } else {
+      // Draw tiny rectangle bullet (4px x 2px)
+      const bulletWidth = 4;
+      const bulletHeight = 2;
+      
+      // Draw the rectangle centered
+      ctx.fillStyle = projectile.color;
+      ctx.fillRect(-bulletWidth / 2, -bulletHeight / 2, bulletWidth, bulletHeight);
+    }
     
     ctx.restore();
   });
+}
+
+function drawShells(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.shells || state.shells.length === 0) return;
+  if (!state.settings.enableParticleEffects) return;
+
+  state.shells.forEach((shell) => {
+    if (!isOnScreen(shell.position, ctx.canvas, state, OFFSCREEN_CULLING_MARGIN)) {
+      return;
+    }
+
+    const screenPos = positionToPixels(shell.position);
+    const shellWidth = 3;
+    const shellHeight = 1.5;
+
+    ctx.save();
+    ctx.translate(screenPos.x, screenPos.y);
+    ctx.rotate(shell.rotation);
+    ctx.fillStyle = 'oklch(0.75 0.15 85)';
+    ctx.fillRect(-shellWidth / 2, -shellHeight / 2, shellWidth, shellHeight);
+    ctx.restore();
+  });
+}
+
+function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
+  const now = Date.now();
+  const baseRotation = unit.rotation ?? 0;
+  const collapseSword = !!unit.bladeVolley;
+  const particleRadius = metersToPixels(BLADE_SWORD_PARTICLE_RADIUS_METERS);
+  const particleSpacing = metersToPixels(BLADE_SWORD_PARTICLE_SPACING_METERS);
+  const swing = unit.swordSwing;
+
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 6;
+
+  for (let i = 0; i < BLADE_SWORD_PARTICLE_COUNT; i++) {
+    let angle = baseRotation;
+
+    if (!collapseSword && swing) {
+      // Offset each successive particle to create a whip-like lag during swings.
+      const elapsed = (now - swing.startTime) / 1000;
+      const delayedElapsed = Math.max(0, elapsed - BLADE_SWORD_WHIP_DELAY * i);
+      const progress = Math.min(1, delayedElapsed / swing.duration);
+      angle = baseRotation - BLADE_SWORD_SWING_ARC / 2 + progress * BLADE_SWORD_SWING_ARC;
+    }
+
+    // Collapse particles into the first segment during the Blade volley wind-up.
+    const offset = collapseSword ? particleSpacing : particleSpacing * (i + 1);
+    const particlePos = {
+      x: screenPos.x + Math.cos(angle) * offset,
+      y: screenPos.y + Math.sin(angle) * offset,
+    };
+
+    ctx.globalAlpha = collapseSword ? 0.9 : 1.0;
+    ctx.beginPath();
+    ctx.arc(particlePos.x, particlePos.y, particleRadius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
 }
 
 function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string, showNumeric: boolean): void {
@@ -1632,6 +1721,10 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
       drawParticles(ctx, unit);
     }
 
+    if (!useLOD && unit.type === 'warrior' && state.settings.enableParticleEffects) {
+      drawBladeSword(ctx, unit, screenPos, color);
+    }
+
     if (unit.cloaked) {
       ctx.globalAlpha = 0.3;
     }
@@ -1707,21 +1800,6 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
         ctx.arc(screenPos.x, screenPos.y, radius * 1.2, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1.0;
-        ctx.restore();
-      }
-
-      if (unit.type === 'warrior') {
-        ctx.save();
-        ctx.translate(screenPos.x, screenPos.y);
-        ctx.rotate(rotation);
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(-radius, -radius);
-        ctx.lineTo(radius, radius);
-        ctx.moveTo(radius, -radius);
-        ctx.lineTo(-radius, radius);
-        ctx.stroke();
         ctx.restore();
       }
 

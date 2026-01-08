@@ -52,6 +52,7 @@ Provides particle, pulse, and ability visual effects used throughout the game. T
 
 ## Change History
 - **2026-01-07:** Removed the execute-dash ability visual effect now that warriors only use the shared laser ability.
+- **2025-03-22:** Added Blade volley ability charge/pulse effect to match the new knife throw ability.
 
 ## Watch Out For
 - Keep abilityType strings consistent between simulation.ts and this module

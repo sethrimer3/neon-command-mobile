@@ -751,6 +751,13 @@ export function createAbilityEffect(
       triggerBackgroundPush(unit.position, 8);
       break;
     
+    case 'blade-volley':
+      // Create a tight charge pulse to sell the blade compression
+      createAbilityCharge(state, unit.position, color, 0.25);
+      createEnergyPulse(state, unit.position, color, 0.4, 1.2);
+      triggerBackgroundPush(unit.position, 6);
+      break;
+    
     case 'line-jump':
       // Create jump telegraph with charge particles
       createAbilityCharge(state, unit.position, 'oklch(0.75 0.18 200)', 0.4);

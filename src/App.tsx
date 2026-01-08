@@ -1724,6 +1724,7 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
     vsMode: 'ai',
     units: [],
     projectiles: [],
+    shells: [],
     obstacles: obstacles,
     miningDepots: miningDepots,
     bases: [
@@ -1800,6 +1801,7 @@ function createInitialState(): GameState {
     vsMode: null,
     units: [],
     projectiles: [],
+    shells: [],
     bases: [],
     miningDepots: [],
     obstacles: [],
@@ -1862,6 +1864,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     vsMode: mode,
     units: [],
     projectiles: [],
+    shells: [],
     obstacles: obstacles,
     miningDepots: miningDepots,
     bases: [
@@ -1959,6 +1962,7 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
     vsMode: mode,
     units: [],
     projectiles: [],
+    shells: [],
     obstacles: obstacles,
     miningDepots: miningDepots,
     bases: [
@@ -2045,6 +2049,7 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
     vsMode: 'online',
     units: [],
     projectiles: [],
+    shells: [],
     obstacles: obstacles,
     miningDepots: miningDepots,
     bases: [
@@ -2147,6 +2152,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
     vsMode: 'online',
     units: [],
     projectiles: [],
+    shells: [],
     obstacles: obstacles,
     miningDepots: miningDepots,
     bases: [
