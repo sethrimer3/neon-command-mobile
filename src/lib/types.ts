@@ -158,7 +158,12 @@ export interface Unit {
     swingType: 'first' | 'second' | 'third'; // Three-swing attack sequence: 210° CCW -> 180° CW -> 360° spin
     swingNumber: number; // Current swing in the sequence (1, 2, or 3)
   }; // Blade sword swing timing data for 3-swing combo
-  lastSwingNumber?: number; // Track last swing number for continuing sequence
+  swordSwingCombo?: {
+    direction: Vector2;
+    nextSwingTime: number;
+    nextSwingNumber: number; // Next swing in the combo (1-3), or 0 when waiting for reset
+    resetAvailableTime: number; // Timestamp after which a new combo can be triggered
+  }; // Blade sword combo state to allow chained swings with pauses
   bladeVolley?: {
     startTime: number;
     direction: Vector2;

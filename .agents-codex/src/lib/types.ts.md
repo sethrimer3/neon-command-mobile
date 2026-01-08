@@ -75,6 +75,7 @@ Represents a game unit with:
 - Ability states: lineJumpTelegraph, shieldActive, cloaked, bombardmentActive, healPulseActive, missileBarrageActive
 - Ability states: lineJumpTelegraph, shieldActive (with damage multipliers), cloaked, daggerAmbush, bombardmentActive, healPulseActive, missileBarrageActive
 - Visual effects: particles (optional array of Particle objects, currently used for marines)
+- Blade melee swing sequencing: swordSwing (active swing animation) and swordSwingCombo (queued combo timing)
 - Mining state: depot/deposit identifiers with cadence delays for alternating mining drone behavior
 
 ### Base Interface
@@ -174,6 +175,7 @@ None currently identified
 - **2025-03-19**: Added projectile variants, marine shell casings, and Blade volley/swing state while renaming the warrior unit to Blade.
 - **2026-01-08**: Renamed Scout to Dagger, added dagger ambush timing state, and extended shield definitions with damage multipliers
 - **2026-01-09**: Aligned Blade melee range with the expanded sword particle spacing via shared constants
+- **2026-01-10**: Replaced legacy Blade swing tracking with swordSwingCombo to coordinate full three-swing sequences
 
 ## Watch Out For
 - Always use meters for game logic, only convert to pixels for rendering

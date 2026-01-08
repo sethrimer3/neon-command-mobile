@@ -42,7 +42,8 @@ const LASER_BEAM_DURATION = 0.5; // seconds for laser beam visual
 const BLADE_SWORD_SWING_DURATION_FIRST = 0.45; // seconds for first 210° swing
 const BLADE_SWORD_SWING_DURATION_SECOND = 0.40; // seconds for second 180° swing
 const BLADE_SWORD_SWING_DURATION_THIRD = 0.50; // seconds for third 360° spin
-const BLADE_SWORD_SEQUENCE_RESET_TIME = 2.0; // seconds before swing sequence resets to first swing
+const BLADE_SWORD_SWING_PAUSE = 0.12; // seconds to pause between individual combo swings
+const BLADE_SWORD_SEQUENCE_RESET_TIME = 0.2; // seconds to pause after the third swing before allowing a new combo
 const BLADE_KNIFE_ANGLES = [-10, -5, 0, 5, 10]; // degrees for volley spread
 const BLADE_KNIFE_SHOT_INTERVAL = 0.06; // seconds between knives
 const BLADE_KNIFE_SCRUNCH_DURATION = 0.12; // seconds to compress sword particles
@@ -2229,6 +2230,40 @@ function updateAbilityEffects(unit: Unit, state: GameState, deltaTime: number): 
     unit.swordSwing = undefined;
   }
 
+  if (unit.swordSwingCombo) {
+    const combo = unit.swordSwingCombo;
+
+    // Clear completed combos once the post-combo pause has elapsed.
+    if (combo.nextSwingNumber === 0 && now >= combo.resetAvailableTime) {
+      unit.swordSwingCombo = undefined;
+    }
+
+    // Start the next swing when the combo is queued and the prior swing has finished.
+    if (combo.nextSwingNumber > 0 && !unit.swordSwing && now >= combo.nextSwingTime) {
+      const swingSettings = getBladeSwingSettings(combo.nextSwingNumber);
+
+      unit.swordSwing = {
+        startTime: now,
+        duration: swingSettings.duration,
+        direction: combo.direction,
+        swingType: swingSettings.swingType,
+        swingNumber: combo.nextSwingNumber,
+      };
+
+      if (combo.nextSwingNumber < 3) {
+        // Queue the next swing after a brief pause to keep the combo readable.
+        combo.nextSwingNumber += 1;
+        combo.nextSwingTime = now + (swingSettings.duration + BLADE_SWORD_SWING_PAUSE) * 1000;
+        combo.resetAvailableTime = combo.nextSwingTime;
+      } else {
+        // Lock the combo until the short reset pause completes after the final spin.
+        combo.nextSwingNumber = 0;
+        combo.resetAvailableTime = now + (swingSettings.duration + BLADE_SWORD_SEQUENCE_RESET_TIME) * 1000;
+        combo.nextSwingTime = combo.resetAvailableTime;
+      }
+    }
+  }
+
   if (unit.bladeVolley) {
     const volley = unit.bladeVolley;
     if (now >= volley.nextShotTime && volley.shotsFired < BLADE_KNIFE_ANGLES.length) {
@@ -3747,43 +3782,34 @@ function updateCombat(state: GameState, deltaTime: number): void {
   });
 }
 
-// Helper function to create Blade sword swing animation with 3-swing combo
+// Helper function to map combo swing number to animation settings.
+function getBladeSwingSettings(swingNumber: number): { swingType: 'first' | 'second' | 'third'; duration: number } {
+  if (swingNumber === 1) {
+    return { swingType: 'first', duration: BLADE_SWORD_SWING_DURATION_FIRST };
+  }
+
+  if (swingNumber === 2) {
+    return { swingType: 'second', duration: BLADE_SWORD_SWING_DURATION_SECOND };
+  }
+
+  return { swingType: 'third', duration: BLADE_SWORD_SWING_DURATION_THIRD };
+}
+
+// Helper function to queue the Blade sword swing animation with a 3-swing combo.
 function createBladeSwing(unit: Unit, direction: Vector2): void {
   const now = Date.now();
-  
-  // Determine which swing in the sequence based on timing and last swing
-  let swingNumber = 1;
-  let swingType: 'first' | 'second' | 'third' = 'first';
-  let duration = BLADE_SWORD_SWING_DURATION_FIRST;
-  
-  // If last swing was recent (within reset time after it ended), continue the sequence
-  if (unit.lastSwingNumber !== undefined && unit.swordSwing) {
-    const swingEndTime = unit.swordSwing.startTime + unit.swordSwing.duration * 1000;
-    const timeSinceLastSwingEnded = (now - swingEndTime) / 1000;
-    if (timeSinceLastSwingEnded >= 0 && timeSinceLastSwingEnded < BLADE_SWORD_SEQUENCE_RESET_TIME) {
-      swingNumber = (unit.lastSwingNumber % 3) + 1; // Cycle through 1, 2, 3
-    }
+
+  // If a combo is already running or cooling down, avoid restarting the swing sequence.
+  if (unit.swordSwingCombo && now < unit.swordSwingCombo.resetAvailableTime) {
+    return;
   }
-  
-  // Set swing type and duration based on swing number
-  if (swingNumber === 1) {
-    swingType = 'first';
-    duration = BLADE_SWORD_SWING_DURATION_FIRST;
-  } else if (swingNumber === 2) {
-    swingType = 'second';
-    duration = BLADE_SWORD_SWING_DURATION_SECOND;
-  } else {
-    swingType = 'third';
-    duration = BLADE_SWORD_SWING_DURATION_THIRD;
-  }
-  
-  unit.lastSwingNumber = swingNumber;
-  unit.swordSwing = {
-    startTime: now,
-    duration,
+
+  // Start (or restart) the combo so the update loop can play all three swings with pauses.
+  unit.swordSwingCombo = {
     direction,
-    swingType,
-    swingNumber,
+    nextSwingNumber: 1,
+    nextSwingTime: now,
+    resetAvailableTime: now,
   };
 }
 

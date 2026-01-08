@@ -119,6 +119,7 @@ Multiple functions for unit abilities:
 - Unit movement collision checks now block on any unit overlap without attempting friendly sliding paths
 - Local collision push keeps units from overlapping while allowing them to keep moving through crowds
 - Obstacle collisions still block movement to prevent clipping through walls
+- Blade melee swings now queue through a full three-hit combo with short pauses via the swordSwingCombo state, preventing mid-swing resets
 
 ### Known Issues
 - None currently identified
@@ -151,6 +152,7 @@ Multiple functions for unit abilities:
 - **2025-03-21**: Moved ability execution to fire on arrival at the queued anchor and disabled cooldown enforcement
 - **2025-03-22**: Added Blade knife volley ability logic, marine projectile speed boost, and shell casing physics with field particle bounces
 - **2026-01-08**: Added tank projectile attraction, ranged-only shield dome mitigation, and Dagger ambush reveal/knife timing with permanent cloak
+- **2026-01-10**: Queued Blade sword swing combo sequencing so each attack plays all three swings with pauses before reset
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds
