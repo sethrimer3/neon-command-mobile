@@ -74,6 +74,10 @@ function getAttackDescription(unitType: UnitType): string {
   if (def.attackType === 'none') {
     return 'This unit does not have a normal attack.';
   }
+
+  if (unitType === 'warrior') {
+    return `Melee combo: Performs three swings. Swings 1-2 hit a 180° arc in front, swing 3 hits a full 360° radius. Each swing deals ${def.attackDamage} damage within ${def.attackRange}m (ignores armor).`;
+  }
   
   const attackTypeText = def.attackType === 'melee' ? 'Melee attack' : 'Ranged attack';
   const armorText = def.attackType === 'melee' 

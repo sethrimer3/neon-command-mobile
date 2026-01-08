@@ -164,6 +164,11 @@ export interface Unit {
     nextSwingNumber: number; // Next swing in the combo (1-3), or 0 when waiting for reset
     resetAvailableTime: number; // Timestamp after which a new combo can be triggered
   }; // Blade sword combo state to allow chained swings with pauses
+  bladeTrailHistory?: Array<{
+    timestamp: number;
+    position: Vector2;
+    rotation: number;
+  }>; // Time-stamped transform history for Blade sword particle lag
   bladeVolley?: {
     startTime: number;
     direction: Vector2;

@@ -111,6 +111,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - Off-screen indicators render at arena viewport edges when zoomed in to keep units/bases visible
 - Cloaked enemy units are culled from rendering (including the minimap), while cloaked friendly units render at reduced opacity
 - Blade sword particle spacing pulls from shared constants so the visuals match the melee range tuning
+- Blade sword particles sample lagged transform history so each segment trails behind movement/turns
 
 ### Rendering Optimizations
 - Clears only once per frame
@@ -157,6 +158,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - **2025-03-22**: Added Blade sword particle rendering, knife projectile visuals, and marine shell casing rendering
 - **2026-01-08**: Hid cloaked enemy units in the main unit render pass while keeping friendly cloaked opacity
 - **2026-01-09**: Spaced Blade sword particles farther apart by reading the shared spacing constant for magnet-like separation
+- **2026-01-11**: Added Blade movement lag sampling so sword particles trail behind the unit based on history snapshots
 
 ## Watch Out For
 - Always convert game positions to pixels before drawing

@@ -31,6 +31,7 @@ Contains the core game simulation loop and logic. Handles unit movement, combat,
 - **Notes:** 
   - Handles ability cooldowns and active effects
   - Updates particle physics for marines (attraction-based orbital motion)
+  - Records Blade movement history snapshots for per-particle lag in the renderer
   - Processes line jump telegraphs (0.5s delay before execution)
   - Executes movement from command queues
   - Applies local collision push to keep units from stacking while still moving
@@ -88,6 +89,7 @@ Multiple functions for unit abilities:
 - `executeArtilleryBombardment()` - Artillery siege attack
 - `executeMedicHeal()` - Medic's healing pulse
 - `executeInterceptorMissiles()` - Interceptor's missile barrage
+- `applyBladeSwingDamage()` - Applies Blade swing damage in a forward semicircle or full circle based on swing number
 
 ## Terminology
 - **Delta Time**: Time elapsed between frames (in seconds)
@@ -120,6 +122,8 @@ Multiple functions for unit abilities:
 - Local collision push keeps units from overlapping while allowing them to keep moving through crowds
 - Obstacle collisions still block movement to prevent clipping through walls
 - Blade melee swings now queue through a full three-hit combo with short pauses via the swordSwingCombo state, preventing mid-swing resets
+- Blade swings now apply area damage per swing with 1s pauses between combo hits and after the final spin
+- Blade movement history is recorded each frame to support lagged sword particle rendering
 
 ### Known Issues
 - None currently identified
@@ -153,6 +157,7 @@ Multiple functions for unit abilities:
 - **2025-03-22**: Added Blade knife volley ability logic, marine projectile speed boost, and shell casing physics with field particle bounces
 - **2026-01-08**: Added tank projectile attraction, ranged-only shield dome mitigation, and Dagger ambush reveal/knife timing with permanent cloak
 - **2026-01-10**: Queued Blade sword swing combo sequencing so each attack plays all three swings with pauses before reset
+- **2026-01-11**: Applied Blade swing damage in semicircle/full-circle arcs, extended combo pauses to 1s, and recorded Blade trail history for particle lag rendering
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds

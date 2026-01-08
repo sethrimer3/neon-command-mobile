@@ -124,6 +124,7 @@ const PROJECTILE_OUTER_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.3;
 const BLADE_SWORD_PARTICLE_RADIUS_METERS = UNIT_SIZE_METERS * 0.18; // Increased from 0.12 for better visibility as floating magnets
 const BLADE_SWORD_SWING_ARC = Math.PI * 1.2; // Wider arc for more visible swings
 const BLADE_SWORD_WHIP_DELAY = 0.04; // seconds of delay per particle index for whip effect
+const BLADE_SWORD_MOVEMENT_LAG_SECONDS = 0.1; // seconds of movement lag per particle index
 // Blade sword rest position and swing arcs
 const BLADE_SWORD_REST_ANGLE = -110 * Math.PI / 180; // 110 degrees clockwise from movement direction
 const BLADE_SWORD_FIRST_SWING_ARC = 210 * Math.PI / 180; // 210 degree counterclockwise arc
@@ -1608,9 +1609,49 @@ function calculateBladeSwingAngle(
   }
 }
 
+/**
+ * Sample the Blade movement history to retrieve a lagged transform for sword particles.
+ * @param unit - Blade unit to sample
+ * @param targetTime - Time in milliseconds to sample from history
+ * @returns Lagged position and rotation to render against
+ */
+function sampleBladeTrail(unit: Unit, targetTime: number): { position: Vector2; rotation: number } {
+  const history = unit.bladeTrailHistory;
+
+  if (!history || history.length === 0) {
+    return { position: unit.position, rotation: unit.rotation ?? 0 };
+  }
+
+  // Clamp to oldest/newest samples when requested time is outside the buffer.
+  if (targetTime <= history[0].timestamp) {
+    return { position: history[0].position, rotation: history[0].rotation };
+  }
+  const lastSample = history[history.length - 1];
+  if (targetTime >= lastSample.timestamp) {
+    return { position: lastSample.position, rotation: lastSample.rotation };
+  }
+
+  // Find the two samples surrounding the target time for interpolation.
+  for (let i = history.length - 2; i >= 0; i -= 1) {
+    const current = history[i];
+    const next = history[i + 1];
+    if (current.timestamp <= targetTime && next.timestamp >= targetTime) {
+      const span = next.timestamp - current.timestamp || 1;
+      const t = (targetTime - current.timestamp) / span;
+      const position = {
+        x: current.position.x + (next.position.x - current.position.x) * t,
+        y: current.position.y + (next.position.y - current.position.y) * t,
+      };
+      const rotation = current.rotation + (next.rotation - current.rotation) * t;
+      return { position, rotation };
+    }
+  }
+
+  return { position: unit.position, rotation: unit.rotation ?? 0 };
+}
+
 function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
   const now = Date.now();
-  const baseRotation = unit.rotation ?? 0;
   const collapseSword = !!unit.bladeVolley;
   const particleRadius = metersToPixels(BLADE_SWORD_PARTICLE_RADIUS_METERS);
   const particleSpacing = metersToPixels(BLADE_SWORD_PARTICLE_SPACING_METERS);
@@ -1620,6 +1661,10 @@ function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { 
   ctx.fillStyle = color;
 
   for (let i = 0; i < BLADE_SWORD_PARTICLE_COUNT; i++) {
+    const lagSeconds = BLADE_SWORD_MOVEMENT_LAG_SECONDS * (i + 1);
+    const trailSample = sampleBladeTrail(unit, now - lagSeconds * 1000);
+    const baseRotation = trailSample.rotation;
+    const baseScreenPos = positionToPixels(trailSample.position);
     let angle = baseRotation;
     let hasSwingMotion = false;
     let elapsed = 0;
@@ -1640,8 +1685,8 @@ function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { 
     // Each particle has its own orbital radius (different distances from unit center)
     const offset = collapseSword ? particleSpacing : particleSpacing * (i + 1);
     const particlePos = {
-      x: screenPos.x + Math.cos(angle) * offset,
-      y: screenPos.y + Math.sin(angle) * offset,
+      x: baseScreenPos.x + Math.cos(angle) * offset,
+      y: baseScreenPos.y + Math.sin(angle) * offset,
     };
 
     // Draw trail if swinging
@@ -1651,8 +1696,8 @@ function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { 
       const prevAngle = calculateBladeSwingAngle(baseRotation, swing.swingType, prevProgress);
       
       const prevParticlePos = {
-        x: screenPos.x + Math.cos(prevAngle) * offset,
-        y: screenPos.y + Math.sin(prevAngle) * offset,
+        x: baseScreenPos.x + Math.cos(prevAngle) * offset,
+        y: baseScreenPos.y + Math.sin(prevAngle) * offset,
       };
 
       // Draw trail

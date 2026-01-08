@@ -42,8 +42,9 @@ const LASER_BEAM_DURATION = 0.5; // seconds for laser beam visual
 const BLADE_SWORD_SWING_DURATION_FIRST = 0.45; // seconds for first 210° swing
 const BLADE_SWORD_SWING_DURATION_SECOND = 0.40; // seconds for second 180° swing
 const BLADE_SWORD_SWING_DURATION_THIRD = 0.50; // seconds for third 360° spin
-const BLADE_SWORD_SWING_PAUSE = 0.12; // seconds to pause between individual combo swings
-const BLADE_SWORD_SEQUENCE_RESET_TIME = 0.2; // seconds to pause after the third swing before allowing a new combo
+const BLADE_SWORD_SWING_PAUSE = 1.0; // seconds to pause between individual combo swings for particle catch-up
+const BLADE_SWORD_SEQUENCE_RESET_TIME = 1.0; // seconds to pause after the third swing before allowing a new combo
+const BLADE_SWORD_LAG_HISTORY_DURATION = 1.2; // seconds of history to retain for Blade movement lag
 const BLADE_KNIFE_ANGLES = [-10, -5, 0, 5, 10]; // degrees for volley spread
 const BLADE_KNIFE_SHOT_INTERVAL = 0.06; // seconds between knives
 const BLADE_KNIFE_SCRUNCH_DURATION = 0.12; // seconds to compress sword particles
@@ -902,6 +903,33 @@ function updateUnitRotation(unit: Unit, direction: Vector2, deltaTime: number): 
   
   // Normalize rotation to [0, 2*PI] range for consistency
   unit.rotation = ((unit.rotation % (Math.PI * 2)) + (Math.PI * 2)) % (Math.PI * 2);
+}
+
+/**
+ * Record a time-stamped snapshot of Blade movement so sword particles can lag behind motion.
+ * Keeps a short history buffer for sampling delayed positions in the renderer.
+ * @param unit - Unit to snapshot (only the Blade uses this history)
+ * @param timestamp - Time in milliseconds for the snapshot
+ */
+function recordBladeTrailHistory(unit: Unit, timestamp: number): void {
+  if (unit.type !== 'warrior') {
+    return;
+  }
+
+  if (!unit.bladeTrailHistory) {
+    unit.bladeTrailHistory = [];
+  }
+
+  // Store the latest transform to drive per-particle movement lag.
+  unit.bladeTrailHistory.push({
+    timestamp,
+    position: { ...unit.position },
+    rotation: unit.rotation ?? 0,
+  });
+
+  // Trim old samples so the buffer stays bounded for performance.
+  const cutoffTime = timestamp - BLADE_SWORD_LAG_HISTORY_DURATION * 1000;
+  unit.bladeTrailHistory = unit.bladeTrailHistory.filter((sample) => sample.timestamp >= cutoffTime);
 }
 
 // Apply smooth acceleration/deceleration to unit movement
@@ -1849,6 +1877,11 @@ function updateUnits(state: GameState, deltaTime: number): void {
   
   // Second pass: update all units normally
   state.units.forEach((unit) => {
+    const frameTime = Date.now();
+    const finalizeBladeTrail = () => {
+      recordBladeTrailHistory(unit, frameTime);
+    };
+
     // Clean up faded command queues that have been marked for cancellation
     if (unit.queueFadeStartTime) {
       const fadeElapsed = (Date.now() - unit.queueFadeStartTime) / 1000;
@@ -1895,6 +1928,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
         executeLineJump(state, unit);
         unit.lineJumpTelegraph = undefined;
       }
+      finalizeBladeTrail();
       return;
     }
 
@@ -1928,6 +1962,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
       // Reset stuck timer when no commands
       unit.stuckTimer = 0;
       unit.lastPosition = undefined;
+      finalizeBladeTrail();
       return;
     }
 
@@ -1945,6 +1980,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
         unit.stuckTimer = 0;
         unit.lastPosition = undefined;
         unit.jitterOffset = undefined;
+        finalizeBladeTrail();
         return;
       }
 
@@ -1997,6 +2033,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
         
         // Track stuck state
         updateStuckDetection(unit, deltaTime);
+        finalizeBladeTrail();
         return;
       }
 
@@ -2049,6 +2086,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
         unit.stuckTimer = 0;
         unit.lastPosition = undefined;
         unit.jitterOffset = undefined;
+        finalizeBladeTrail();
         return;
       }
 
@@ -2100,6 +2138,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
         
         // Track stuck state
         updateStuckDetection(unit, deltaTime);
+        finalizeBladeTrail();
         return;
       }
 
@@ -2119,6 +2158,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
       // Only execute the ability once the unit reaches the queued anchor.
       if (!hasUnitArrivedAtPosition(unit, currentNode.position, dist, state.units)) {
         moveUnitTowardPosition(state, unit, currentNode.position, deltaTime);
+        finalizeBladeTrail();
         return;
       }
 
@@ -2149,6 +2189,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
         unit.stuckTimer = 0;
         unit.lastPosition = undefined;
         unit.jitterOffset = undefined;
+        finalizeBladeTrail();
         return;
       }
 
@@ -2195,6 +2236,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
       } else {
         // Track stuck state
         updateStuckDetection(unit, deltaTime);
+        finalizeBladeTrail();
         return;
       }
 
@@ -2212,6 +2254,8 @@ function updateUnits(state: GameState, deltaTime: number): void {
 
       unit.distanceTraveled += moveDist;
     }
+
+    finalizeBladeTrail();
   });
 }
 
@@ -2249,6 +2293,11 @@ function updateAbilityEffects(unit: Unit, state: GameState, deltaTime: number): 
         swingType: swingSettings.swingType,
         swingNumber: combo.nextSwingNumber,
       };
+
+      // Apply Blade damage at the start of each swing to match the attack cadence.
+      if (unit.type === 'warrior') {
+        applyBladeSwingDamage(state, unit, unit.swordSwing);
+      }
 
       if (combo.nextSwingNumber < 3) {
         // Queue the next swing after a brief pause to keep the combo readable.
@@ -3813,6 +3862,119 @@ function createBladeSwing(unit: Unit, direction: Vector2): void {
   };
 }
 
+/**
+ * Apply Blade combo damage for a single swing using a semicircle (swings 1-2) or full circle (swing 3).
+ * @param state - Current game state for finding nearby enemies and bases
+ * @param unit - Blade unit performing the swing
+ * @param swing - Sword swing data including direction and swing number
+ */
+function applyBladeSwingDamage(state: GameState, unit: Unit, swing: { direction: Vector2; swingNumber: number }): void {
+  const def = UNIT_DEFINITIONS[unit.type];
+  const swingDirection = swing.direction.x === 0 && swing.direction.y === 0
+    ? { x: Math.cos(unit.rotation ?? 0), y: Math.sin(unit.rotation ?? 0) }
+    : normalize(swing.direction);
+  const damage = def.attackDamage * unit.damageMultiplier;
+  const useFullCircle = swing.swingNumber === 3;
+  let closestTargetPos: Vector2 | null = null;
+  let closestTargetDist = Number.POSITIVE_INFINITY;
+
+  // Damage enemy units within the swing radius, filtering out cloaked and flying targets.
+  state.units.forEach((enemy) => {
+    if (enemy.owner === unit.owner || enemy.cloaked) {
+      return;
+    }
+
+    const enemyDef = UNIT_DEFINITIONS[enemy.type];
+    if (enemyDef.modifiers.includes('flying')) {
+      return;
+    }
+
+    const dist = distance(unit.position, enemy.position);
+    if (dist > def.attackRange) {
+      return;
+    }
+
+    // For the first two swings, only hit targets in the forward semicircle.
+    const dot = dist === 0 ? 0 : (enemy.position.x - unit.position.x) * swingDirection.x + (enemy.position.y - unit.position.y) * swingDirection.y;
+    if (!useFullCircle && dot < 0) {
+      return;
+    }
+
+    const shieldMultiplier = getShieldDamageMultiplier(state, enemy, 'melee');
+    const finalDamage = damage * shieldMultiplier;
+    enemy.hp -= finalDamage;
+    createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+
+    if (dist < closestTargetDist) {
+      closestTargetDist = dist;
+      closestTargetPos = { ...enemy.position };
+    }
+
+    if (state.matchStats && unit.owner === 0) {
+      state.matchStats.damageDealtByPlayer += finalDamage;
+    }
+  });
+
+  // Damage enemy bases if the Blade can damage structures.
+  if (def.canDamageStructures) {
+    state.bases.forEach((base) => {
+      if (base.owner === unit.owner) {
+        return;
+      }
+
+      const baseRadius = BASE_SIZE_METERS / 2;
+      const dist = distance(unit.position, base.position);
+      if (dist > def.attackRange + baseRadius) {
+        return;
+      }
+
+      // For the first two swings, only hit bases in the forward semicircle.
+      const dot = (base.position.x - unit.position.x) * swingDirection.x + (base.position.y - unit.position.y) * swingDirection.y;
+      if (!useFullCircle && dot < 0) {
+        return;
+      }
+
+      // Skip damage when the base shield is active.
+      if (base.shieldActive && Date.now() < base.shieldActive.endTime) {
+        createHitSparks(state, base.position, state.players[base.owner].color, 12);
+        return;
+      }
+
+      const prevHp = base.hp;
+      base.hp -= damage;
+
+      if (prevHp > 0 && base.hp < prevHp) {
+        createImpactEffect(state, base.position, state.players[unit.owner].color, 2.5);
+      }
+
+      if (state.matchStats) {
+        if (base.owner === 0) {
+          state.matchStats.damageToPlayerBase += damage;
+        } else {
+          state.matchStats.damageToEnemyBase += damage;
+        }
+
+        if (unit.owner === 0) {
+          state.matchStats.damageDealtByPlayer += damage;
+        }
+      }
+
+      if (dist < closestTargetDist) {
+        closestTargetDist = dist;
+        closestTargetPos = { ...base.position };
+      }
+    });
+  }
+
+  // Trigger a melee impact effect toward the nearest valid target for feedback.
+  if (closestTargetPos) {
+    unit.meleeAttackEffect = {
+      endTime: Date.now() + MELEE_EFFECT_DURATION * 1000,
+      targetPos: { ...closestTargetPos },
+    };
+  }
+}
+
 // Helper function to perform an attack
 function performAttack(state: GameState, unit: Unit, target: Unit | Base): void {
   const def = UNIT_DEFINITIONS[unit.type];
@@ -3847,6 +4009,12 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
       soundManager.playAttack();
     }
   } else if (def.attackType === 'melee') {
+    if (unit.type === 'warrior') {
+      // Blade uses a combo swing sequence, so damage is applied per swing instead of per target.
+      createBladeSwing(unit, direction);
+      return;
+    }
+
     // Apply instant damage for melee and create visual effect
     let damage = def.attackDamage * unit.damageMultiplier;
 
