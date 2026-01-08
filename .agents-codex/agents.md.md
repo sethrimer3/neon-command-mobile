@@ -61,6 +61,7 @@ Defines project-wide guidelines for AI agents, including documentation expectati
 - **2025-03-21**: Incremented the recorded build number to 22 for the latest agent changes.
 - **2025-03-22**: Incremented the recorded build number to 24 for the latest agent changes.
 - **2026-01-08**: Incremented the recorded build number to 25 for the latest agent changes.
+- **2026-01-09**: Incremented the recorded build number to 26 for the latest agent changes.
 
 ## Watch Out For
 - Keep the build number in sync with pull requests

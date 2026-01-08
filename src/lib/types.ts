@@ -3,6 +3,11 @@ export const PIXELS_PER_METER = 20;
 export const BASE_SIZE_METERS = 6;
 // Double the unit footprint so all unit rendering/collision scales up.
 export const UNIT_SIZE_METERS = 2;
+// Separate Blade sword particles into distinct, magnet-like segments.
+export const BLADE_SWORD_PARTICLE_COUNT = 5;
+export const BLADE_SWORD_PARTICLE_SPACING_METERS = UNIT_SIZE_METERS * 0.24 * 3.2;
+// Keep Blade melee range aligned with the outermost sword particle radius.
+export const BLADE_SWORD_RANGE_METERS = BLADE_SWORD_PARTICLE_SPACING_METERS * BLADE_SWORD_PARTICLE_COUNT;
 // Scale mining depots to read as large structures in the resource loop.
 export const MINING_DEPOT_SIZE_METERS = 3;
 // Scale resource deposits so their hex tiles feel substantial on the map.
@@ -343,7 +348,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     armor: 5,
     moveSpeed: 3,
     attackType: 'melee',
-    attackRange: 1,
+    attackRange: BLADE_SWORD_RANGE_METERS,
     attackDamage: 18,
     attackRate: 1,
     cost: 40,

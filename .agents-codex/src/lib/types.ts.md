@@ -23,6 +23,9 @@ Defines all core type definitions, interfaces, and constants for the SoL-RTS gam
 - **PIXELS_PER_METER:** `20` - Conversion ratio between game meters and screen pixels
 - **BASE_SIZE_METERS:** `6` - Size of player bases in game units
 - **UNIT_SIZE_METERS:** `2` - Standard unit collision size
+- **BLADE_SWORD_PARTICLE_COUNT:** `5` - Number of Blade sword particles used for rendering and range alignment
+- **BLADE_SWORD_PARTICLE_SPACING_METERS:** `UNIT_SIZE_METERS * 0.24 * 3.2` - Spacing between Blade sword particles for magnet-like separation
+- **BLADE_SWORD_RANGE_METERS:** `BLADE_SWORD_PARTICLE_SPACING_METERS * BLADE_SWORD_PARTICLE_COUNT` - Melee range aligned to the outermost sword particle
 - **MINING_DEPOT_SIZE_METERS:** `3` - Mining depot footprint used for rendering and input hit tests
 - **RESOURCE_DEPOSIT_SIZE_METERS:** `1.2` - Hex resource deposit size around each depot
 - **RESOURCE_DEPOSIT_RING_RADIUS_METERS:** `5` - Radius of the deposit ring around each depot
@@ -170,6 +173,7 @@ None currently identified
 - **2025-03-18**: Added mining structure/drone sizing constants to scale depots, deposits, and drones together.
 - **2025-03-19**: Added projectile variants, marine shell casings, and Blade volley/swing state while renaming the warrior unit to Blade.
 - **2026-01-08**: Renamed Scout to Dagger, added dagger ambush timing state, and extended shield definitions with damage multipliers
+- **2026-01-09**: Aligned Blade melee range with the expanded sword particle spacing via shared constants
 
 ## Watch Out For
 - Always use meters for game logic, only convert to pixels for rendering

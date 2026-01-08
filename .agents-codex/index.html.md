@@ -51,6 +51,7 @@ Defines the HTML entry point for the Vite-powered React application, including m
 - **2026-01-01:** Bumped the startup overlay build badge to the latest AI-driven build number.
 - **2025-03-22:** Bumped the startup overlay build badge to build 24.
 - **2026-01-08:** Bumped the startup overlay build badge to build 25.
+- **2026-01-09:** Bumped the startup overlay build badge to build 26.
 
 ## Watch Out For
 - Keep asset paths relative if the site is hosted under a non-root base path.
