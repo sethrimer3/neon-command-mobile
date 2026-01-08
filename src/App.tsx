@@ -316,6 +316,11 @@ function App() {
             updateCamera(gameStateRef.current, deltaTime);
           }
           updateVisualEffects(gameStateRef.current, deltaTime);
+          
+          // Check if mode changed to victory (base destroyed or time limit reached)
+          if (gameStateRef.current.mode === 'victory') {
+            setRenderTrigger(prev => prev + 1);
+          }
         }
         
         if (gameStateRef.current.matchTimeLimit && !gameStateRef.current.timeoutWarningShown) {
@@ -1211,8 +1216,9 @@ function App() {
           {/* 50% transparent black overlay */}
           <div className="absolute inset-0 bg-black opacity-50 pointer-events-none" />
           
-          <div className="absolute inset-0 flex items-center justify-center animate-in fade-in duration-500">
-            <div className="flex flex-col gap-4 w-80 max-w-[90vw]">
+          <div className="absolute inset-0 overflow-y-auto">
+            <div className="min-h-full flex items-center justify-center p-4 py-8 animate-in fade-in duration-500">
+            <div className="flex flex-col gap-4 w-80 max-w-[90vw] my-auto">
               <div className="flex justify-center mb-4 animate-in fade-in zoom-in-95 duration-700">
                 <img 
                   src={`${assetBaseUrl}ASSETS/sprites/menus/mainMenuTitle.png`} 
@@ -1315,6 +1321,7 @@ function App() {
               <Book className="mr-2" size={24} />
               Unit Information
             </Button>
+          </div>
           </div>
         </div>
         </>
@@ -1605,6 +1612,8 @@ function App() {
           onBack={backToMenu}
           onSelectLevel={handleLevelSelect}
           currentMap={selectedMap || 'open'}
+          chessMode={chessMode ?? false}
+          onChessModeChange={setChessMode}
         />
       )}
 
@@ -1614,6 +1623,8 @@ function App() {
           onMatchmaking={goToMatchmaking}
           onCustomGame={goToMultiplayer}
           onLAN={goToLANMode}
+          chessMode={chessMode ?? false}
+          onChessModeChange={setChessMode}
         />
       )}
 
