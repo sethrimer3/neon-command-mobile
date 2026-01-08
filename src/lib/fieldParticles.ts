@@ -1,4 +1,4 @@
-import { FieldParticle, Vector2, GameState, Unit, Base, Projectile } from './types';
+import { FieldParticle, Vector2, GameState, Unit, Base, Projectile, ARENA_WIDTH_METERS } from './types';
 import { generateId, getArenaHeight, distance, normalize, subtract, add, scale } from './gameUtils';
 
 // Field particle constants
@@ -18,6 +18,7 @@ const BASE_REPULSION_FORCE = 6.0; // Force for base repulsion
 // Physics constants
 const PARTICLE_DAMPING = 0.95; // Velocity damping to slow particles over time
 const PARTICLE_MAX_SPEED = 8.0; // Maximum particle speed
+const PARTICLE_MAX_SPEED_SQUARED = PARTICLE_MAX_SPEED * PARTICLE_MAX_SPEED; // Squared for optimization
 const BOUNDARY_MARGIN = 2.0; // Margin from arena edges
 
 /**
@@ -46,13 +47,15 @@ export function initializeFieldParticles(arenaWidth: number, arenaHeight: number
       y = minY + Math.random() * (maxY - minY);
       
       // Calculate distance from center (normalized 0-1)
+      // Use squared distance to avoid expensive sqrt in rejection sampling
       const distFromCenterX = Math.abs(x - arenaWidth / 2) / (arenaWidth / 2);
       const distFromCenterY = Math.abs(y - centerY) / ((maxY - minY) / 2);
-      const distFromCenter = Math.sqrt(distFromCenterX * distFromCenterX + distFromCenterY * distFromCenterY);
+      const distFromCenterSquared = distFromCenterX * distFromCenterX + distFromCenterY * distFromCenterY;
       
       // Accept position with probability inversely proportional to distance from center
       // This creates higher density near center
-      const acceptProbability = 1.0 - (distFromCenter * 0.5); // 0.5 to 1.0 range
+      // Using squared distance maintains the same distribution
+      const acceptProbability = 1.0 - (Math.sqrt(distFromCenterSquared) * 0.5); // 0.5 to 1.0 range
       
       if (Math.random() < acceptProbability) {
         break;
@@ -80,7 +83,7 @@ export function initializeFieldParticles(arenaWidth: number, arenaHeight: number
 export function updateFieldParticles(state: GameState, deltaTime: number): void {
   if (!state.fieldParticles) return;
   
-  const arenaWidth = 60; // ARENA_WIDTH_METERS
+  const arenaWidth = ARENA_WIDTH_METERS;
   const arenaHeight = getArenaHeight();
   
   // Calculate quartile boundaries
@@ -138,9 +141,10 @@ export function updateFieldParticles(state: GameState, deltaTime: number): void 
     particle.velocity.x *= PARTICLE_DAMPING;
     particle.velocity.y *= PARTICLE_DAMPING;
     
-    // Clamp speed to maximum
-    const speed = Math.sqrt(particle.velocity.x ** 2 + particle.velocity.y ** 2);
-    if (speed > PARTICLE_MAX_SPEED) {
+    // Clamp speed to maximum (use squared comparison to avoid sqrt when not needed)
+    const speedSquared = particle.velocity.x * particle.velocity.x + particle.velocity.y * particle.velocity.y;
+    if (speedSquared > PARTICLE_MAX_SPEED_SQUARED) {
+      const speed = Math.sqrt(speedSquared);
       const scale = PARTICLE_MAX_SPEED / speed;
       particle.velocity.x *= scale;
       particle.velocity.y *= scale;
