@@ -120,6 +120,7 @@ Main application component that orchestrates the entire game. Manages game state
 - MMR calculated using ELO formula for online matches
 - Surrender requires 3 clicks within time window
 - Victory animation includes base sliding sequence
+- Preloads available sound effect assets and maps them to sound manager keys
 
 ### Performance Considerations
 - Game state in ref (not React state) avoids re-render overhead
@@ -167,6 +168,7 @@ Main application component that orchestrates the entire game. Manages game state
 - **2026-01-01**: Removed the main menu build badge so only the loading overlay displays build metadata.
 - Added portrait-stable coordinate usage so desktop rotation does not change gameplay layout.
 - **2025-03-22**: Initialized shell casing arrays alongside projectiles in game state setup.
+- **2025-03-22**: Preloaded UI/gameplay sound effect assets and routed settings controls to the setting change cue.
 
 ## Watch Out For
 - Game state ref vs React state - use correctly for performance
