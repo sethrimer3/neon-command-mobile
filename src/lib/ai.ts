@@ -9,7 +9,6 @@ const AI_ACTION_INTERVAL = 2.0;
 const DIFFICULTY_SETTINGS = {
   easy: {
     actionInterval: 3.0,
-    spawnChanceMultiplier: 0.6,
     commandChance: 0.2,
     abilityChance: 0.1,
     economicBuildThreshold: 0.4, // 40% chance to build economy when not pressured
@@ -17,7 +16,6 @@ const DIFFICULTY_SETTINGS = {
   },
   medium: {
     actionInterval: 2.0,
-    spawnChanceMultiplier: 1.0,
     commandChance: 0.3,
     abilityChance: 0.2,
     economicBuildThreshold: 0.5, // 50% chance to build economy when not pressured
@@ -25,7 +23,6 @@ const DIFFICULTY_SETTINGS = {
   },
   hard: {
     actionInterval: 1.5,
-    spawnChanceMultiplier: 1.2,
     commandChance: 0.4,
     abilityChance: 0.3,
     economicBuildThreshold: 0.6, // 60% chance to build economy when not pressured
@@ -153,9 +150,6 @@ function performAIActions(state: GameState, aiPlayer: number = 1, difficultyConf
     );
 
     if (unitTypes.length === 0) return;
-
-    // Apply difficulty-based spawn chance - higher multiplier means more spawning
-    if (Math.random() > difficultyConfig.spawnChanceMultiplier) return;
 
     const chosenType = unitTypes[Math.floor(Math.random() * unitTypes.length)];
     const def = UNIT_DEFINITIONS[chosenType];
