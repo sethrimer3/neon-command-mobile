@@ -102,6 +102,13 @@ function App() {
       multiplayerManagerRef.current = new MultiplayerManager(uid, createRealtimeStore());
     };
     initUser();
+    // Preload available UI and system sound effects from the bundled assets folder.
+    soundManager.loadAudioFile('menu-selection', `${assetBaseUrl}ASSETS/soundEffects/menu_selection.mp3`);
+    soundManager.loadAudioFile('setting-change', `${assetBaseUrl}ASSETS/soundEffects/settingChange.mp3`);
+    soundManager.loadAudioFile('enter-game-mode', `${assetBaseUrl}ASSETS/soundEffects/enterGameMode.mp3`);
+    soundManager.loadAudioFile('error', `${assetBaseUrl}ASSETS/soundEffects/error.mp3`);
+    soundManager.loadAudioFile('timer-tick', `${assetBaseUrl}ASSETS/soundEffects/timerTick.m4a`);
+    soundManager.loadAudioFile('income-note', `${assetBaseUrl}ASSETS/soundEffects/note_D#.mp3`);
     soundManager.setEnabled(soundEnabled ?? true);
     soundManager.setSfxVolume(sfxVolume ?? 0.7);
     soundManager.setMusicVolume(musicVolume ?? 0.5);
@@ -1349,7 +1356,7 @@ function App() {
                     <button
                       key={color.name}
                       onClick={() => {
-                        soundManager.playButtonClick();
+                        soundManager.playSettingChange();
                         setPlayerColor(color.value);
                       }}
                       className="w-12 h-12 rounded border-2 transition-all"
@@ -1374,7 +1381,7 @@ function App() {
                     <button
                       key={color.name}
                       onClick={() => {
-                        soundManager.playButtonClick();
+                        soundManager.playSettingChange();
                         setEnemyColor(color.value);
                       }}
                       className="w-12 h-12 rounded border-2 transition-all"
@@ -1398,7 +1405,7 @@ function App() {
                   onCheckedChange={(checked) => {
                     setSoundEnabled(checked);
                     if (checked) {
-                      soundManager.playButtonClick();
+                      soundManager.playSettingChange();
                     }
                   }}
                 />
@@ -1415,6 +1422,9 @@ function App() {
                     value={[sfxVolume ?? 0.7]}
                     onValueChange={(values) => {
                       setSfxVolume(values[0]);
+                    }}
+                    onValueCommit={() => {
+                      soundManager.playSettingChange();
                     }}
                     min={0}
                     max={1}
@@ -1434,6 +1444,9 @@ function App() {
                     onValueChange={(values) => {
                       setMusicVolume(values[0]);
                     }}
+                    onValueCommit={() => {
+                      soundManager.playSettingChange();
+                    }}
                     min={0}
                     max={1}
                     step={0.01}
@@ -1449,7 +1462,7 @@ function App() {
                   checked={showNumericHP ?? true}
                   onCheckedChange={(checked) => {
                     setShowNumericHP(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
@@ -1461,7 +1474,7 @@ function App() {
                   checked={showHealthBarsOnlyWhenDamaged ?? false}
                   onCheckedChange={(checked) => {
                     setShowHealthBarsOnlyWhenDamaged(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
@@ -1473,7 +1486,7 @@ function App() {
                   checked={showMinimap ?? true}
                   onCheckedChange={(checked) => {
                     setShowMinimap(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
@@ -1485,7 +1498,7 @@ function App() {
                   checked={enableCameraControls ?? true}
                   onCheckedChange={(checked) => {
                     setEnableCameraControls(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
@@ -1497,7 +1510,7 @@ function App() {
                   checked={showPerformance ?? false}
                   onCheckedChange={(checked) => {
                     setShowPerformance(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
@@ -1513,7 +1526,7 @@ function App() {
                   checked={enableGlowEffects ?? true}
                   onCheckedChange={(checked) => {
                     setEnableGlowEffects(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
@@ -1525,7 +1538,7 @@ function App() {
                   checked={enableParticleEffects ?? true}
                   onCheckedChange={(checked) => {
                     setEnableParticleEffects(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
@@ -1537,7 +1550,7 @@ function App() {
                   checked={enableMotionBlur ?? true}
                   onCheckedChange={(checked) => {
                     setEnableMotionBlur(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
