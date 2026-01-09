@@ -1,4 +1,4 @@
-import { Vector2, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS, ARENA_HEIGHT_METERS_MOBILE, PIXELS_PER_METER, RESOURCE_DEPOSIT_RING_RADIUS_METERS, UNIT_DEFINITIONS, FOG_OF_WAR_VISION_RANGE } from './types';
+import { Vector2, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS, ARENA_HEIGHT_METERS_MOBILE, PIXELS_PER_METER, RESOURCE_DEPOSIT_RING_RADIUS_METERS, UNIT_DEFINITIONS, FOG_OF_WAR_VISION_RANGE, GameState } from './types';
 
 // Calculate viewport scale to fit the fixed arena to the viewport
 let viewportScale = 1.0;
@@ -463,7 +463,7 @@ export function createInitialMiningDrones(miningDepots: import('./types').Mining
  * @param state - The game state containing player units and bases
  * @returns true if the position is visible to the player
  */
-export function isVisibleToPlayer(position: Vector2, state: import('./types').GameState): boolean {
+export function isVisibleToPlayer(position: Vector2, state: GameState): boolean {
   if (!state.settings.enableFogOfWar) {
     return true; // Fog of war disabled, everything is visible
   }
