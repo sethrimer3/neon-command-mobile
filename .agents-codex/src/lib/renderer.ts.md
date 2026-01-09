@@ -117,6 +117,8 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - Blade sword particles honor the swing hold state to keep the sword at the final swing angle between combo hits
 - Sprite rendering uses cached Image instances and respects the `settings.enableSprites` toggle
 - Sprite glow uses the same glow toggle as other shader-like effects
+- Radiant sprites are tinted to the owning team color using multiplicative blending to preserve shading
+- Radiant sprite rotation adds a fixed offset so sprite-forward (up) aligns with unit-forward directions
 
 ### Rendering Optimizations
 - Clears only once per frame
@@ -166,6 +168,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - **2026-01-11**: Added Blade movement lag sampling so sword particles trail behind the unit based on history snapshots
 - **2026-01-12**: Held Blade sword particles at the final swing angles between combo swings before resetting to rest
 - **2025-03-22**: Added Radiant sprite rendering for units, bases, and mining drones with a settings toggle.
+- **2025-03-23**: Tinted Radiant sprites to team colors and added a rotation offset to align sprite-forward direction.
 
 ## Watch Out For
 - Always convert game positions to pixels before drawing

@@ -44,6 +44,8 @@ projectileSprite.onload = () => {
 const UNIT_SPRITE_SCALE = 1.55;
 const BASE_SPRITE_SCALE = 1.15;
 const MINING_DRONE_SPRITE_SCALE = 1.35;
+// Radiant sprites are authored facing "up" in texture space, so rotate to match the engine's forward direction.
+const RADIANT_SPRITE_ROTATION_OFFSET = Math.PI / 2;
 
 // Sprite asset paths for the Radiant faction (exclude "knots" files on purpose).
 const radiantUnitSpritePaths: Partial<Record<UnitType, string>> = {
@@ -81,23 +83,49 @@ function isSpriteReady(sprite: HTMLImageElement): boolean {
   return sprite.complete && sprite.naturalWidth > 0;
 }
 
+/**
+ * Draws a sprite centered at the provided screen position with rotation, optional glow, and team tinting.
+ * @param ctx - Canvas rendering context.
+ * @param sprite - The sprite image to render.
+ * @param center - Screen-space center point for the sprite.
+ * @param size - Rendered sprite size in pixels.
+ * @param rotation - Rotation in radians applied around the center.
+ * @param tintColor - Team color used to tint white-shaded sprites.
+ * @param enableGlow - Whether to apply a glow effect.
+ */
 function drawCenteredSprite(
   ctx: CanvasRenderingContext2D,
   sprite: HTMLImageElement,
   center: Vector2,
   size: number,
   rotation: number,
-  glowColor: string,
+  tintColor: string,
   enableGlow: boolean,
 ): void {
   ctx.save();
   ctx.translate(center.x, center.y);
   ctx.rotate(rotation);
   if (enableGlow) {
-    ctx.shadowColor = glowColor;
+    // Apply glow first so the base sprite gets a soft halo.
+    ctx.shadowColor = tintColor;
     ctx.shadowBlur = 18;
   }
+  // Draw the base sprite before tinting.
   ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
+  if (enableGlow) {
+    // Disable glow for the tint pass to avoid extra shadow artifacts.
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+  }
+  // Tint the white-shaded sprites so the team color replaces white while preserving shading.
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = tintColor;
+  ctx.fillRect(-size / 2, -size / 2, size, size);
+  // Reapply the sprite alpha so the tint stays inside the sprite silhouette.
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
+  // Reset to default composition for subsequent draws.
+  ctx.globalCompositeOperation = 'source-over';
   ctx.restore();
 }
 
@@ -127,7 +155,16 @@ function drawRadiantUnitSprite(
       return false;
     }
     const spriteSize = metersToPixels(getUnitSizeMeters(unit)) * MINING_DRONE_SPRITE_SCALE;
-    drawCenteredSprite(ctx, miningSprite, screenPos, spriteSize, unit.rotation || 0, color, !!state.settings.enableGlowEffects);
+    // Rotate mining drones so sprite-forward (up) matches the unit's forward direction.
+    drawCenteredSprite(
+      ctx,
+      miningSprite,
+      screenPos,
+      spriteSize,
+      (unit.rotation || 0) + RADIANT_SPRITE_ROTATION_OFFSET,
+      color,
+      !!state.settings.enableGlowEffects,
+    );
     return true;
   }
 
@@ -142,7 +179,16 @@ function drawRadiantUnitSprite(
   }
 
   const spriteSize = metersToPixels(getUnitSizeMeters(unit)) * UNIT_SPRITE_SCALE;
-  drawCenteredSprite(ctx, sprite, screenPos, spriteSize, unit.rotation || 0, color, !!state.settings.enableGlowEffects);
+  // Rotate unit sprites so sprite-forward (up) matches the unit's forward direction.
+  drawCenteredSprite(
+    ctx,
+    sprite,
+    screenPos,
+    spriteSize,
+    (unit.rotation || 0) + RADIANT_SPRITE_ROTATION_OFFSET,
+    color,
+    !!state.settings.enableGlowEffects,
+  );
   return true;
 }
 
