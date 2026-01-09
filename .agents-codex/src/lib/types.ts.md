@@ -75,7 +75,7 @@ Represents a game unit with:
 - Ability states: lineJumpTelegraph, shieldActive, cloaked, bombardmentActive, healPulseActive, missileBarrageActive
 - Ability states: lineJumpTelegraph, shieldActive (with damage multipliers), cloaked, daggerAmbush, bombardmentActive, healPulseActive, missileBarrageActive
 - Visual effects: particles (optional array of Particle objects, currently used for marines)
-- Blade melee swing sequencing: swordSwing (active swing animation) and swordSwingCombo (queued combo timing)
+- Blade melee swing sequencing: swordSwing (active swing animation), swordSwingHold (hold angle between swings), and swordSwingCombo (queued combo timing)
 - Blade movement lag: bladeTrailHistory snapshot buffer for delayed sword particle rendering
 - Mining state: depot/deposit identifiers with cadence delays for alternating mining drone behavior
 
@@ -178,6 +178,7 @@ None currently identified
 - **2026-01-09**: Aligned Blade melee range with the expanded sword particle spacing via shared constants
 - **2026-01-10**: Replaced legacy Blade swing tracking with swordSwingCombo to coordinate full three-swing sequences
 - **2026-01-11**: Added Blade trail history snapshots to drive lagged sword particle positioning while moving/turning
+- **2026-01-12**: Added Blade sword swing hold state to keep the blade at its last angle between combo swings
 
 ## Watch Out For
 - Always use meters for game logic, only convert to pixels for rendering

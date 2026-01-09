@@ -1656,6 +1656,7 @@ function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { 
   const particleRadius = metersToPixels(BLADE_SWORD_PARTICLE_RADIUS_METERS);
   const particleSpacing = metersToPixels(BLADE_SWORD_PARTICLE_SPACING_METERS);
   const swing = unit.swordSwing;
+  const swingHold = unit.swordSwingHold;
 
   ctx.save();
   ctx.fillStyle = color;
@@ -1677,6 +1678,9 @@ function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { 
       const progress = Math.min(1, delayedElapsed / swing.duration);
       
       angle = calculateBladeSwingAngle(baseRotation, swing.swingType, progress);
+    } else if (!collapseSword && swingHold) {
+      // Hold the sword at the final angle of the last completed swing between combo hits.
+      angle = calculateBladeSwingAngle(baseRotation, swingHold.swingType, 1);
     } else if (!collapseSword) {
       // When not swinging and not collapsed, hold sword at rest position
       angle = baseRotation + BLADE_SWORD_REST_ANGLE;

@@ -158,6 +158,10 @@ export interface Unit {
     swingType: 'first' | 'second' | 'third'; // Three-swing attack sequence: 210° CCW -> 180° CW -> 360° spin
     swingNumber: number; // Current swing in the sequence (1, 2, or 3)
   }; // Blade sword swing timing data for 3-swing combo
+  swordSwingHold?: {
+    swingType: 'first' | 'second' | 'third';
+    releaseTime?: number; // Timestamp to return the sword to rest after the final swing hold
+  }; // Blade sword hold state to keep the blade at the last swing angle
   swordSwingCombo?: {
     direction: Vector2;
     nextSwingTime: number;

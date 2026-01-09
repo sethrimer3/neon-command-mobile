@@ -124,6 +124,7 @@ Multiple functions for unit abilities:
 - Blade melee swings now queue through a full three-hit combo with short pauses via the swordSwingCombo state, preventing mid-swing resets
 - Blade swings now apply area damage per swing with 1s pauses between combo hits and after the final spin
 - Blade movement history is recorded each frame to support lagged sword particle rendering
+- Blade sword swing completions now store a hold state so the sword stays at its final angle between combo swings
 
 ### Known Issues
 - None currently identified
@@ -158,6 +159,7 @@ Multiple functions for unit abilities:
 - **2026-01-08**: Added tank projectile attraction, ranged-only shield dome mitigation, and Dagger ambush reveal/knife timing with permanent cloak
 - **2026-01-10**: Queued Blade sword swing combo sequencing so each attack plays all three swings with pauses before reset
 - **2026-01-11**: Applied Blade swing damage in semicircle/full-circle arcs, extended combo pauses to 1s, and recorded Blade trail history for particle lag rendering
+- **2026-01-12**: Held Blade sword angles after each swing and added a final-swing hold delay before returning to rest
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds

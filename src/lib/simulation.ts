@@ -44,6 +44,7 @@ const BLADE_SWORD_SWING_DURATION_SECOND = 0.40; // seconds for second 180° swin
 const BLADE_SWORD_SWING_DURATION_THIRD = 0.50; // seconds for third 360° spin
 const BLADE_SWORD_SWING_PAUSE = 1.0; // seconds to pause between individual combo swings for particle catch-up
 const BLADE_SWORD_SEQUENCE_RESET_TIME = 1.0; // seconds to pause after the third swing before allowing a new combo
+const BLADE_SWORD_HOLD_RESET_DELAY = 1.0; // seconds to hold the sword angle after the final swing before resting
 const BLADE_SWORD_LAG_HISTORY_DURATION = 1.2; // seconds of history to retain for Blade movement lag
 const BLADE_KNIFE_ANGLES = [-10, -5, 0, 5, 10]; // degrees for volley spread
 const BLADE_KNIFE_SHOT_INTERVAL = 0.06; // seconds between knives
@@ -2271,7 +2272,21 @@ function updateAbilityEffects(unit: Unit, state: GameState, deltaTime: number): 
   }
 
   if (unit.swordSwing && now > unit.swordSwing.startTime + unit.swordSwing.duration * 1000) {
+    const completedSwing = unit.swordSwing;
+    const swingEndTime = completedSwing.startTime + completedSwing.duration * 1000;
+    const isFinalSwing = completedSwing.swingNumber === 3;
+
+    // Preserve the sword angle after each swing so it doesn't snap back to the rest pose.
+    unit.swordSwingHold = {
+      swingType: completedSwing.swingType,
+      releaseTime: isFinalSwing ? swingEndTime + BLADE_SWORD_HOLD_RESET_DELAY * 1000 : undefined,
+    };
     unit.swordSwing = undefined;
+  }
+
+  if (unit.swordSwingHold?.releaseTime && now >= unit.swordSwingHold.releaseTime) {
+    // Clear the hold after the final swing linger so the sword returns to its resting angle.
+    unit.swordSwingHold = undefined;
   }
 
   if (unit.swordSwingCombo) {
@@ -2286,6 +2301,8 @@ function updateAbilityEffects(unit: Unit, state: GameState, deltaTime: number): 
     if (combo.nextSwingNumber > 0 && !unit.swordSwing && now >= combo.nextSwingTime) {
       const swingSettings = getBladeSwingSettings(combo.nextSwingNumber);
 
+      // Reset any lingering hold so the next swing animates from the combo sequence.
+      unit.swordSwingHold = undefined;
       unit.swordSwing = {
         startTime: now,
         duration: swingSettings.duration,
