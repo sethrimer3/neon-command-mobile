@@ -440,12 +440,14 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
   
   ctx.save();
   
+  // Helper to get vision radius in pixels
+  const getVisionRadius = () => metersToPixels(FOG_OF_WAR_VISION_RANGE) * (state.camera?.zoom || 1);
+  
   // Step 1: Draw dim black fog for all unexplored areas (very dark, almost black)
   ctx.fillStyle = 'rgba(5, 5, 10, 0.92)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   
-  // Step 2: Identify all explored areas (where player units/base have been)
-  // Create an offscreen canvas for the explored mask
+  // Step 2: Create an offscreen canvas for the explored mask
   const exploredCanvas = document.createElement('canvas');
   exploredCanvas.width = canvas.width;
   exploredCanvas.height = canvas.height;
@@ -455,12 +457,13 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
     return;
   }
   
-  // Draw circles for all player unit and base positions (marking explored areas)
+  // Find player base once
   const playerBase = state.bases.find(b => b.owner === 0);
+  const visionRadius = getVisionRadius();
+  
+  // Mark explored areas by drawing circles at player unit and base positions
   if (playerBase) {
     const screenPos = worldToScreen(playerBase.position, state, canvas);
-    const visionRadius = metersToPixels(FOG_OF_WAR_VISION_RANGE) * (state.camera?.zoom || 1);
-    
     exploredCtx.fillStyle = 'rgba(255, 255, 255, 1)';
     exploredCtx.beginPath();
     exploredCtx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
@@ -470,8 +473,6 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
   state.units.forEach(unit => {
     if (unit.owner === 0) {
       const screenPos = worldToScreen(unit.position, state, canvas);
-      const visionRadius = metersToPixels(FOG_OF_WAR_VISION_RANGE) * (state.camera?.zoom || 1);
-      
       exploredCtx.fillStyle = 'rgba(255, 255, 255, 1)';
       exploredCtx.beginPath();
       exploredCtx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
@@ -485,27 +486,6 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
   
   // Step 3: Draw purple fog over explored areas (but not currently visible)
   ctx.globalCompositeOperation = 'source-over';
-  ctx.globalAlpha = 0.7;
-  
-  // Use the explored mask to only draw purple fog in explored areas
-  ctx.save();
-  
-  // Clip to explored areas
-  ctx.globalCompositeOperation = 'source-over';
-  
-  // Draw purple fog
-  ctx.fillStyle = 'rgba(60, 30, 90, 1)';
-  ctx.globalAlpha = 0.7;
-  
-  // Apply the explored mask
-  ctx.globalCompositeOperation = 'destination-over';
-  ctx.drawImage(exploredCanvas, 0, 0);
-  
-  ctx.restore();
-  
-  // Draw purple fog over the entire explored area
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.save();
   
   // Create a temporary canvas for purple fog
   const purpleCanvas = document.createElement('canvas');
@@ -524,9 +504,8 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
     // Draw it on main canvas with medium opacity
     ctx.globalAlpha = 0.65;
     ctx.drawImage(purpleCanvas, 0, 0);
+    ctx.globalAlpha = 1.0;
   }
-  
-  ctx.restore();
   
   // Draw swirling fog particles in explored areas
   if (state.fogParticles && state.settings.enableParticleEffects) {
@@ -553,8 +532,6 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
   // Draw vision circles for player base
   if (playerBase) {
     const screenPos = worldToScreen(playerBase.position, state, canvas);
-    const visionRadius = metersToPixels(FOG_OF_WAR_VISION_RANGE) * (state.camera?.zoom || 1);
-    
     ctx.fillStyle = createVisionGradient(ctx, screenPos.x, screenPos.y, visionRadius);
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
@@ -565,8 +542,6 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
   state.units.forEach(unit => {
     if (unit.owner === 0) {
       const screenPos = worldToScreen(unit.position, state, canvas);
-      const visionRadius = metersToPixels(FOG_OF_WAR_VISION_RANGE) * (state.camera?.zoom || 1);
-      
       ctx.fillStyle = createVisionGradient(ctx, screenPos.x, screenPos.y, visionRadius);
       ctx.beginPath();
       ctx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
