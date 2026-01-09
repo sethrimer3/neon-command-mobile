@@ -23,8 +23,9 @@ import {
   ARENA_WIDTH_METERS,
   ARENA_HEIGHT_METERS,
   Floater,
+  FOG_OF_WAR_VISION_RANGE,
 } from './types';
-import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract, getViewportOffset, getViewportDimensions, getArenaHeight, getPlayfieldRotationRadians } from './gameUtils';
+import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract, getViewportOffset, getViewportDimensions, getArenaHeight, getPlayfieldRotationRadians, isVisibleToPlayer } from './gameUtils';
 import { applyCameraTransform, removeCameraTransform, worldToScreen } from './camera';
 import { Obstacle } from './maps';
 import { MOTION_TRAIL_DURATION, QUEUE_FADE_DURATION, QUEUE_DRAW_DURATION, QUEUE_UNDRAW_DURATION } from './simulation';
@@ -405,31 +406,6 @@ function clearGlowEffect(ctx: CanvasRenderingContext2D, state: GameState): void 
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
   }
-}
-
-// Fog of war constants
-const FOG_OF_WAR_VISION_RANGE = 15; // meters - how far player units/base can see
-
-// Helper function to check if a position is visible to the player (for fog of war)
-function isVisibleToPlayer(position: Vector2, state: GameState): boolean {
-  if (!state.settings.enableFogOfWar) {
-    return true; // Fog of war disabled, everything is visible
-  }
-  
-  // Player's base provides vision
-  const playerBase = state.bases.find(b => b.owner === 0);
-  if (playerBase && distance(playerBase.position, position) <= FOG_OF_WAR_VISION_RANGE) {
-    return true;
-  }
-  
-  // Player's units provide vision
-  for (const unit of state.units) {
-    if (unit.owner === 0 && distance(unit.position, position) <= FOG_OF_WAR_VISION_RANGE) {
-      return true;
-    }
-  }
-  
-  return false;
 }
 
 // Helper function to create a radial gradient for fog of war vision

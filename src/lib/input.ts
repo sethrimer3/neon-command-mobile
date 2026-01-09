@@ -18,7 +18,7 @@ import {
   UNIT_DEFINITIONS,
   Vector2,
 } from './types';
-import { distance, normalize, scale, add, subtract, pixelsToPosition, positionToPixels, getViewportOffset, getViewportDimensions, generateId } from './gameUtils';
+import { distance, normalize, scale, add, subtract, pixelsToPosition, positionToPixels, getViewportOffset, getViewportDimensions, generateId, isVisibleToPlayer } from './gameUtils';
 import { screenToWorld, worldToScreen, zoomCamera } from './camera';
 import { spawnUnit } from './simulation';
 import { soundManager } from './sound';
@@ -1107,24 +1107,11 @@ export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCan
       if (dist >= 0.8) return false; // Outside unit radius
       
       // For enemy units, check if they're visible (fog of war)
-      if (unit.owner !== 0 && state.settings.enableFogOfWar) {
-        const FOG_OF_WAR_VISION_RANGE = 15; // meters - must match renderer.ts
-        
-        // Check if visible from player base
-        const playerBase = state.bases.find(b => b.owner === 0);
-        if (playerBase && distance(playerBase.position, unit.position) <= FOG_OF_WAR_VISION_RANGE) {
-          return true;
-        }
-        
-        // Check if visible from any player unit
-        const visibleFromUnit = state.units.some(u => 
-          u.owner === 0 && distance(u.position, unit.position) <= FOG_OF_WAR_VISION_RANGE
-        );
-        
-        return visibleFromUnit;
+      if (unit.owner !== 0) {
+        return isVisibleToPlayer(unit.position, state);
       }
       
-      return true; // Show player units and enemy units when fog of war is disabled
+      return true; // Show player units
     });
     
     if (hoveredUnit) {

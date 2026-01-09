@@ -42,6 +42,9 @@ export const PROMOTION_DISTANCE_THRESHOLD = 10;
 export const PROMOTION_MULTIPLIER = 1.1;
 export const QUEUE_BONUS_PER_NODE = 0.1;
 
+// Fog of war vision range in meters
+export const FOG_OF_WAR_VISION_RANGE = 15;
+
 export const COLORS = {
   background: '#0a0a0a',
   pattern: '#1a1a1a',

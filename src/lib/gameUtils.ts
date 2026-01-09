@@ -456,3 +456,32 @@ export function createInitialMiningDrones(miningDepots: import('./types').Mining
   
   return drones;
 }
+
+/**
+ * Check if a position is visible to the player under fog of war
+ * @param position - The position to check
+ * @param state - The game state containing player units and bases
+ * @returns true if the position is visible to the player
+ */
+export function isVisibleToPlayer(position: Vector2, state: import('./types').GameState): boolean {
+  const { FOG_OF_WAR_VISION_RANGE } = require('./types');
+  
+  if (!state.settings.enableFogOfWar) {
+    return true; // Fog of war disabled, everything is visible
+  }
+  
+  // Player's base provides vision
+  const playerBase = state.bases.find(b => b.owner === 0);
+  if (playerBase && distance(playerBase.position, position) <= FOG_OF_WAR_VISION_RANGE) {
+    return true;
+  }
+  
+  // Player's units provide vision
+  for (const unit of state.units) {
+    if (unit.owner === 0 && distance(unit.position, position) <= FOG_OF_WAR_VISION_RANGE) {
+      return true;
+    }
+  }
+  
+  return false;
+}
