@@ -1,4 +1,4 @@
-import { Vector2, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS, PIXELS_PER_METER, RESOURCE_DEPOSIT_RING_RADIUS_METERS } from './types';
+import { Vector2, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS, ARENA_HEIGHT_METERS_MOBILE, PIXELS_PER_METER, RESOURCE_DEPOSIT_RING_RADIUS_METERS } from './types';
 
 // Calculate viewport scale to fit the fixed arena to the viewport
 let viewportScale = 1.0;
@@ -16,6 +16,20 @@ function shouldRotatePlayfield(): boolean {
   const isLandscape = window.innerWidth >= window.innerHeight;
   const hasFinePointer = window.matchMedia?.('(pointer: fine)').matches ?? false;
   return isLandscape && hasFinePointer;
+}
+
+// Detect if we're on a mobile device (no fine pointer)
+function isMobileDevice(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  const hasFinePointer = window.matchMedia?.('(pointer: fine)').matches ?? false;
+  return !hasFinePointer;
+}
+
+// Get the appropriate arena height based on device type
+export function getArenaHeight(): number {
+  return isMobileDevice() ? ARENA_HEIGHT_METERS_MOBILE : ARENA_HEIGHT_METERS;
 }
 
 // Use portrait-oriented gameplay coordinates even when the playfield is rotated
@@ -39,8 +53,9 @@ export function updateViewportScale(width: number, height: number): void {
   
   // Swap arena dimensions when the playfield is rotated to keep it fully visible
   const shouldRotate = shouldRotatePlayfield();
-  const arenaWidthMeters = shouldRotate ? ARENA_HEIGHT_METERS : ARENA_WIDTH_METERS;
-  const arenaHeightMeters = shouldRotate ? ARENA_WIDTH_METERS : ARENA_HEIGHT_METERS;
+  const arenaHeight = getArenaHeight();
+  const arenaWidthMeters = shouldRotate ? arenaHeight : ARENA_WIDTH_METERS;
+  const arenaHeightMeters = shouldRotate ? ARENA_WIDTH_METERS : arenaHeight;
 
   // Calculate scale factors for both dimensions
   const scaleX = width / (arenaWidthMeters * PIXELS_PER_METER);
@@ -113,8 +128,9 @@ export function positionToPixels(pos: Vector2): Vector2 {
     x: viewportOffset.x + viewportDimensions.width / 2,
     y: viewportOffset.y + viewportDimensions.height / 2,
   };
+  const arenaHeight = getArenaHeight();
   const arenaWidthPixels = ARENA_WIDTH_METERS * PIXELS_PER_METER * viewportScale;
-  const arenaHeightPixels = ARENA_HEIGHT_METERS * PIXELS_PER_METER * viewportScale;
+  const arenaHeightPixels = arenaHeight * PIXELS_PER_METER * viewportScale;
   const dx = pos.x * PIXELS_PER_METER * viewportScale - arenaWidthPixels / 2;
   const dy = pos.y * PIXELS_PER_METER * viewportScale - arenaHeightPixels / 2;
 
@@ -140,8 +156,9 @@ export function pixelsToPosition(pixels: Vector2): Vector2 {
     x: viewportOffset.x + viewportDimensions.width / 2,
     y: viewportOffset.y + viewportDimensions.height / 2,
   };
+  const arenaHeight = getArenaHeight();
   const arenaWidthPixels = ARENA_WIDTH_METERS * PIXELS_PER_METER * viewportScale;
-  const arenaHeightPixels = ARENA_HEIGHT_METERS * PIXELS_PER_METER * viewportScale;
+  const arenaHeightPixels = arenaHeight * PIXELS_PER_METER * viewportScale;
   const dx = pixels.x - center.x;
   const dy = pixels.y - center.y;
   const scale = PIXELS_PER_METER * viewportScale;

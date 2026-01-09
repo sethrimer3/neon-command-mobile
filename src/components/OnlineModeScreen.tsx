@@ -1,5 +1,7 @@
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Label } from './ui/label';
+import { Switch } from './ui/switch';
 import { ArrowLeft, MagnifyingGlass, Users, WifiHigh } from '@phosphor-icons/react';
 
 interface OnlineModeScreenProps {
@@ -7,6 +9,8 @@ interface OnlineModeScreenProps {
   onMatchmaking: () => void;
   onCustomGame: () => void;
   onLAN: () => void;
+  chessMode: boolean;
+  onChessModeChange: (enabled: boolean) => void;
 }
 
 export function OnlineModeScreen({
@@ -14,6 +18,8 @@ export function OnlineModeScreen({
   onMatchmaking,
   onCustomGame,
   onLAN,
+  chessMode,
+  onChessModeChange,
 }: OnlineModeScreenProps) {
   return (
     <div className="absolute inset-0 overflow-y-auto">
@@ -26,6 +32,23 @@ export function OnlineModeScreen({
           <p className="text-sm text-muted-foreground text-center mb-6">
             Choose how you want to play online
           </p>
+
+          {/* Chess Mode Toggle */}
+          <div className="p-4 rounded-lg border-2 border-border bg-secondary/30">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="chess-mode-online" className="flex flex-col gap-1">
+                <span className="text-base font-semibold">Chess Mode</span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  Queue 1 move per unit every 10s
+                </span>
+              </Label>
+              <Switch
+                id="chess-mode-online"
+                checked={chessMode}
+                onCheckedChange={onChessModeChange}
+              />
+            </div>
+          </div>
 
           <Button
             onClick={onMatchmaking}

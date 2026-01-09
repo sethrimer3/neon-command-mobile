@@ -18,6 +18,8 @@ import {
   ABILITY_LASER_BASE_DAMAGE_MULTIPLIER,
   Particle,
   Projectile,
+  ProjectileKind,
+  Shell,
   FACTION_DEFINITIONS,
   UnitModifier,
   QUEUE_MAX_LENGTH,
@@ -32,8 +34,49 @@ import { ObjectPool } from './objectPool';
 // Projectile constants - must be declared before object pool
 const PROJECTILE_SPEED = 15; // meters per second
 const PROJECTILE_LIFETIME = 2.0; // seconds before projectile disappears
+const MARINE_PROJECTILE_SPEED_MULTIPLIER = 3; // Marines fire faster bullets for snappier ranged pressure
 const MELEE_EFFECT_DURATION = 0.2; // seconds for melee attack visual
 const LASER_BEAM_DURATION = 0.5; // seconds for laser beam visual
+
+// Blade ability constants
+const BLADE_SWORD_SWING_DURATION_FIRST = 0.45; // seconds for first 210° swing
+const BLADE_SWORD_SWING_DURATION_SECOND = 0.40; // seconds for second 180° swing
+const BLADE_SWORD_SWING_DURATION_THIRD = 0.50; // seconds for third 360° spin
+const BLADE_SWORD_SWING_PAUSE = 1.0; // seconds to pause between individual combo swings for particle catch-up
+const BLADE_SWORD_SEQUENCE_RESET_TIME = 1.0; // seconds to pause after the third swing before allowing a new combo
+const BLADE_SWORD_HOLD_RESET_DELAY = 1.0; // seconds to hold the sword angle after the final swing before resting
+const BLADE_SWORD_LAG_HISTORY_DURATION = 1.2; // seconds of history to retain for Blade movement lag
+const BLADE_KNIFE_ANGLES = [-10, -5, 0, 5, 10]; // degrees for volley spread
+const BLADE_KNIFE_SHOT_INTERVAL = 0.06; // seconds between knives
+const BLADE_KNIFE_SCRUNCH_DURATION = 0.12; // seconds to compress sword particles
+const BLADE_KNIFE_BASE_SPEED = 20; // base knife speed before arrow magnitude scaling
+const BLADE_KNIFE_LIFETIME = 1.4; // seconds knives persist before disappearing
+const BLADE_KNIFE_DAMAGE = 6; // base damage per knife before multiplier
+const BLADE_KNIFE_START_OFFSET = UNIT_SIZE_METERS * 0.4; // offset from unit center for knife spawn
+
+// Dagger ability constants
+const DAGGER_KNIFE_DELAY = 2.0; // seconds before the knife is thrown after reveal
+const DAGGER_REVEAL_AFTER_THROW = 1.0; // seconds visible after throwing before recloaking
+const DAGGER_KNIFE_RANGE = 10; // distance the knife travels
+const DAGGER_KNIFE_SPEED = 18; // knife travel speed
+const DAGGER_KNIFE_DAMAGE = 8; // base damage per knife before multiplier
+const DAGGER_KNIFE_LIFETIME = 1.4; // seconds knives persist before disappearing
+const DAGGER_KNIFE_START_OFFSET = UNIT_SIZE_METERS * 0.35; // offset from unit center for knife spawn
+
+// Tank projectile attraction constants
+const TANK_PROJECTILE_ATTRACTION_RADIUS = 6; // meters within which tanks attract enemy projectiles
+const TANK_PROJECTILE_ATTRACTION_STRENGTH = 6; // velocity pull strength toward tanks
+
+// Shell ejection constants for marine firing
+const SHELL_EJECTION_SPEED = 3.8; // meters per second
+const SHELL_EJECTION_OFFSET = UNIT_SIZE_METERS * 0.4; // offset from unit center
+const SHELL_EJECTION_ANGLE_VARIANCE = 0.25; // radians for ejection wobble
+const SHELL_EJECTION_SPEED_VARIANCE = 0.35; // percent variance in speed
+const SHELL_LIFETIME = 1.2; // seconds before shell disappears
+const SHELL_COLLISION_RADIUS = 0.18; // meters for shell-field particle collision
+const SHELL_BOUNCE_DAMPING = 0.6; // velocity damping after bounce
+const SHELL_MOMENTUM_TRANSFER = 0.4; // velocity transfer factor to field particles
+const SHELL_MASS = 0.02; // small mass for shell physics
 
 // Helper function to calculate damage with armor
 // Ranged attacks are reduced by armor, melee attacks ignore armor
@@ -49,6 +92,33 @@ function calculateDamageWithArmor(baseDamage: number, armor: number, isMelee: bo
   }
 }
 
+// Apply shield dome modifiers for melee/ranged damage when allies are inside active shields.
+function getShieldDamageMultiplier(state: GameState, targetUnit: Unit, attackType: 'melee' | 'ranged'): number {
+  const shieldProviders = state.units.filter((ally) => 
+    ally.owner === targetUnit.owner &&
+    ally.shieldActive &&
+    distance(ally.position, targetUnit.position) <= ally.shieldActive.radius
+  );
+
+  if (shieldProviders.length === 0) {
+    return 1;
+  }
+
+  const multipliers = shieldProviders.map((ally) => {
+    if (attackType === 'ranged') {
+      return ally.shieldActive?.rangedDamageMultiplier ?? 1;
+    }
+    return ally.shieldActive?.meleeDamageMultiplier ?? 1;
+  });
+
+  return Math.min(...multipliers, 1);
+}
+
+// Helper to filter out cloaked enemies for auto-targeted abilities.
+function getTargetableEnemies(state: GameState, unit: Unit): Unit[] {
+  return state.units.filter((enemy) => enemy.owner !== unit.owner && !enemy.cloaked);
+}
+
 // Object pool for projectiles - reuse projectiles instead of creating/destroying
 const projectilePool = new ObjectPool<Projectile>(
   () => ({
@@ -62,6 +132,7 @@ const projectilePool = new ObjectPool<Projectile>(
     lifetime: PROJECTILE_LIFETIME,
     createdAt: Date.now(),
     sourceUnit: '',
+    kind: 'standard',
   }),
   (projectile) => {
     // Reset projectile state when returned to pool
@@ -72,6 +143,7 @@ const projectilePool = new ObjectPool<Projectile>(
     projectile.damage = 0;
     projectile.createdAt = Date.now();
     delete projectile.targetUnit;
+    projectile.kind = 'standard';
   },
   100, // Initial pool size
   500  // Max pool size
@@ -80,7 +152,14 @@ const projectilePool = new ObjectPool<Projectile>(
 // Unit collision constants
 const UNIT_COLLISION_RADIUS = UNIT_SIZE_METERS / 2; // Minimum distance between unit centers
 const UNIT_COLLISION_SQUEEZE_FACTOR = 0.75; // Allow units to squeeze past each other (75% of full diameter - more permissive for smoother flow)
-const FRIENDLY_SLIDE_DISTANCE = 0.3; // Distance to slide perpendicular when avoiding friendly units
+const ARRIVAL_DISTANCE_THRESHOLD = 0.1; // Distance threshold for considering a unit has arrived at destination
+const COLLISION_PUSH_STRENGTH = 0.6; // Strength of local collision push to keep units from stacking
+const COLLISION_PUSH_MAX_DISTANCE = 0.25; // Maximum push distance per update for gentle separation
+
+// Helper function to calculate effective collision radius
+function getCollisionRadius(): number {
+  return (UNIT_COLLISION_RADIUS * 2) * UNIT_COLLISION_SQUEEZE_FACTOR;
+}
 
 // Flocking/Boids constants for smooth group movement (StarCraft-like)
 const SEPARATION_RADIUS = 1.5; // Distance to maintain from nearby units
@@ -248,7 +327,7 @@ function getSafeRallyPosition(
 // Check if a position would collide with any existing unit
 function checkUnitCollision(position: Vector2, currentUnitId: string, allUnits: Unit[]): boolean {
   // Use a slightly smaller collision radius to allow units to squeeze past each other
-  const collisionRadius = (UNIT_COLLISION_RADIUS * 2) * UNIT_COLLISION_SQUEEZE_FACTOR;
+  const collisionRadius = getCollisionRadius();
   
   for (const otherUnit of allUnits) {
     // Skip checking against self
@@ -265,85 +344,183 @@ function checkUnitCollision(position: Vector2, currentUnitId: string, allUnits: 
   return false; // No collision
 }
 
-// Enhanced collision check that attempts to find a slide path for friendly units
-// Returns { blocked: boolean, alternativePosition?: Vector2 }
-function checkUnitCollisionWithSliding(
+// Check if a friendly unit is occupying a target position
+// Returns true if a friendly unit is within arrival distance of the target
+function isFriendlyUnitAtPosition(unit: Unit, targetPosition: Vector2, allUnits: Unit[]): boolean {
+  for (const otherUnit of allUnits) {
+    // Skip checking against self
+    if (otherUnit.id === unit.id) continue;
+    
+    // Only check friendly units
+    if (otherUnit.owner !== unit.owner) continue;
+    
+    // Check if the other unit is "on top of" the target position (has arrived there)
+    const distToTarget = distance(otherUnit.position, targetPosition);
+    if (distToTarget < ARRIVAL_DISTANCE_THRESHOLD) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Check if a unit has arrived at its target position
+// Considers both direct arrival and arrival when a friendly unit is blocking the target
+function hasUnitArrivedAtPosition(
+  unit: Unit,
+  targetPosition: Vector2,
+  currentDistance: number,
+  allUnits: Unit[]
+): boolean {
+  // Standard arrival: within threshold distance of target
+  if (currentDistance < ARRIVAL_DISTANCE_THRESHOLD) {
+    return true;
+  }
+  
+  // Alternative arrival: close enough to a friendly unit occupying the target
+  if (isFriendlyUnitAtPosition(unit, targetPosition, allUnits) && 
+      currentDistance < getCollisionRadius()) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Move a unit toward a target position using standard movement logic.
+ * Mirrors regular move behavior so ability anchors behave like normal commands.
+ * @param state - Current game state for collision/pathing context
+ * @param unit - Unit to move
+ * @param targetPosition - Destination to move toward
+ * @param deltaTime - Elapsed time in seconds for this frame
+ */
+function moveUnitTowardPosition(
+  state: GameState,
+  unit: Unit,
+  targetPosition: Vector2,
+  deltaTime: number
+): void {
+  const dist = distance(unit.position, targetPosition);
+  const def = UNIT_DEFINITIONS[unit.type];
+
+  // Determine a movement direction, factoring in flocking and obstacle avoidance.
+  let direction = normalize(subtract(targetPosition, unit.position));
+  direction = applyFlockingBehavior(unit, direction, state.units);
+
+  const alternativePath = findPathAroundObstacle(unit, targetPosition, state.obstacles);
+  if (alternativePath) {
+    direction = alternativePath;
+  }
+
+  if (unit.jitterOffset !== undefined) {
+    const jitteredDirection = applyJitterMovement(unit, direction, state.units, state.obstacles);
+    if (jitteredDirection) {
+      direction = jitteredDirection;
+    }
+  }
+
+  // Align unit orientation with its travel direction for consistent visuals.
+  updateUnitRotation(unit, direction, deltaTime);
+
+  // Apply acceleration so movement feels consistent with standard move commands.
+  const currentSpeed = applyMovementAcceleration(unit, direction, def.moveSpeed, deltaTime);
+  const movement = scale(direction, currentSpeed * deltaTime);
+  const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
+  const newPosition = add(unit.position, scale(direction, moveDist));
+
+  // Apply local collision push to prevent stacking while moving to the anchor.
+  const adjustedPosition = applyLocalCollisionPush(unit, newPosition, state.units);
+  const collisionResult = checkUnitCollisionBlocking(unit, adjustedPosition, state.units, state.obstacles);
+
+  if (!collisionResult.blocked) {
+    unit.position = adjustedPosition;
+    unit.stuckTimer = 0;
+    unit.lastPosition = { ...unit.position };
+    unit.jitterOffset = undefined;
+  } else {
+    // Slow down when blocked and track stuck state to enable jitter recovery.
+    unit.currentSpeed = Math.max(0, (unit.currentSpeed || 0) * COLLISION_DECELERATION_FACTOR);
+    updateStuckDetection(unit, deltaTime);
+    return;
+  }
+
+  // Reward movement distance so ability positioning still contributes to promotions.
+  const queueMovementNodes = unit.commandQueue.filter((n) => n.type === 'move' || n.type === 'attack-move').length;
+  const creditMultiplier = 1.0 + QUEUE_BONUS_PER_NODE * queueMovementNodes;
+  unit.distanceCredit += moveDist * creditMultiplier;
+
+  while (unit.distanceCredit >= PROMOTION_DISTANCE_THRESHOLD) {
+    unit.distanceCredit -= PROMOTION_DISTANCE_THRESHOLD;
+    unit.damageMultiplier *= PROMOTION_MULTIPLIER;
+  }
+
+  unit.distanceTraveled += moveDist;
+}
+
+// Collision check that blocks movement when any unit or obstacle overlap is detected
+// Returns { blocked: boolean }
+function checkUnitCollisionBlocking(
   unit: Unit,
   desiredPosition: Vector2,
   allUnits: Unit[],
   obstacles: import('./maps').Obstacle[]
-): { blocked: boolean; alternativePosition?: Vector2 } {
-  const collisionRadius = (UNIT_COLLISION_RADIUS * 2) * UNIT_COLLISION_SQUEEZE_FACTOR;
+): { blocked: boolean } {
+  const collisionRadius = getCollisionRadius();
   
   // Check obstacle collision first
   if (checkObstacleCollision(desiredPosition, UNIT_SIZE_METERS / 2, obstacles)) {
     return { blocked: true };
   }
-  
-  // Check unit collisions
-  let hasEnemyCollision = false;
-  let hasFriendlyCollision = false;
-  
+
+  // Unit collisions are handled via local avoidance rather than hard blocking.
+  return { blocked: false };
+}
+
+/**
+ * Nudges a desired position away from nearby units to prevent stacking.
+ * Uses a capped push force so units can still flow past each other smoothly.
+ * @param unit - Unit attempting to move
+ * @param desiredPosition - Proposed new position for the unit
+ * @param allUnits - All units in the simulation for local avoidance
+ * @returns Adjusted position that is gently pushed away from neighbors
+ */
+function applyLocalCollisionPush(
+  unit: Unit,
+  desiredPosition: Vector2,
+  allUnits: Unit[]
+): Vector2 {
+  const collisionRadius = getCollisionRadius();
+  let pushVector = { x: 0, y: 0 };
+  let pushCount = 0;
+
   for (const otherUnit of allUnits) {
     if (otherUnit.id === unit.id) continue;
-    
+
     const dist = distance(desiredPosition, otherUnit.position);
-    if (dist < collisionRadius) {
-      if (otherUnit.owner === unit.owner) {
-        hasFriendlyCollision = true;
-      } else {
-        hasEnemyCollision = true;
-      }
+    if (dist > 0 && dist < collisionRadius) {
+      // Push away more strongly the closer the units are.
+      const overlap = collisionRadius - dist;
+      const away = normalize(subtract(desiredPosition, otherUnit.position));
+      pushVector = add(pushVector, scale(away, overlap));
+      pushCount += 1;
     }
   }
-  
-  // If blocked by enemy, return blocked status
-  if (hasEnemyCollision) {
-    return { blocked: true };
+
+  if (pushCount === 0) {
+    return desiredPosition;
   }
-  
-  // If only friendly collisions, try to find a sliding path
-  if (hasFriendlyCollision) {
-    const movementDirection = normalize(subtract(desiredPosition, unit.position));
-    
-    // Calculate perpendicular directions for sliding
-    const rightPerpendicular = { x: -movementDirection.y, y: movementDirection.x };
-    const leftPerpendicular = { x: movementDirection.y, y: -movementDirection.x };
-    
-    // Calculate diagonal directions (45-degree rotations)
-    // Diagonal right: rotate movement direction 45° clockwise
-    const sqrt2 = Math.sqrt(2);
-    const diagonalRight = { 
-      x: (-movementDirection.y + movementDirection.x) / sqrt2, 
-      y: (movementDirection.x + movementDirection.y) / sqrt2 
-    };
-    // Diagonal left: rotate movement direction 45° counter-clockwise
-    const diagonalLeft = { 
-      x: (movementDirection.y + movementDirection.x) / sqrt2, 
-      y: (-movementDirection.x + movementDirection.y) / sqrt2 
-    };
-    
-    // Try multiple slide distances and angles for better pathfinding
-    const slideDistances = [FRIENDLY_SLIDE_DISTANCE, FRIENDLY_SLIDE_DISTANCE * 1.5, FRIENDLY_SLIDE_DISTANCE * 0.5];
-    const slideAngles = [rightPerpendicular, leftPerpendicular, diagonalRight, diagonalLeft];
-    
-    // Try each combination of slide distance and angle
-    for (const slideDistance of slideDistances) {
-      for (const slideAngle of slideAngles) {
-        const slidePos = add(desiredPosition, scale(slideAngle, slideDistance));
-        if (!checkObstacleCollision(slidePos, UNIT_SIZE_METERS / 2, obstacles) &&
-            !checkUnitCollision(slidePos, unit.id, allUnits)) {
-          return { blocked: false, alternativePosition: slidePos };
-        }
-      }
-    }
-    
-    // If no slide path found, return blocked but still friendly collision
-    return { blocked: true };
+
+  // Average and clamp the push so adjustments remain smooth.
+  pushVector = scale(pushVector, 1 / pushCount);
+  const pushMagnitude = Math.min(
+    COLLISION_PUSH_MAX_DISTANCE,
+    distance({ x: 0, y: 0 }, pushVector) * COLLISION_PUSH_STRENGTH
+  );
+
+  if (pushMagnitude < MIN_FORCE_THRESHOLD) {
+    return desiredPosition;
   }
-  
-  // No collision
-  return { blocked: false };
+
+  return add(desiredPosition, scale(normalize(pushVector), pushMagnitude));
 }
 
 // Helper function to mark unit's queue for cancellation due to being stuck
@@ -729,6 +906,33 @@ function updateUnitRotation(unit: Unit, direction: Vector2, deltaTime: number): 
   unit.rotation = ((unit.rotation % (Math.PI * 2)) + (Math.PI * 2)) % (Math.PI * 2);
 }
 
+/**
+ * Record a time-stamped snapshot of Blade movement so sword particles can lag behind motion.
+ * Keeps a short history buffer for sampling delayed positions in the renderer.
+ * @param unit - Unit to snapshot (only the Blade uses this history)
+ * @param timestamp - Time in milliseconds for the snapshot
+ */
+function recordBladeTrailHistory(unit: Unit, timestamp: number): void {
+  if (unit.type !== 'warrior') {
+    return;
+  }
+
+  if (!unit.bladeTrailHistory) {
+    unit.bladeTrailHistory = [];
+  }
+
+  // Store the latest transform to drive per-particle movement lag.
+  unit.bladeTrailHistory.push({
+    timestamp,
+    position: { ...unit.position },
+    rotation: unit.rotation ?? 0,
+  });
+
+  // Trim old samples so the buffer stays bounded for performance.
+  const cutoffTime = timestamp - BLADE_SWORD_LAG_HISTORY_DURATION * 1000;
+  unit.bladeTrailHistory = unit.bladeTrailHistory.filter((sample) => sample.timestamp >= cutoffTime);
+}
+
 // Apply smooth acceleration/deceleration to unit movement
 function applyMovementAcceleration(unit: Unit, direction: Vector2, targetSpeed: number, deltaTime: number): number {
   // Initialize current speed if not set
@@ -822,28 +1026,70 @@ function updateParticles(unit: Unit, deltaTime: number): void {
 }
 
 // Create a projectile for ranged attacks
-function createProjectile(state: GameState, sourceUnit: Unit, target: Vector2, targetUnit?: Unit): Projectile {
+function createProjectile(
+  state: GameState,
+  sourceUnit: Unit,
+  target: Vector2,
+  targetUnit?: Unit,
+  options?: {
+    speed?: number;
+    damage?: number;
+    kind?: ProjectileKind;
+    lifetime?: number;
+    startOffset?: number;
+  }
+): Projectile {
   const direction = normalize(subtract(target, sourceUnit.position));
   const def = UNIT_DEFINITIONS[sourceUnit.type];
-  const damage = def.attackDamage * sourceUnit.damageMultiplier;
+  const damage = options?.damage ?? (def.attackDamage * sourceUnit.damageMultiplier);
   const color = state.players[sourceUnit.owner].color;
+  const baseSpeed = options?.speed ?? PROJECTILE_SPEED;
+  // Marines get a speed multiplier on default shots to make their bullets feel snappier.
+  const projectileSpeed = options?.speed ? baseSpeed : baseSpeed * (sourceUnit.type === 'marine' ? MARINE_PROJECTILE_SPEED_MULTIPLIER : 1);
+  const startOffset = options?.startOffset ?? 0;
   
   // Acquire projectile from pool and initialize it
   const projectile = projectilePool.acquire();
   projectile.id = generateId();
-  projectile.position.x = sourceUnit.position.x;
-  projectile.position.y = sourceUnit.position.y;
-  projectile.velocity = scale(direction, PROJECTILE_SPEED);
+  projectile.position.x = sourceUnit.position.x + direction.x * startOffset;
+  projectile.position.y = sourceUnit.position.y + direction.y * startOffset;
+  projectile.velocity = scale(direction, projectileSpeed);
   projectile.target = target;
   projectile.damage = damage;
   projectile.owner = sourceUnit.owner;
   projectile.color = color;
-  projectile.lifetime = PROJECTILE_LIFETIME;
+  projectile.lifetime = options?.lifetime ?? PROJECTILE_LIFETIME;
   projectile.createdAt = Date.now();
   projectile.sourceUnit = sourceUnit.id;
   projectile.targetUnit = targetUnit?.id;
+  projectile.kind = options?.kind ?? 'standard';
   
   return projectile;
+}
+
+// Create a shell casing ejected from a marine shot
+function createEjectedShell(unit: Unit, firingDirection: Vector2): Shell {
+  const now = Date.now();
+  const fallbackDirection = firingDirection.x === 0 && firingDirection.y === 0 ? { x: 1, y: 0 } : firingDirection;
+  const forward = normalize(fallbackDirection);
+  const side = normalize({ x: -forward.y, y: forward.x });
+  const sideSign = Math.random() < 0.5 ? -1 : 1;
+  const baseEjection = normalize(add(scale(side, sideSign), scale(forward, 0.25)));
+  const baseAngle = Math.atan2(baseEjection.y, baseEjection.x);
+  const angle = baseAngle + (Math.random() - 0.5) * 2 * SHELL_EJECTION_ANGLE_VARIANCE;
+  const speed = SHELL_EJECTION_SPEED * (1 + (Math.random() - 0.5) * SHELL_EJECTION_SPEED_VARIANCE);
+
+  return {
+    id: generateId(),
+    position: add(unit.position, scale(side, sideSign * SHELL_EJECTION_OFFSET)),
+    velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
+    rotation: Math.random() * Math.PI * 2,
+    rotationSpeed: (Math.random() - 0.5) * 8,
+    createdAt: now,
+    lifetime: SHELL_LIFETIME,
+    mass: SHELL_MASS,
+    owner: unit.owner,
+  };
 }
 
 // Create an impact effect
@@ -1116,7 +1362,7 @@ function updateMotionTrails(state: GameState): void {
   
   // Update trails for each unit
   state.units.forEach((unit) => {
-    // Only create trails for fast units (scout, interceptor, snaker)
+    // Only create trails for fast units (dagger, interceptor, snaker)
     if (unit.type !== 'scout' && unit.type !== 'interceptor' && unit.type !== 'snaker') {
       return;
     }
@@ -1150,12 +1396,40 @@ function updateMotionTrails(state: GameState): void {
   state.motionTrails = state.motionTrails.filter(t => unitIds.has(t.unitId));
 }
 
+// Pull enemy projectiles toward nearby tanks to simulate passive magnetic defense.
+function applyTankProjectileAttraction(state: GameState, projectile: Projectile, deltaTime: number): void {
+  const enemyTanks = state.units.filter((unit) => unit.type === 'tank' && unit.owner !== projectile.owner && unit.hp > 0);
+
+  let closestTank: Unit | null = null;
+  let closestDistance = Infinity;
+
+  enemyTanks.forEach((tank) => {
+    const dist = distance(projectile.position, tank.position);
+    if (dist < closestDistance) {
+      closestDistance = dist;
+      closestTank = tank;
+    }
+  });
+
+  if (!closestTank || closestDistance > TANK_PROJECTILE_ATTRACTION_RADIUS) {
+    return;
+  }
+
+  const pullStrength = TANK_PROJECTILE_ATTRACTION_STRENGTH * (1 - closestDistance / TANK_PROJECTILE_ATTRACTION_RADIUS);
+  const pullDirection = normalize(subtract(closestTank.position, projectile.position));
+  const pull = scale(pullDirection, pullStrength * deltaTime);
+
+  projectile.velocity.x += pull.x;
+  projectile.velocity.y += pull.y;
+}
+
 // Update projectiles - movement and collision
 function updateProjectiles(state: GameState, deltaTime: number): void {
   const now = Date.now();
   
   // Update positions
   state.projectiles.forEach((projectile) => {
+    applyTankProjectileAttraction(state, projectile, deltaTime);
     projectile.position.x += projectile.velocity.x * deltaTime;
     projectile.position.y += projectile.velocity.y * deltaTime;
   });
@@ -1179,7 +1453,8 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
           const target = state.units.find((u) => u.id === projectile.targetUnit);
           if (target && target.hp > 0) {
             const def = UNIT_DEFINITIONS[target.type];
-            const finalDamage = calculateDamageWithArmor(projectile.damage, target.armor, false, def.modifiers);
+            const shieldMultiplier = getShieldDamageMultiplier(state, target, 'ranged');
+            const finalDamage = calculateDamageWithArmor(projectile.damage, target.armor, false, def.modifiers) * shieldMultiplier;
             target.hp -= finalDamage;
             createDamageNumber(state, projectile.position, finalDamage, projectile.color);
             createHitSparks(state, projectile.position, projectile.color, 6);
@@ -1202,7 +1477,8 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
           for (const enemy of enemies) {
             if (distance(enemy.position, projectile.position) < UNIT_SIZE_METERS / 2) {
               const def = UNIT_DEFINITIONS[enemy.type];
-              const finalDamage = calculateDamageWithArmor(projectile.damage, enemy.armor, false, def.modifiers);
+              const shieldMultiplier = getShieldDamageMultiplier(state, enemy, 'ranged');
+              const finalDamage = calculateDamageWithArmor(projectile.damage, enemy.armor, false, def.modifiers) * shieldMultiplier;
               enemy.hp -= finalDamage;
               createDamageNumber(state, projectile.position, finalDamage, projectile.color);
               createHitSparks(state, projectile.position, projectile.color, 6);
@@ -1273,6 +1549,53 @@ function updateProjectiles(state: GameState, deltaTime: number): void {
   // Return removed projectiles to pool
   projectilePool.releaseAll(removedProjectiles);
   state.projectiles = remainingProjectiles;
+}
+
+// Update shell casings and handle collisions with field particles
+function updateShells(state: GameState, deltaTime: number): void {
+  if (!state.shells || state.shells.length === 0) return;
+
+  const now = Date.now();
+  const remainingShells: Shell[] = [];
+
+  state.shells.forEach((shell) => {
+    shell.position.x += shell.velocity.x * deltaTime;
+    shell.position.y += shell.velocity.y * deltaTime;
+    shell.rotation += shell.rotationSpeed * deltaTime;
+
+    if (state.fieldParticles && state.fieldParticles.length > 0) {
+      for (const particle of state.fieldParticles) {
+        const dist = distance(shell.position, particle.position);
+        const collisionDist = SHELL_COLLISION_RADIUS + particle.size;
+
+        if (dist > 0 && dist < collisionDist) {
+          const normal = normalize(subtract(shell.position, particle.position));
+          const preBounceVelocity = { ...shell.velocity };
+          const dot = shell.velocity.x * normal.x + shell.velocity.y * normal.y;
+
+          // Reflect shell velocity across the collision normal
+          shell.velocity.x = shell.velocity.x - 2 * dot * normal.x;
+          shell.velocity.y = shell.velocity.y - 2 * dot * normal.y;
+          shell.velocity.x *= SHELL_BOUNCE_DAMPING;
+          shell.velocity.y *= SHELL_BOUNCE_DAMPING;
+
+          // Transfer momentum into the ambient particle
+          particle.velocity.x += preBounceVelocity.x * SHELL_MOMENTUM_TRANSFER;
+          particle.velocity.y += preBounceVelocity.y * SHELL_MOMENTUM_TRANSFER;
+
+          // Push shell out of overlap to prevent sticking
+          shell.position = add(particle.position, scale(normal, collisionDist));
+        }
+      }
+    }
+
+    const age = (now - shell.createdAt) / 1000;
+    if (age <= shell.lifetime) {
+      remainingShells.push(shell);
+    }
+  });
+
+  state.shells = remainingShells;
 }
 
 /**
@@ -1427,6 +1750,7 @@ export function updateGame(state: GameState, deltaTime: number): void {
   updateUnits(state, deltaTime);
   updateBases(state, deltaTime);
   updateProjectiles(state, deltaTime);
+  updateShells(state, deltaTime);
   updateCombat(state, deltaTime);
   cleanupDeadUnits(state); // Clean up dead units after combat
   cleanupDyingUnits(state); // Clean up dying units after animation completes
@@ -1554,6 +1878,11 @@ function updateUnits(state: GameState, deltaTime: number): void {
   
   // Second pass: update all units normally
   state.units.forEach((unit) => {
+    const frameTime = Date.now();
+    const finalizeBladeTrail = () => {
+      recordBladeTrailHistory(unit, frameTime);
+    };
+
     // Clean up faded command queues that have been marked for cancellation
     if (unit.queueFadeStartTime) {
       const fadeElapsed = (Date.now() - unit.queueFadeStartTime) / 1000;
@@ -1600,6 +1929,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
         executeLineJump(state, unit);
         unit.lineJumpTelegraph = undefined;
       }
+      finalizeBladeTrail();
       return;
     }
 
@@ -1633,6 +1963,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
       // Reset stuck timer when no commands
       unit.stuckTimer = 0;
       unit.lastPosition = undefined;
+      finalizeBladeTrail();
       return;
     }
 
@@ -1642,7 +1973,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
       const dist = distance(unit.position, currentNode.position);
       const def = UNIT_DEFINITIONS[unit.type];
 
-      if (dist < 0.1) {
+      if (hasUnitArrivedAtPosition(unit, currentNode.position, dist, state.units)) {
         unit.commandQueue.shift();
         // Decelerate when reaching destination
         unit.currentSpeed = 0;
@@ -1650,6 +1981,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
         unit.stuckTimer = 0;
         unit.lastPosition = undefined;
         unit.jitterOffset = undefined;
+        finalizeBladeTrail();
         return;
       }
 
@@ -1681,13 +2013,16 @@ function updateUnits(state: GameState, deltaTime: number): void {
 
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
-      
-      // Check for collisions with sliding for friendly units
-      const collisionResult = checkUnitCollisionWithSliding(unit, newPosition, state.units, state.obstacles);
+
+      // Apply local collision push to keep units from stacking at shared goals.
+      const adjustedPosition = applyLocalCollisionPush(unit, newPosition, state.units);
+
+      // Check for collisions with any obstacles (unit overlap handled by local push)
+      const collisionResult = checkUnitCollisionBlocking(unit, adjustedPosition, state.units, state.obstacles);
       
       if (!collisionResult.blocked) {
-        // Use alternative position if sliding found a path, otherwise use desired position
-        unit.position = collisionResult.alternativePosition || newPosition;
+        // Use the desired position when clear
+        unit.position = adjustedPosition;
         
         // Reset stuck timer and jitter - unit is making progress
         unit.stuckTimer = 0;
@@ -1699,6 +2034,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
         
         // Track stuck state
         updateStuckDetection(unit, deltaTime);
+        finalizeBladeTrail();
         return;
       }
 
@@ -1744,12 +2080,14 @@ function updateUnits(state: GameState, deltaTime: number): void {
       
       // Continue moving towards destination
       const dist = distance(unit.position, currentNode.position);
-      if (dist < 0.1) {
+      
+      if (hasUnitArrivedAtPosition(unit, currentNode.position, dist, state.units)) {
         unit.commandQueue.shift();
         unit.currentSpeed = 0;
         unit.stuckTimer = 0;
         unit.lastPosition = undefined;
         unit.jitterOffset = undefined;
+        finalizeBladeTrail();
         return;
       }
 
@@ -1781,13 +2119,16 @@ function updateUnits(state: GameState, deltaTime: number): void {
 
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
-      
-      // Check for collisions with sliding for friendly units
-      const collisionResult = checkUnitCollisionWithSliding(unit, newPosition, state.units, state.obstacles);
+
+      // Apply local collision push to keep attack-move units flowing through crowds.
+      const adjustedPosition = applyLocalCollisionPush(unit, newPosition, state.units);
+
+      // Check for collisions with any obstacles (unit overlap handled by local push)
+      const collisionResult = checkUnitCollisionBlocking(unit, adjustedPosition, state.units, state.obstacles);
       
       if (!collisionResult.blocked) {
-        // Use alternative position if sliding found a path
-        unit.position = collisionResult.alternativePosition || newPosition;
+        // Use the desired position when clear
+        unit.position = adjustedPosition;
         // Reset stuck timer and jitter
         unit.stuckTimer = 0;
         unit.lastPosition = { ...unit.position };
@@ -1798,6 +2139,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
         
         // Track stuck state
         updateStuckDetection(unit, deltaTime);
+        finalizeBladeTrail();
         return;
       }
 
@@ -1813,17 +2155,28 @@ function updateUnits(state: GameState, deltaTime: number): void {
       unit.distanceTraveled += moveDist;
     } else if (currentNode.type === 'ability') {
       const dist = distance(unit.position, currentNode.position);
-      
-      // Abilities should execute even if the unit drifted away from the queued anchor
-      const abilityOrigin = dist > 0.1 ? { ...unit.position } : currentNode.position;
-      const abilityNode: CommandNode = { ...currentNode, position: abilityOrigin };
-      
+
+      // Only execute the ability once the unit reaches the queued anchor.
+      if (!hasUnitArrivedAtPosition(unit, currentNode.position, dist, state.units)) {
+        moveUnitTowardPosition(state, unit, currentNode.position, deltaTime);
+        finalizeBladeTrail();
+        return;
+      }
+
+      // Reset movement state once the unit reaches its ability anchor.
+      unit.currentSpeed = 0;
+      unit.stuckTimer = 0;
+      unit.lastPosition = undefined;
+      unit.jitterOffset = undefined;
+
+      const abilityNode: CommandNode = { ...currentNode, position: currentNode.position };
       executeAbility(state, unit, abilityNode);
       unit.commandQueue.shift();
     } else if (currentNode.type === 'patrol') {
       // Patrol: move to patrol point, then add return command to create loop
       const dist = distance(unit.position, currentNode.position);
-      if (dist < 0.1) {
+      
+      if (hasUnitArrivedAtPosition(unit, currentNode.position, dist, state.units)) {
         // Reached patrol point - add return command and remove current
         unit.commandQueue.shift();
         // Add return patrol command if queue isn't full
@@ -1837,6 +2190,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
         unit.stuckTimer = 0;
         unit.lastPosition = undefined;
         unit.jitterOffset = undefined;
+        finalizeBladeTrail();
         return;
       }
 
@@ -1867,12 +2221,15 @@ function updateUnits(state: GameState, deltaTime: number): void {
       
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
-      
-      // Check for collisions with sliding for friendly units
-      const collisionResult = checkUnitCollisionWithSliding(unit, newPosition, state.units, state.obstacles);
+
+      // Apply local collision push to keep patrol units from clumping.
+      const adjustedPosition = applyLocalCollisionPush(unit, newPosition, state.units);
+
+      // Check for collisions with any obstacles (unit overlap handled by local push)
+      const collisionResult = checkUnitCollisionBlocking(unit, adjustedPosition, state.units, state.obstacles);
       
       if (!collisionResult.blocked) {
-        unit.position = collisionResult.alternativePosition || newPosition;
+        unit.position = adjustedPosition;
         // Reset stuck timer and jitter
         unit.stuckTimer = 0;
         unit.lastPosition = { ...unit.position };
@@ -1880,6 +2237,7 @@ function updateUnits(state: GameState, deltaTime: number): void {
       } else {
         // Track stuck state
         updateStuckDetection(unit, deltaTime);
+        finalizeBladeTrail();
         return;
       }
 
@@ -1897,6 +2255,8 @@ function updateUnits(state: GameState, deltaTime: number): void {
 
       unit.distanceTraveled += moveDist;
     }
+
+    finalizeBladeTrail();
   });
 }
 
@@ -1909,6 +2269,96 @@ function updateAbilityEffects(unit: Unit, state: GameState, deltaTime: number): 
 
   if (unit.cloaked && now > unit.cloaked.endTime) {
     unit.cloaked = undefined;
+  }
+
+  if (unit.swordSwing && now > unit.swordSwing.startTime + unit.swordSwing.duration * 1000) {
+    const completedSwing = unit.swordSwing;
+    const swingEndTime = completedSwing.startTime + completedSwing.duration * 1000;
+    const isFinalSwing = completedSwing.swingNumber === 3;
+
+    // Preserve the sword angle after each swing so it doesn't snap back to the rest pose.
+    unit.swordSwingHold = {
+      swingType: completedSwing.swingType,
+      releaseTime: isFinalSwing ? swingEndTime + BLADE_SWORD_HOLD_RESET_DELAY * 1000 : undefined,
+    };
+    unit.swordSwing = undefined;
+  }
+
+  if (unit.swordSwingHold?.releaseTime && now >= unit.swordSwingHold.releaseTime) {
+    // Clear the hold after the final swing linger so the sword returns to its resting angle.
+    unit.swordSwingHold = undefined;
+  }
+
+  if (unit.swordSwingCombo) {
+    const combo = unit.swordSwingCombo;
+
+    // Clear completed combos once the post-combo pause has elapsed.
+    if (combo.nextSwingNumber === 0 && now >= combo.resetAvailableTime) {
+      unit.swordSwingCombo = undefined;
+    }
+
+    // Start the next swing when the combo is queued and the prior swing has finished.
+    if (combo.nextSwingNumber > 0 && !unit.swordSwing && now >= combo.nextSwingTime) {
+      const swingSettings = getBladeSwingSettings(combo.nextSwingNumber);
+
+      // Reset any lingering hold so the next swing animates from the combo sequence.
+      unit.swordSwingHold = undefined;
+      unit.swordSwing = {
+        startTime: now,
+        duration: swingSettings.duration,
+        direction: combo.direction,
+        swingType: swingSettings.swingType,
+        swingNumber: combo.nextSwingNumber,
+      };
+
+      // Apply Blade damage at the start of each swing to match the attack cadence.
+      if (unit.type === 'warrior') {
+        applyBladeSwingDamage(state, unit, unit.swordSwing);
+      }
+
+      if (combo.nextSwingNumber < 3) {
+        // Queue the next swing after a brief pause to keep the combo readable.
+        combo.nextSwingNumber += 1;
+        combo.nextSwingTime = now + (swingSettings.duration + BLADE_SWORD_SWING_PAUSE) * 1000;
+        combo.resetAvailableTime = combo.nextSwingTime;
+      } else {
+        // Lock the combo until the short reset pause completes after the final spin.
+        combo.nextSwingNumber = 0;
+        combo.resetAvailableTime = now + (swingSettings.duration + BLADE_SWORD_SEQUENCE_RESET_TIME) * 1000;
+        combo.nextSwingTime = combo.resetAvailableTime;
+      }
+    }
+  }
+
+  if (unit.bladeVolley) {
+    const volley = unit.bladeVolley;
+    if (now >= volley.nextShotTime && volley.shotsFired < BLADE_KNIFE_ANGLES.length) {
+      // Emit knives in quick succession using the stored volley direction and magnitude.
+      const angleOffset = BLADE_KNIFE_ANGLES[volley.shotsFired];
+      fireBladeKnife(state, unit, volley.direction, volley.magnitude, angleOffset);
+      volley.shotsFired += 1;
+      volley.nextShotTime = now + BLADE_KNIFE_SHOT_INTERVAL * 1000;
+    }
+
+    if (volley.shotsFired >= BLADE_KNIFE_ANGLES.length && now > volley.nextShotTime) {
+      unit.bladeVolley = undefined;
+    }
+  }
+
+  if (unit.daggerAmbush) {
+    const ambush = unit.daggerAmbush;
+
+    if (!ambush.knifeFired && now >= ambush.throwTime) {
+      // Throw the ambush knife after the reveal delay.
+      fireDaggerKnife(state, unit, ambush.direction);
+      ambush.knifeFired = true;
+    }
+
+    if (now >= ambush.recloakTime) {
+      // Reapply permanent cloak after the post-throw reveal window.
+      unit.daggerAmbush = undefined;
+      unit.cloaked = { endTime: Number.POSITIVE_INFINITY };
+    }
   }
 
   if (unit.bombardmentActive) {
@@ -1925,7 +2375,8 @@ function updateAbilityEffects(unit: Unit, state: GameState, deltaTime: number): 
           }
           
           // Bombardment is a ranged attack, so it respects armor
-          const finalDamage = calculateDamageWithArmor(damage, enemy.armor, false, def.modifiers);
+          const shieldMultiplier = getShieldDamageMultiplier(state, enemy, 'ranged');
+          const finalDamage = calculateDamageWithArmor(damage, enemy.armor, false, def.modifiers) * shieldMultiplier;
           enemy.hp -= finalDamage;
           
           if (state.matchStats && unit.owner === 0) {
@@ -1970,7 +2421,8 @@ function updateAbilityEffects(unit: Unit, state: GameState, deltaTime: number): 
         const target = enemies.find((e) => distance(e.position, missile.target) < 0.5);
         if (target) {
           const def = UNIT_DEFINITIONS[target.type];
-          const finalDamage = calculateDamageWithArmor(missile.damage, target.armor, false, def.modifiers);
+          const shieldMultiplier = getShieldDamageMultiplier(state, target, 'ranged');
+          const finalDamage = calculateDamageWithArmor(missile.damage, target.armor, false, def.modifiers) * shieldMultiplier;
           target.hp -= finalDamage;
           
           if (state.matchStats && unit.owner === 0) {
@@ -2101,6 +2553,10 @@ function updateBases(state: GameState, deltaTime: number): void {
       if (base.shieldActive) {
         base.shieldActive = undefined;
       }
+      // Reset speed when not moving
+      if (base.currentSpeed !== undefined && base.currentSpeed > 0) {
+        base.currentSpeed = Math.max(0, base.currentSpeed - DECELERATION_RATE * deltaTime);
+      }
       return;
     }
 
@@ -2111,6 +2567,8 @@ function updateBases(state: GameState, deltaTime: number): void {
       if (base.shieldActive) {
         base.shieldActive = undefined;
       }
+      // Reset speed when reaching target
+      base.currentSpeed = 0;
       return;
     }
 
@@ -2119,6 +2577,7 @@ function updateBases(state: GameState, deltaTime: number): void {
     if (!baseTypeDef.canMove) {
       // Stationary base cannot move
       base.movementTarget = null;
+      base.currentSpeed = 0;
       return;
     }
 
@@ -2130,7 +2589,32 @@ function updateBases(state: GameState, deltaTime: number): void {
     const direction = normalize(subtract(base.movementTarget, base.position));
     // Use baseTypeDef moveSpeed if > 0, otherwise use faction baseMoveSpeed
     const moveSpeed = baseTypeDef.moveSpeed > 0 ? baseTypeDef.moveSpeed : FACTION_DEFINITIONS[base.faction].baseMoveSpeed;
-    const movement = scale(direction, moveSpeed * deltaTime);
+    
+    // Initialize base current speed if needed
+    if (base.currentSpeed === undefined) {
+      base.currentSpeed = 0;
+    }
+    
+    // Apply acceleration/deceleration to base movement
+    const targetSpeed = moveSpeed;
+    const speedDiff = targetSpeed - base.currentSpeed;
+    
+    if (speedDiff > 0) {
+      // Accelerating
+      const acceleration = Math.min(ACCELERATION_RATE * deltaTime, speedDiff);
+      base.currentSpeed += acceleration;
+    } else if (speedDiff < 0) {
+      // Decelerating (shouldn't happen while moving, but for completeness)
+      const deceleration = Math.max(-DECELERATION_RATE * deltaTime, speedDiff);
+      base.currentSpeed += deceleration;
+    }
+    
+    // Apply minimum speed threshold
+    if (base.currentSpeed < MIN_SPEED_THRESHOLD) {
+      base.currentSpeed = 0;
+    }
+    
+    const movement = scale(direction, base.currentSpeed * deltaTime);
     base.position = add(base.position, movement);
     
     // Update shield endTime to keep it active while moving (assault base)
@@ -2142,21 +2626,23 @@ function updateBases(state: GameState, deltaTime: number): void {
 
 function executeAbility(state: GameState, unit: Unit, node: CommandNode): void {
   if (node.type !== 'ability') return;
-  if (unit.abilityCooldown > 0) return;
-
-  const def = UNIT_DEFINITIONS[unit.type];
 
   soundManager.playAbility();
 
-  // Execute generic laser ability for all units
-  executeGenericLaser(state, unit, node.direction);
-  unit.abilityCooldown = def.abilityCooldown;
+  // Execute generic laser ability for all units except the Blade (warrior) who throws knives instead
+  if (unit.type !== 'warrior') {
+    executeGenericLaser(state, unit, node.direction);
+  }
+  // Ability cooldowns are temporarily disabled, so keep cooldown cleared.
+  unit.abilityCooldown = 0;
   
   // Keep existing specific abilities as additional effects
-  // Warriors intentionally use only the generic laser to avoid dash-related crashes.
   if (unit.type === 'marine') {
     createAbilityEffect(state, unit, node.position, 'burst-fire');
     executeBurstFire(state, unit, node.direction);
+  } else if (unit.type === 'warrior') {
+    createAbilityEffect(state, unit, node.position, 'blade-volley');
+    executeBladeVolley(state, unit, node.direction);
   } else if (unit.type === 'snaker') {
     createAbilityEffect(state, unit, node.position, 'line-jump');
     unit.lineJumpTelegraph = {
@@ -2169,7 +2655,7 @@ function executeAbility(state: GameState, unit: Unit, node: CommandNode): void {
     executeShieldDome(state, unit);
   } else if (unit.type === 'scout') {
     createAbilityEffect(state, unit, node.position, 'cloak');
-    executeCloak(state, unit);
+    executeDaggerAmbush(state, unit, node.direction);
   } else if (unit.type === 'artillery') {
     createAbilityEffect(state, unit, node.position, 'bombardment');
     executeArtilleryBombardment(state, unit, node.position);
@@ -2298,11 +2784,13 @@ function executeGenericLaser(state: GameState, unit: Unit, direction: { x: numbe
     const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x); // 2D cross product for perpendicular distance
     
     if (projectedDist > 0 && projectedDist < laserRange && perpDist < laserWidthHalf) {
-      enemy.hp -= damage;
+      const shieldMultiplier = getShieldDamageMultiplier(state, enemy, 'ranged');
+      const finalDamage = damage * shieldMultiplier;
+      enemy.hp -= finalDamage;
       createHitSparks(state, enemy.position, laserColor, 6);
       
       if (state.matchStats && unit.owner === 0) {
-        state.matchStats.damageDealtByPlayer += damage;
+        state.matchStats.damageDealtByPlayer += finalDamage;
       }
     }
   });
@@ -2325,6 +2813,59 @@ function executeGenericLaser(state: GameState, unit: Unit, direction: { x: numbe
   });
 }
 
+function executeBladeVolley(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const now = Date.now();
+  const magnitude = distance({ x: 0, y: 0 }, direction);
+  const normalized = normalize(direction);
+
+  // Store volley timing so updateAbilityEffects can emit knives in sequence.
+  unit.bladeVolley = {
+    startTime: now,
+    direction: normalized,
+    magnitude,
+    scrunchEndTime: now + BLADE_KNIFE_SCRUNCH_DURATION * 1000,
+    nextShotTime: now + BLADE_KNIFE_SCRUNCH_DURATION * 1000,
+    shotsFired: 0,
+  };
+}
+
+// Spawn a single throwing knife projectile for the Blade volley.
+function fireBladeKnife(state: GameState, unit: Unit, direction: Vector2, magnitude: number, angleOffset: number): void {
+  const clampedMagnitude = Math.min(magnitude, ABILITY_MAX_RANGE);
+  const speedScale = clampedMagnitude / ABILITY_MAX_RANGE;
+  const baseAngle = direction.x === 0 && direction.y === 0 ? 0 : Math.atan2(direction.y, direction.x);
+  const angle = baseAngle + (angleOffset * Math.PI) / 180;
+  const throwDirection = { x: Math.cos(angle), y: Math.sin(angle) };
+  const throwRange = Math.max(0.5, clampedMagnitude);
+  const targetPos = add(unit.position, scale(throwDirection, throwRange));
+  const damage = BLADE_KNIFE_DAMAGE * unit.damageMultiplier;
+  const projectile = createProjectile(state, unit, targetPos, undefined, {
+    speed: BLADE_KNIFE_BASE_SPEED * speedScale,
+    damage,
+    kind: 'knife',
+    lifetime: BLADE_KNIFE_LIFETIME,
+    startOffset: BLADE_KNIFE_START_OFFSET,
+  });
+
+  state.projectiles.push(projectile);
+}
+
+// Spawn a single throwing knife projectile for the Dagger ambush ability.
+function fireDaggerKnife(state: GameState, unit: Unit, direction: Vector2): void {
+  const throwDirection = direction.x === 0 && direction.y === 0 ? { x: 1, y: 0 } : normalize(direction);
+  const targetPos = add(unit.position, scale(throwDirection, DAGGER_KNIFE_RANGE));
+  const damage = DAGGER_KNIFE_DAMAGE * unit.damageMultiplier;
+  const projectile = createProjectile(state, unit, targetPos, undefined, {
+    speed: DAGGER_KNIFE_SPEED,
+    damage,
+    kind: 'knife',
+    lifetime: DAGGER_KNIFE_LIFETIME,
+    startOffset: DAGGER_KNIFE_START_OFFSET,
+  });
+
+  state.projectiles.push(projectile);
+}
+
 function executeBurstFire(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
   const def = UNIT_DEFINITIONS.marine;
   const shotDamage = 2 * unit.damageMultiplier;
@@ -2336,6 +2877,11 @@ function executeBurstFire(state: GameState, unit: Unit, direction: { x: number; 
   const dir = normalize(direction);
 
   for (let i = 0; i < 10; i++) {
+    if (!state.shells) {
+      state.shells = [];
+    }
+    state.shells.push(createEjectedShell(unit, dir));
+
     let hitTarget: Unit | Base | null = null;
     let minDist = Infinity;
 
@@ -2354,13 +2900,16 @@ function executeBurstFire(state: GameState, unit: Unit, direction: { x: number; 
     });
 
     if (hitTarget) {
-      (hitTarget as Unit).hp -= shotDamage;
+      const targetUnit = hitTarget as Unit;
+      const shieldMultiplier = getShieldDamageMultiplier(state, targetUnit, 'ranged');
+      const finalDamage = shotDamage * shieldMultiplier;
+      targetUnit.hp -= finalDamage;
       
       // Create hit spark effect
       createHitSparks(state, hitTarget.position, state.players[unit.owner].color, 4);
       
       if (state.matchStats && unit.owner === 0) {
-        state.matchStats.damageDealtByPlayer += shotDamage;
+        state.matchStats.damageDealtByPlayer += finalDamage;
       }
     }
   }
@@ -2406,12 +2955,21 @@ function executeShieldDome(state: GameState, unit: Unit): void {
   unit.shieldActive = {
     endTime: Date.now() + 5000,
     radius: 4,
+    rangedDamageMultiplier: 0.5,
+    meleeDamageMultiplier: 1,
   };
 }
 
-function executeCloak(state: GameState, unit: Unit): void {
-  unit.cloaked = {
-    endTime: Date.now() + 6000,
+function executeDaggerAmbush(state: GameState, unit: Unit, direction: Vector2): void {
+  const now = Date.now();
+
+  // Reveal immediately, then schedule the delayed knife throw and recloak.
+  unit.cloaked = undefined;
+  unit.daggerAmbush = {
+    throwTime: now + DAGGER_KNIFE_DELAY * 1000,
+    recloakTime: now + (DAGGER_KNIFE_DELAY + DAGGER_REVEAL_AFTER_THROW) * 1000,
+    direction: normalize(direction),
+    knifeFired: false,
   };
 }
 
@@ -2448,7 +3006,7 @@ function executeHealPulse(state: GameState, unit: Unit): void {
 }
 
 function executeMissileBarrage(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
-  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  const enemies = getTargetableEnemies(state, unit);
   const dir = normalize(direction);
   
   const missiles: Array<{ position: Vector2; target: Vector2; damage: number }> = [];
@@ -2479,8 +3037,7 @@ function executeMissileBarrage(state: GameState, unit: Unit, direction: { x: num
 // Radiant faction abilities
 function executePrecisionShot(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
   const dir = normalize(direction);
-  const enemies = state.units.filter((u) => u.owner !== unit.owner);
-  const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
+  const enemies = getTargetableEnemies(state, unit);
   
   let target: Unit | Base | null = null;
   let maxDist = 0;
@@ -2501,13 +3058,16 @@ function executePrecisionShot(state: GameState, unit: Unit, direction: { x: numb
   });
   
   if (target) {
+    const targetUnit = target as Unit;
     const damage = 50 * unit.damageMultiplier;
-    (target as Unit).hp -= damage;
+    const shieldMultiplier = getShieldDamageMultiplier(state, targetUnit, 'ranged');
+    const finalDamage = damage * shieldMultiplier;
+    targetUnit.hp -= finalDamage;
     createHitSparks(state, target.position, state.players[unit.owner].color, 8);
     createEnergyPulse(state, target.position, state.players[unit.owner].color, 1.5, 0.3);
     
     if (state.matchStats && unit.owner === 0) {
-      state.matchStats.damageDealtByPlayer += damage;
+      state.matchStats.damageDealtByPlayer += finalDamage;
     }
   }
 }
@@ -2583,7 +3143,7 @@ function executeHolyStrike(state: GameState, unit: Unit, direction: { x: number;
 // Aurum faction abilities
 function executeLethalStrike(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
   const dir = normalize(direction);
-  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  const enemies = getTargetableEnemies(state, unit);
   
   let target: Unit | null = null;
   let minDist = Infinity;
@@ -2659,6 +3219,7 @@ function executeRiposte(state: GameState, unit: Unit): void {
   unit.shieldActive = {
     endTime: Date.now() + 2000,
     radius: 2,
+    meleeDamageMultiplier: 0.3,
   };
   
   // Damage nearby enemies
@@ -2715,6 +3276,7 @@ function executeCosmicBarrier(state: GameState, unit: Unit, targetPos: { x: numb
   unit.shieldActive = {
     endTime: Date.now() + 6000,
     radius: 3,
+    meleeDamageMultiplier: 0.3,
   };
   
   createEnergyPulse(state, targetPos, state.players[unit.owner].color, 3, 0.5);
@@ -3033,6 +3595,7 @@ function executeProtectAllies(state: GameState, unit: Unit): void {
       ally.shieldActive = {
         endTime: Date.now() + 6000,
         radius: 3,
+        meleeDamageMultiplier: 0.3,
       };
       createEnergyPulse(state, ally.position, state.players[unit.owner].color, 2, 0.3);
     }
@@ -3285,6 +3848,150 @@ function updateCombat(state: GameState, deltaTime: number): void {
   });
 }
 
+// Helper function to map combo swing number to animation settings.
+function getBladeSwingSettings(swingNumber: number): { swingType: 'first' | 'second' | 'third'; duration: number } {
+  if (swingNumber === 1) {
+    return { swingType: 'first', duration: BLADE_SWORD_SWING_DURATION_FIRST };
+  }
+
+  if (swingNumber === 2) {
+    return { swingType: 'second', duration: BLADE_SWORD_SWING_DURATION_SECOND };
+  }
+
+  return { swingType: 'third', duration: BLADE_SWORD_SWING_DURATION_THIRD };
+}
+
+// Helper function to queue the Blade sword swing animation with a 3-swing combo.
+function createBladeSwing(unit: Unit, direction: Vector2): void {
+  const now = Date.now();
+
+  // If a combo is already running or cooling down, avoid restarting the swing sequence.
+  if (unit.swordSwingCombo && now < unit.swordSwingCombo.resetAvailableTime) {
+    return;
+  }
+
+  // Start (or restart) the combo so the update loop can play all three swings with pauses.
+  unit.swordSwingCombo = {
+    direction,
+    nextSwingNumber: 1,
+    nextSwingTime: now,
+    resetAvailableTime: now,
+  };
+}
+
+/**
+ * Apply Blade combo damage for a single swing using a semicircle (swings 1-2) or full circle (swing 3).
+ * @param state - Current game state for finding nearby enemies and bases
+ * @param unit - Blade unit performing the swing
+ * @param swing - Sword swing data including direction and swing number
+ */
+function applyBladeSwingDamage(state: GameState, unit: Unit, swing: { direction: Vector2; swingNumber: number }): void {
+  const def = UNIT_DEFINITIONS[unit.type];
+  const swingDirection = swing.direction.x === 0 && swing.direction.y === 0
+    ? { x: Math.cos(unit.rotation ?? 0), y: Math.sin(unit.rotation ?? 0) }
+    : normalize(swing.direction);
+  const damage = def.attackDamage * unit.damageMultiplier;
+  const useFullCircle = swing.swingNumber === 3;
+  let closestTargetPos: Vector2 | null = null;
+  let closestTargetDist = Number.POSITIVE_INFINITY;
+
+  // Damage enemy units within the swing radius, filtering out cloaked and flying targets.
+  state.units.forEach((enemy) => {
+    if (enemy.owner === unit.owner || enemy.cloaked) {
+      return;
+    }
+
+    const enemyDef = UNIT_DEFINITIONS[enemy.type];
+    if (enemyDef.modifiers.includes('flying')) {
+      return;
+    }
+
+    const dist = distance(unit.position, enemy.position);
+    if (dist > def.attackRange) {
+      return;
+    }
+
+    // For the first two swings, only hit targets in the forward semicircle.
+    const dot = dist === 0 ? 0 : (enemy.position.x - unit.position.x) * swingDirection.x + (enemy.position.y - unit.position.y) * swingDirection.y;
+    if (!useFullCircle && dot < 0) {
+      return;
+    }
+
+    const shieldMultiplier = getShieldDamageMultiplier(state, enemy, 'melee');
+    const finalDamage = damage * shieldMultiplier;
+    enemy.hp -= finalDamage;
+    createHitSparks(state, enemy.position, state.players[unit.owner].color, 6);
+
+    if (dist < closestTargetDist) {
+      closestTargetDist = dist;
+      closestTargetPos = { ...enemy.position };
+    }
+
+    if (state.matchStats && unit.owner === 0) {
+      state.matchStats.damageDealtByPlayer += finalDamage;
+    }
+  });
+
+  // Damage enemy bases if the Blade can damage structures.
+  if (def.canDamageStructures) {
+    state.bases.forEach((base) => {
+      if (base.owner === unit.owner) {
+        return;
+      }
+
+      const baseRadius = BASE_SIZE_METERS / 2;
+      const dist = distance(unit.position, base.position);
+      if (dist > def.attackRange + baseRadius) {
+        return;
+      }
+
+      // For the first two swings, only hit bases in the forward semicircle.
+      const dot = (base.position.x - unit.position.x) * swingDirection.x + (base.position.y - unit.position.y) * swingDirection.y;
+      if (!useFullCircle && dot < 0) {
+        return;
+      }
+
+      // Skip damage when the base shield is active.
+      if (base.shieldActive && Date.now() < base.shieldActive.endTime) {
+        createHitSparks(state, base.position, state.players[base.owner].color, 12);
+        return;
+      }
+
+      const prevHp = base.hp;
+      base.hp -= damage;
+
+      if (prevHp > 0 && base.hp < prevHp) {
+        createImpactEffect(state, base.position, state.players[unit.owner].color, 2.5);
+      }
+
+      if (state.matchStats) {
+        if (base.owner === 0) {
+          state.matchStats.damageToPlayerBase += damage;
+        } else {
+          state.matchStats.damageToEnemyBase += damage;
+        }
+
+        if (unit.owner === 0) {
+          state.matchStats.damageDealtByPlayer += damage;
+        }
+      }
+
+      if (dist < closestTargetDist) {
+        closestTargetDist = dist;
+        closestTargetPos = { ...base.position };
+      }
+    });
+  }
+
+  // Trigger a melee impact effect toward the nearest valid target for feedback.
+  if (closestTargetPos) {
+    unit.meleeAttackEffect = {
+      endTime: Date.now() + MELEE_EFFECT_DURATION * 1000,
+      targetPos: { ...closestTargetPos },
+    };
+  }
+}
+
 // Helper function to perform an attack
 function performAttack(state: GameState, unit: Unit, target: Unit | Base): void {
   const def = UNIT_DEFINITIONS[unit.type];
@@ -3303,6 +4010,13 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
     const targetUnit = 'type' in target ? (target as Unit) : undefined;
     const projectile = createProjectile(state, unit, targetPos, targetUnit);
     state.projectiles.push(projectile);
+
+    if (unit.type === 'marine') {
+      if (!state.shells) {
+        state.shells = [];
+      }
+      state.shells.push(createEjectedShell(unit, direction));
+    }
     
     // Create muzzle flash effect for visual feedback
     const color = state.players[unit.owner].color;
@@ -3312,22 +4026,20 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
       soundManager.playAttack();
     }
   } else if (def.attackType === 'melee') {
+    if (unit.type === 'warrior') {
+      // Blade uses a combo swing sequence, so damage is applied per swing instead of per target.
+      createBladeSwing(unit, direction);
+      return;
+    }
+
     // Apply instant damage for melee and create visual effect
     let damage = def.attackDamage * unit.damageMultiplier;
 
     if ('type' in target) {
       const targetUnit = target as Unit;
       
-      if (targetUnit.shieldActive) {
-        const allies = state.units.filter((u) => 
-          u.owner === targetUnit.owner && 
-          u.shieldActive && 
-          distance(u.position, targetUnit.position) <= u.shieldActive.radius
-        );
-        if (allies.length > 0) {
-          damage *= 0.3;
-        }
-      }
+      // Apply any active shield dome modifiers for melee hits.
+      damage *= getShieldDamageMultiplier(state, targetUnit, 'melee');
 
       targetUnit.hp -= damage;
       
@@ -3340,6 +4052,10 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
         endTime: Date.now() + MELEE_EFFECT_DURATION * 1000,
         targetPos: { ...targetUnit.position },
       };
+
+      if (unit.type === 'warrior') {
+        createBladeSwing(unit, direction);
+      }
     } else {
       const targetBase = target as Base;
       // Check if base has active shield (mobile faction)
@@ -3376,6 +4092,10 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
         endTime: Date.now() + MELEE_EFFECT_DURATION * 1000,
         targetPos: { ...targetBase.position },
       };
+
+      if (unit.type === 'warrior') {
+        createBladeSwing(unit, direction);
+      }
     }
     
     if (unit.owner === 0 && Math.random() < 0.3) {
@@ -3559,6 +4279,11 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
     attackCooldown: 0, // Initialize attack cooldown
   };
   
+  // Dagger units start permanently cloaked until they reveal for ambush attacks.
+  if (type === 'scout') {
+    unit.cloaked = { endTime: Number.POSITIVE_INFINITY };
+  }
+
   // Initialize particles only for Solari faction units
   const solariUnits: Set<UnitType> = new Set(['flare', 'nova', 'eclipse', 'corona', 'supernova', 'zenith', 'pulsar', 'celestial', 'voidwalker', 'chronomancer', 'nebula', 'quasar']);
   

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useKV } from './hooks/useKV';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS, FactionType, FACTION_DEFINITIONS, BASE_TYPE_DEFINITIONS, BaseType, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS } from './lib/types';
-import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, shouldUsePortraitCoordinates, updateViewportScale, calculateDefaultRallyPoint, createMiningDepots } from './lib/gameUtils';
+import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, shouldUsePortraitCoordinates, updateViewportScale, calculateDefaultRallyPoint, createMiningDepots, getArenaHeight } from './lib/gameUtils';
 import { updateGame } from './lib/simulation';
 import { updateAI } from './lib/ai';
 import { renderGame } from './lib/renderer';
@@ -11,12 +11,13 @@ import { initializeCamera, updateCamera, zoomCamera, panCamera, resetCamera } fr
 import { updateVisualEffects, createCelebrationParticles } from './lib/visualEffects';
 import { FormationType, getFormationName } from './lib/formations';
 import { initializeFloaters, updateFloaters } from './lib/floaters';
+import { initializeFieldParticles, updateFieldParticles } from './lib/fieldParticles';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Label } from './components/ui/label';
 import { Switch } from './components/ui/switch';
 import { Slider } from './components/ui/slider';
-import { GameController, Robot, ListChecks, GearSix, ArrowLeft, Flag, MapPin, WifiHigh, ChartBar, SpeakerHigh, SpeakerSlash, Info, Book } from '@phosphor-icons/react';
+import { GameController, Robot, ListChecks, GearSix, ArrowLeft, Flag, MapPin, WifiHigh, ChartBar, SpeakerHigh, SpeakerSlash, Info, Book, GraduationCap } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { UnitSelectionScreen } from './components/UnitSelectionScreen';
 import { MapSelectionScreen } from './components/MapSelectionScreen';
@@ -27,6 +28,7 @@ import { MultiplayerLobbyScreen } from './components/MultiplayerLobbyScreen';
 import { StatisticsScreen } from './components/StatisticsScreen';
 import { ModifierHelpScreen } from './components/ModifierHelpScreen';
 import { UnitInformationScreen } from './components/UnitInformationScreen';
+import { TutorialScreen } from './components/TutorialScreen';
 import { VictoryScreen } from './components/VictoryScreen';
 import { AnimatedBackground } from './components/AnimatedBackground';
 import { getMapById, getValidBasePositions, createBoundaryObstacles } from './lib/maps';
@@ -224,6 +226,7 @@ function App() {
         const bg = gameStateRef.current.backgroundBattle;
         updateGame(bg, deltaTime);
         updateFloaters(bg, deltaTime);
+        updateFieldParticles(bg, deltaTime);
         updateAI(bg, deltaTime, true); // Both players are AI
         updateCamera(bg, deltaTime);
         updateVisualEffects(bg, deltaTime);
@@ -255,6 +258,7 @@ function App() {
         
         // Update floaters during countdown
         updateFloaters(gameStateRef.current, deltaTime);
+        updateFieldParticles(gameStateRef.current, deltaTime);
         updateVisualEffects(gameStateRef.current, deltaTime);
         
         if (elapsed >= 3000) {
@@ -291,6 +295,9 @@ function App() {
           // Update floaters physics
           updateFloaters(gameStateRef.current, deltaTime);
           
+          // Update field particles physics
+          updateFieldParticles(gameStateRef.current, deltaTime);
+          
           // Update multiplayer synchronization for online games
           if (gameStateRef.current.vsMode === 'online' && multiplayerManagerRef.current && multiplayerSyncRef.current) {
             const localPlayerIndex = multiplayerManagerRef.current.getIsHost() ? 0 : 1;
@@ -309,6 +316,11 @@ function App() {
             updateCamera(gameStateRef.current, deltaTime);
           }
           updateVisualEffects(gameStateRef.current, deltaTime);
+          
+          // Check if mode changed to victory (base destroyed or time limit reached)
+          if (gameStateRef.current.mode === 'victory') {
+            setRenderTrigger(prev => prev + 1);
+          }
         }
         
         if (gameStateRef.current.matchTimeLimit && !gameStateRef.current.timeoutWarningShown) {
@@ -786,6 +798,12 @@ function App() {
     setRenderTrigger(prev => prev + 1);
   };
 
+  const goToTutorial = () => {
+    soundManager.playButtonClick();
+    gameStateRef.current.mode = 'tutorial';
+    setRenderTrigger(prev => prev + 1);
+  };
+
   const goToLANMode = () => {
     soundManager.playButtonClick();
     // Disconnect any existing LAN store
@@ -1198,8 +1216,9 @@ function App() {
           {/* 50% transparent black overlay */}
           <div className="absolute inset-0 bg-black opacity-50 pointer-events-none" />
           
-          <div className="absolute inset-0 flex items-center justify-center animate-in fade-in duration-500">
-            <div className="flex flex-col gap-4 w-80 max-w-[90vw]">
+          <div className="absolute inset-0 overflow-y-auto">
+            <div className="min-h-full flex items-center justify-center p-4 py-8 animate-in fade-in duration-500">
+              <div className="flex flex-col gap-4 w-80 max-w-[90vw] my-auto">
               <div className="flex justify-center mb-4 animate-in fade-in zoom-in-95 duration-700">
                 <img 
                   src={`${assetBaseUrl}ASSETS/sprites/menus/mainMenuTitle.png`} 
@@ -1229,6 +1248,15 @@ function App() {
               variant="secondary"
             >
               Quick Match
+            </Button>
+
+            <Button
+              onClick={goToTutorial}
+              className="h-12 text-base orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/50"
+              variant="secondary"
+            >
+              <GraduationCap className="mr-2" size={24} />
+              Tutorial
             </Button>
 
             <Button
@@ -1293,6 +1321,7 @@ function App() {
               <Book className="mr-2" size={24} />
               Unit Information
             </Button>
+            </div>
           </div>
         </div>
         </>
@@ -1583,6 +1612,8 @@ function App() {
           onBack={backToMenu}
           onSelectLevel={handleLevelSelect}
           currentMap={selectedMap || 'open'}
+          chessMode={chessMode ?? false}
+          onChessModeChange={setChessMode}
         />
       )}
 
@@ -1592,6 +1623,8 @@ function App() {
           onMatchmaking={goToMatchmaking}
           onCustomGame={goToMultiplayer}
           onLAN={goToLANMode}
+          chessMode={chessMode ?? false}
+          onChessModeChange={setChessMode}
         />
       )}
 
@@ -1636,6 +1669,12 @@ function App() {
         />
       )}
 
+      {gameState.mode === 'tutorial' && (
+        <TutorialScreen
+          onBack={backToMenu}
+        />
+      )}
+
       {gameState.mode === 'victory' && (
         <VictoryScreen
           gameState={gameState}
@@ -1655,7 +1694,7 @@ function App() {
 
 function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
   const arenaWidth = ARENA_WIDTH_METERS;
-  const arenaHeight = ARENA_HEIGHT_METERS;
+  const arenaHeight = getArenaHeight();
 
   // Randomly select factions for both players
   const factions: FactionType[] = ['radiant', 'solari', 'aurum'];
@@ -1696,6 +1735,7 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
     vsMode: 'ai',
     units: [],
     projectiles: [],
+    shells: [],
     obstacles: obstacles,
     miningDepots: miningDepots,
     bases: [
@@ -1760,6 +1800,7 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
     nebulaClouds,
     stars,
     floaters: initializeFloaters(),
+    fieldParticles: initializeFieldParticles(arenaWidth, arenaHeight),
     // Keep gameplay coordinates consistent across devices
     isPortrait: shouldUsePortraitCoordinates(),
   };
@@ -1771,6 +1812,7 @@ function createInitialState(): GameState {
     vsMode: null,
     units: [],
     projectiles: [],
+    shells: [],
     bases: [],
     miningDepots: [],
     obstacles: [],
@@ -1805,7 +1847,7 @@ function createInitialState(): GameState {
 
 function createCountdownState(mode: 'ai' | 'player', settings: GameState['settings'], canvas: HTMLCanvasElement): GameState {
   const arenaWidth = ARENA_WIDTH_METERS;
-  const arenaHeight = ARENA_HEIGHT_METERS;
+  const arenaHeight = getArenaHeight();
 
   const selectedMapDef = getMapById(settings.selectedMap) || getMapById('open')!;
   const mapObstacles = selectedMapDef.obstacles;
@@ -1833,6 +1875,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     vsMode: mode,
     units: [],
     projectiles: [],
+    shells: [],
     obstacles: obstacles,
     miningDepots: miningDepots,
     bases: [
@@ -1899,6 +1942,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     nebulaClouds,
     stars,
     floaters: initializeFloaters(),
+    fieldParticles: initializeFieldParticles(arenaWidth, arenaHeight),
     // Keep gameplay coordinates consistent across devices
     isPortrait: shouldUsePortraitCoordinates(),
   };
@@ -1906,7 +1950,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
 
 function createGameState(mode: 'ai' | 'player', settings: GameState['settings']): GameState {
   const arenaWidth = ARENA_WIDTH_METERS;
-  const arenaHeight = ARENA_HEIGHT_METERS;
+  const arenaHeight = getArenaHeight();
 
   const selectedMapDef = getMapById(settings.selectedMap) || getMapById('open')!;
   const mapObstacles = selectedMapDef.obstacles;
@@ -1929,6 +1973,7 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
     vsMode: mode,
     units: [],
     projectiles: [],
+    shells: [],
     obstacles: obstacles,
     miningDepots: miningDepots,
     bases: [
@@ -1985,12 +2030,13 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
     // Keep gameplay coordinates consistent across devices
     isPortrait: shouldUsePortraitCoordinates(),
     floaters: initializeFloaters(),
+    fieldParticles: initializeFieldParticles(arenaWidth, arenaHeight),
   };
 }
 
 function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
   const arenaWidth = ARENA_WIDTH_METERS;
-  const arenaHeight = ARENA_HEIGHT_METERS;
+  const arenaHeight = getArenaHeight();
 
   const selectedMapDef = getMapById(lobby.mapId) || getMapById('open')!;
   const mapObstacles = selectedMapDef.obstacles;
@@ -2014,6 +2060,7 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
     vsMode: 'online',
     units: [],
     projectiles: [],
+    shells: [],
     obstacles: obstacles,
     miningDepots: miningDepots,
     bases: [
@@ -2081,12 +2128,13 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
     // Keep gameplay coordinates consistent across devices
     isPortrait: shouldUsePortraitCoordinates(),
     floaters: initializeFloaters(),
+    fieldParticles: initializeFieldParticles(arenaWidth, arenaHeight),
   };
 }
 
 function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: HTMLCanvasElement): GameState {
   const arenaWidth = ARENA_WIDTH_METERS;
-  const arenaHeight = ARENA_HEIGHT_METERS;
+  const arenaHeight = getArenaHeight();
 
   const selectedMapDef = getMapById(lobby.mapId) || getMapById('open')!;
   const mapObstacles = selectedMapDef.obstacles;
@@ -2115,6 +2163,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
     vsMode: 'online',
     units: [],
     projectiles: [],
+    shells: [],
     obstacles: obstacles,
     miningDepots: miningDepots,
     bases: [
@@ -2192,6 +2241,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
     nebulaClouds,
     stars,
     floaters: initializeFloaters(),
+    fieldParticles: initializeFieldParticles(arenaWidth, arenaHeight),
     // Keep gameplay coordinates consistent across devices
     isPortrait: shouldUsePortraitCoordinates(),
   };

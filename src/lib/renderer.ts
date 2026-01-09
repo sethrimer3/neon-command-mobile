@@ -9,7 +9,8 @@ import {
   RESOURCE_DEPOSIT_SIZE_METERS,
   MINING_DRONE_SIZE_MULTIPLIER,
   UNIT_DEFINITIONS,
-  Projectile,
+  BLADE_SWORD_PARTICLE_COUNT,
+  BLADE_SWORD_PARTICLE_SPACING_METERS,
   LASER_RANGE,
   ABILITY_MAX_RANGE,
   ABILITY_LASER_DURATION,
@@ -21,7 +22,7 @@ import {
   ARENA_HEIGHT_METERS,
   Floater,
 } from './types';
-import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract, getViewportOffset, getViewportDimensions } from './gameUtils';
+import { positionToPixels, metersToPixels, distance, add, scale, normalize, subtract, getViewportOffset, getViewportDimensions, getArenaHeight } from './gameUtils';
 import { applyCameraTransform, removeCameraTransform, worldToScreen } from './camera';
 import { Obstacle } from './maps';
 import { MOTION_TRAIL_DURATION, QUEUE_FADE_DURATION, QUEUE_DRAW_DURATION, QUEUE_UNDRAW_DURATION } from './simulation';
@@ -36,55 +37,6 @@ let projectileSpriteLoaded = false;
 projectileSprite.onload = () => {
   projectileSpriteLoaded = true;
 };
-
-// Load faction-based sprites
-type FactionSpriteCache = {
-  miningDrone?: HTMLImageElement;
-  miningDepot?: HTMLImageElement;
-  resource?: HTMLImageElement;
-  base1?: HTMLImageElement;
-  base2?: HTMLImageElement;
-  units?: Map<string, HTMLImageElement>;
-};
-
-const factionSprites: Record<string, FactionSpriteCache> = {
-  radiant: {},
-  aurum: {},
-  solari: {},
-};
-
-// Helper to load an image and mark it as loaded
-function loadFactionImage(path: string): HTMLImageElement {
-  const img = new Image();
-  img.src = `${assetBaseUrl}${path}`;
-  return img;
-}
-
-// Load mining sprites for all factions
-factionSprites.radiant.miningDrone = loadFactionImage('ASSETS/sprites/factions/radiant/mining/radiantMiningDrone.png');
-factionSprites.radiant.miningDepot = loadFactionImage('ASSETS/sprites/factions/radiant/mining/radiantMiningDepot.png');
-
-factionSprites.aurum.miningDrone = loadFactionImage('ASSETS/sprites/factions/aurum/mining/aurumMiningDrone.png');
-factionSprites.aurum.miningDepot = loadFactionImage('ASSETS/sprites/factions/aurum/mining/aurumMiningDepot.png');
-
-factionSprites.solari.miningDrone = loadFactionImage('ASSETS/sprites/factions/solari/mining/solariMiningDrone.png');
-factionSprites.solari.miningDepot = loadFactionImage('ASSETS/sprites/factions/solari/mining/solariMiningDepot.png');
-factionSprites.solari.resource = loadFactionImage('ASSETS/sprites/factions/solari/mining/solariResource.png');
-
-// Load base sprites for all factions
-factionSprites.radiant.base1 = loadFactionImage('ASSETS/sprites/factions/radiant/bases/radiantBase1.png');
-factionSprites.radiant.base2 = loadFactionImage('ASSETS/sprites/factions/radiant/bases/radiantBase2.png');
-
-factionSprites.aurum.base1 = loadFactionImage('ASSETS/sprites/factions/aurum/bases/aurumBase1.png');
-factionSprites.aurum.base2 = loadFactionImage('ASSETS/sprites/factions/aurum/bases/aurumBase2.png');
-
-factionSprites.solari.base1 = loadFactionImage('ASSETS/sprites/factions/solari/bases/solariBase1.png');
-factionSprites.solari.base2 = loadFactionImage('ASSETS/sprites/factions/solari/bases/solariBase2.png');
-
-// Load unit sprites for radiant
-factionSprites.radiant.units = new Map();
-factionSprites.radiant.units.set('marine', loadFactionImage('ASSETS/sprites/factions/radiant/units/marine.png'));
-factionSprites.radiant.units.set('warrior', loadFactionImage('ASSETS/sprites/factions/radiant/units/warrior.png'));
 
 function getUnitSizeMeters(unit: Unit): number {
   // Expand mining drones so their visuals match the larger resource structures.
@@ -167,6 +119,17 @@ const ABILITY_ARROW_LENGTH = 12; // Arrow length for ability command visualizati
 const PROJECTILE_SIZE_METERS = UNIT_SIZE_METERS * 1.2;
 const PROJECTILE_TRAIL_LENGTH_METERS = UNIT_SIZE_METERS * 0.9;
 const PROJECTILE_OUTER_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.3;
+
+// Blade sword particle visuals
+const BLADE_SWORD_PARTICLE_RADIUS_METERS = UNIT_SIZE_METERS * 0.18; // Increased from 0.12 for better visibility as floating magnets
+const BLADE_SWORD_SWING_ARC = Math.PI * 1.2; // Wider arc for more visible swings
+const BLADE_SWORD_WHIP_DELAY = 0.04; // seconds of delay per particle index for whip effect
+const BLADE_SWORD_MOVEMENT_LAG_SECONDS = 0.1; // seconds of movement lag per particle index
+// Blade sword rest position and swing arcs
+const BLADE_SWORD_REST_ANGLE = -110 * Math.PI / 180; // 110 degrees clockwise from movement direction
+const BLADE_SWORD_FIRST_SWING_ARC = 210 * Math.PI / 180; // 210 degree counterclockwise arc
+const BLADE_SWORD_SECOND_SWING_ARC = 180 * Math.PI / 180; // 180 degree clockwise arc
+const BLADE_SWORD_THIRD_SWING_ARC = 2 * Math.PI; // 360 degree full rotation
 const PROJECTILE_INNER_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.15;
 const PROJECTILE_CORE_RADIUS_METERS = UNIT_SIZE_METERS * 0.25;
 const PROJECTILE_CORE_INNER_RADIUS_METERS = UNIT_SIZE_METERS * 0.125;
@@ -287,6 +250,8 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
       drawCommandQueues(ctx, state);
       drawMotionTrails(ctx, state);
       drawProjectiles(ctx, state);
+      drawShells(ctx, state);
+      drawFieldParticles(ctx, state);
       drawUnits(ctx, state);
       drawExplosionParticles(ctx, state);
       drawHitSparks(ctx, state);
@@ -567,7 +532,7 @@ function drawPlayfieldBorder(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasEl
   const viewportDimensions = getViewportDimensions();
   // Use the rotated viewport dimensions so the border hugs the visible arena
   const playfieldWidthPixels = viewportDimensions.width || metersToPixels(ARENA_WIDTH_METERS);
-  const playfieldHeightPixels = viewportDimensions.height || metersToPixels(ARENA_HEIGHT_METERS);
+  const playfieldHeightPixels = viewportDimensions.height || metersToPixels(getArenaHeight());
   
   // Border thickness is 1 meter
   const borderThickness = metersToPixels(1);
@@ -712,45 +677,23 @@ function drawMiningDepots(ctx: CanvasRenderingContext2D, state: GameState): void
     
     // Depot base
     const depotColor = state.players[depot.owner].color;
-    const faction = depot.owner === 0 ? state.settings.playerFaction : state.settings.enemyFaction;
-    const depotSprite = factionSprites[faction]?.miningDepot;
+    ctx.fillStyle = 'oklch(0.25 0.05 0)';
+    ctx.strokeStyle = depotColor;
+    ctx.lineWidth = 2;
     
-    if (depotSprite && depotSprite.complete) {
-      // Draw sprite centered on depot position
-      ctx.globalAlpha = 0.9;
-      const size = Math.max(depotWidth, depotHeight);
-      ctx.drawImage(depotSprite, depotScreenPos.x - size / 2, depotScreenPos.y - size / 2, size, size);
-      
-      // Add colored glow
-      ctx.globalAlpha = 0.3;
-      ctx.shadowColor = depotColor;
-      ctx.shadowBlur = 15;
-      ctx.drawImage(depotSprite, depotScreenPos.x - size / 2, depotScreenPos.y - size / 2, size, size);
-      
-      // Reset shadow and alpha
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
-      ctx.globalAlpha = 1.0;
-    } else {
-      // Fallback to rectangle rendering
-      ctx.fillStyle = 'oklch(0.25 0.05 0)';
-      ctx.strokeStyle = depotColor;
-      ctx.lineWidth = 2;
-      
-      ctx.fillRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
-      ctx.strokeRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
-      
-      // Add glow effect
-      applyGlowEffect(ctx, state, depotColor, 10);
-      ctx.strokeRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
-      clearGlowEffect(ctx, state);
-      
-      // Draw a center marker scaled to the depot footprint
-      ctx.fillStyle = depotColor;
-      ctx.beginPath();
-      ctx.arc(depotScreenPos.x, depotScreenPos.y, metersToPixels(DEPOT_SIZE * 0.2), 0, Math.PI * 2);
-      ctx.fill();
-    }
+    ctx.fillRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
+    ctx.strokeRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
+    
+    // Add glow effect
+    applyGlowEffect(ctx, state, depotColor, 10);
+    ctx.strokeRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
+    clearGlowEffect(ctx, state);
+    
+    // Draw a center marker scaled to the depot footprint
+    ctx.fillStyle = depotColor;
+    ctx.beginPath();
+    ctx.arc(depotScreenPos.x, depotScreenPos.y, metersToPixels(DEPOT_SIZE * 0.2), 0, Math.PI * 2);
+    ctx.fill();
     
     ctx.restore();
     
@@ -770,56 +713,31 @@ function drawMiningDepots(ctx: CanvasRenderingContext2D, state: GameState): void
           ? 'oklch(0.85 0.20 95)'
           : 'oklch(0.50 0.15 95)'; // Yellow photon color
       
-      // Check if we have a faction-specific resource sprite (only solari has one currently)
-      const faction = depot.owner === 0 ? state.settings.playerFaction : state.settings.enemyFaction;
-      const resourceSprite = factionSprites[faction]?.resource;
+      ctx.fillStyle = depositColor;
+      ctx.strokeStyle = depotColor;
+      ctx.lineWidth = 1.5;
       
-      if (resourceSprite && resourceSprite.complete) {
-        // Draw sprite centered on deposit position
-        ctx.globalAlpha = 0.9;
-        const size = depositWidth * 1.5;
-        ctx.drawImage(resourceSprite, depositScreenPos.x - size / 2, depositScreenPos.y - size / 2, size, size);
-        
-        // Add colored glow for occupied deposits
-        if (isOccupied) {
-          ctx.globalAlpha = 0.4;
-          ctx.shadowColor = depositColor;
-          ctx.shadowBlur = 10;
-          ctx.drawImage(resourceSprite, depositScreenPos.x - size / 2, depositScreenPos.y - size / 2, size, size);
+      // Draw hexagon
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+        const x = depositScreenPos.x + Math.cos(angle) * depositWidth / 2;
+        const y = depositScreenPos.y + Math.sin(angle) * depositWidth / 2;
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
         }
-        
-        // Reset shadow and alpha
-        ctx.shadowColor = 'transparent';
-        ctx.shadowBlur = 0;
-        ctx.globalAlpha = 1.0;
-      } else {
-        // Fallback to hexagon rendering
-        ctx.fillStyle = depositColor;
-        ctx.strokeStyle = depotColor;
-        ctx.lineWidth = 1.5;
-        
-        // Draw hexagon
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-          const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
-          const x = depositScreenPos.x + Math.cos(angle) * depositWidth / 2;
-          const y = depositScreenPos.y + Math.sin(angle) * depositWidth / 2;
-          if (i === 0) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
-        }
-        ctx.closePath();
-        ctx.fill();
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      
+      // Add glow for occupied deposits
+      if (isOccupied) {
+        applyGlowEffect(ctx, state, depositColor, 8);
         ctx.stroke();
-        
-        // Add glow for occupied deposits
-        if (isOccupied) {
-          applyGlowEffect(ctx, state, depositColor, 8);
-          ctx.stroke();
-          clearGlowEffect(ctx, state);
-        }
+        clearGlowEffect(ctx, state);
       }
       
       ctx.restore();
@@ -1173,64 +1091,26 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
     const time = Date.now() / 1000;
     const pulseIntensity = Math.sin(time * 1.5) * 0.3 + 0.7; // Pulse between 0.4 and 1.0
     
-    // Try to use faction-specific base sprite
-    const faction = base.owner === 0 ? state.settings.playerFaction : state.settings.enemyFaction;
-    const baseSprite = base.baseType === 'defense' ? factionSprites[faction]?.base2 : factionSprites[faction]?.base1;
-    const useSpriteRendering = baseSprite && baseSprite.complete;
-    
-    if (useSpriteRendering) {
-      // Render base using sprite
+    // Draw shield effect for mobile faction when shield is active
+    if (base.shieldActive && Date.now() < base.shieldActive.endTime) {
+      const shieldRadius = size * 0.8;
       ctx.save();
-      ctx.globalAlpha = 0.9;
-      const spriteSize = size * 1.2;
-      ctx.drawImage(baseSprite, screenPos.x - spriteSize / 2, screenPos.y - spriteSize / 2, spriteSize, spriteSize);
-      
-      // Add colored glow
-      ctx.globalAlpha = 0.3 * pulseIntensity;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.6;
       ctx.shadowColor = color;
-      ctx.shadowBlur = base.isSelected ? 35 : 15;
-      ctx.drawImage(baseSprite, screenPos.x - spriteSize / 2, screenPos.y - spriteSize / 2, spriteSize, spriteSize);
-      
-      ctx.globalAlpha = 1.0;
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, shieldRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 0.2;
+      ctx.fill();
       ctx.restore();
-      
-      // Add selection indicator if selected
-      if (base.isSelected) {
-        ctx.save();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 4;
-        ctx.globalAlpha = 0.7 * pulseIntensity;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 25;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y, size * 0.7, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
     }
-    
-    // Only render shape-based base if sprite is not used
-    if (!useSpriteRendering) {
-      // Draw shield effect for mobile faction when shield is active
-      if (base.shieldActive && Date.now() < base.shieldActive.endTime) {
-        const shieldRadius = size * 0.8;
-        ctx.save();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 3;
-        ctx.globalAlpha = 0.6;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 20;
-        ctx.beginPath();
-        ctx.arc(screenPos.x, screenPos.y, shieldRadius, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 0.2;
-        ctx.fill();
-        ctx.restore();
-      }
 
-      const factionDef = FACTION_DEFINITIONS[base.faction];
-      
-      if (base.isSelected) {
+    const factionDef = FACTION_DEFINITIONS[base.faction];
+    
+    if (base.isSelected) {
       ctx.save();
       ctx.shadowColor = color;
       ctx.shadowBlur = 35 * pulseIntensity;
@@ -1384,7 +1264,6 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
       
       ctx.restore();
     }
-    } // End of shape-based rendering conditional
 
     if (state.mode === 'game' && (!state.matchStartAnimation || state.matchStartAnimation.phase === 'go')) {
       const doorSize = size / 3;
@@ -1654,16 +1533,209 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
     ctx.translate(screenPos.x, screenPos.y);
     ctx.rotate(angle);
     
-    // Draw tiny rectangle bullet (4px x 2px)
-    const bulletWidth = 4;
-    const bulletHeight = 2;
-    
-    // Draw the rectangle centered
-    ctx.fillStyle = projectile.color;
-    ctx.fillRect(-bulletWidth / 2, -bulletHeight / 2, bulletWidth, bulletHeight);
+    if (projectile.kind === 'knife') {
+      // Draw slim knife silhouette with a pointed tip
+      const bladeLength = 6;
+      const bladeWidth = 2;
+      ctx.fillStyle = projectile.color;
+      ctx.beginPath();
+      ctx.moveTo(bladeLength / 2, 0);
+      ctx.lineTo(-bladeLength / 2, -bladeWidth / 2);
+      ctx.lineTo(-bladeLength / 2, bladeWidth / 2);
+      ctx.closePath();
+      ctx.fill();
+      
+      ctx.strokeStyle = projectile.color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-bladeLength / 2, 0);
+      ctx.lineTo(-bladeLength / 2 - 2, 0);
+      ctx.stroke();
+    } else {
+      // Draw tiny rectangle bullet (4px x 2px)
+      const bulletWidth = 4;
+      const bulletHeight = 2;
+      
+      // Draw the rectangle centered
+      ctx.fillStyle = projectile.color;
+      ctx.fillRect(-bulletWidth / 2, -bulletHeight / 2, bulletWidth, bulletHeight);
+    }
     
     ctx.restore();
   });
+}
+
+function drawShells(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.shells || state.shells.length === 0) return;
+  if (!state.settings.enableParticleEffects) return;
+
+  state.shells.forEach((shell) => {
+    if (!isOnScreen(shell.position, ctx.canvas, state, OFFSCREEN_CULLING_MARGIN)) {
+      return;
+    }
+
+    const screenPos = positionToPixels(shell.position);
+    const shellWidth = 3;
+    const shellHeight = 1.5;
+
+    ctx.save();
+    ctx.translate(screenPos.x, screenPos.y);
+    ctx.rotate(shell.rotation);
+    ctx.fillStyle = 'oklch(0.75 0.15 85)';
+    ctx.fillRect(-shellWidth / 2, -shellHeight / 2, shellWidth, shellHeight);
+    ctx.restore();
+  });
+}
+
+// Helper function to calculate blade particle angle for a given swing state and progress
+function calculateBladeSwingAngle(
+  baseRotation: number,
+  swingType: 'first' | 'second' | 'third',
+  progress: number
+): number {
+  const restAngle = baseRotation + BLADE_SWORD_REST_ANGLE;
+  
+  if (swingType === 'first') {
+    // First swing: 210-degree arc counterclockwise from rest position
+    return restAngle + progress * BLADE_SWORD_FIRST_SWING_ARC;
+  } else if (swingType === 'second') {
+    // Second swing: 180-degree arc clockwise from end of first swing
+    const firstSwingEnd = restAngle + BLADE_SWORD_FIRST_SWING_ARC;
+    return firstSwingEnd - progress * BLADE_SWORD_SECOND_SWING_ARC;
+  } else {
+    // Third swing: 360-degree full rotation
+    const secondSwingEnd = restAngle + BLADE_SWORD_FIRST_SWING_ARC - BLADE_SWORD_SECOND_SWING_ARC;
+    return secondSwingEnd + progress * BLADE_SWORD_THIRD_SWING_ARC;
+  }
+}
+
+/**
+ * Sample the Blade movement history to retrieve a lagged transform for sword particles.
+ * @param unit - Blade unit to sample
+ * @param targetTime - Time in milliseconds to sample from history
+ * @returns Lagged position and rotation to render against
+ */
+function sampleBladeTrail(unit: Unit, targetTime: number): { position: Vector2; rotation: number } {
+  const history = unit.bladeTrailHistory;
+
+  if (!history || history.length === 0) {
+    return { position: unit.position, rotation: unit.rotation ?? 0 };
+  }
+
+  // Clamp to oldest/newest samples when requested time is outside the buffer.
+  if (targetTime <= history[0].timestamp) {
+    return { position: history[0].position, rotation: history[0].rotation };
+  }
+  const lastSample = history[history.length - 1];
+  if (targetTime >= lastSample.timestamp) {
+    return { position: lastSample.position, rotation: lastSample.rotation };
+  }
+
+  // Find the two samples surrounding the target time for interpolation.
+  for (let i = history.length - 2; i >= 0; i -= 1) {
+    const current = history[i];
+    const next = history[i + 1];
+    if (current.timestamp <= targetTime && next.timestamp >= targetTime) {
+      const span = next.timestamp - current.timestamp || 1;
+      const t = (targetTime - current.timestamp) / span;
+      const position = {
+        x: current.position.x + (next.position.x - current.position.x) * t,
+        y: current.position.y + (next.position.y - current.position.y) * t,
+      };
+      const rotation = current.rotation + (next.rotation - current.rotation) * t;
+      return { position, rotation };
+    }
+  }
+
+  return { position: unit.position, rotation: unit.rotation ?? 0 };
+}
+
+function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
+  const now = Date.now();
+  const collapseSword = !!unit.bladeVolley;
+  const particleRadius = metersToPixels(BLADE_SWORD_PARTICLE_RADIUS_METERS);
+  const particleSpacing = metersToPixels(BLADE_SWORD_PARTICLE_SPACING_METERS);
+  const swing = unit.swordSwing;
+  const swingHold = unit.swordSwingHold;
+
+  ctx.save();
+  ctx.fillStyle = color;
+
+  for (let i = 0; i < BLADE_SWORD_PARTICLE_COUNT; i++) {
+    const lagSeconds = BLADE_SWORD_MOVEMENT_LAG_SECONDS * (i + 1);
+    const trailSample = sampleBladeTrail(unit, now - lagSeconds * 1000);
+    const baseRotation = trailSample.rotation;
+    const baseScreenPos = positionToPixels(trailSample.position);
+    let angle = baseRotation;
+    let hasSwingMotion = false;
+    let elapsed = 0;
+    let delayedElapsed = 0;
+
+    if (!collapseSword && swing) {
+      hasSwingMotion = true;
+      elapsed = (now - swing.startTime) / 1000;
+      delayedElapsed = Math.max(0, elapsed - BLADE_SWORD_WHIP_DELAY * i);
+      const progress = Math.min(1, delayedElapsed / swing.duration);
+      
+      angle = calculateBladeSwingAngle(baseRotation, swing.swingType, progress);
+    } else if (!collapseSword && swingHold) {
+      // Hold the sword at the final angle of the last completed swing between combo hits.
+      angle = calculateBladeSwingAngle(baseRotation, swingHold.swingType, 1);
+    } else if (!collapseSword) {
+      // When not swinging and not collapsed, hold sword at rest position
+      angle = baseRotation + BLADE_SWORD_REST_ANGLE;
+    }
+
+    // Each particle has its own orbital radius (different distances from unit center)
+    const offset = collapseSword ? particleSpacing : particleSpacing * (i + 1);
+    const particlePos = {
+      x: baseScreenPos.x + Math.cos(angle) * offset,
+      y: baseScreenPos.y + Math.sin(angle) * offset,
+    };
+
+    // Draw trail if swinging
+    if (hasSwingMotion && swing) {
+      // Calculate previous angle for trail (16ms ago ~60fps)
+      const prevProgress = Math.max(0, Math.min(1, (delayedElapsed - 0.016) / swing.duration));
+      const prevAngle = calculateBladeSwingAngle(baseRotation, swing.swingType, prevProgress);
+      
+      const prevParticlePos = {
+        x: baseScreenPos.x + Math.cos(prevAngle) * offset,
+        y: baseScreenPos.y + Math.sin(prevAngle) * offset,
+      };
+
+      // Draw trail
+      ctx.strokeStyle = color;
+      ctx.lineWidth = particleRadius * 0.8;
+      ctx.globalAlpha = 0.3;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(prevParticlePos.x, prevParticlePos.y);
+      ctx.lineTo(particlePos.x, particlePos.y);
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
+    }
+
+    // Draw each particle as a distinct glowing orb with minimal blur to keep them separated
+    ctx.globalAlpha = collapseSword ? 0.9 : 1.0;
+    
+    // Draw a very subtle glow for each particle separately to maintain distinction
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 2; // Reduced from 6 to 2 to make particles distinctly separated
+    
+    ctx.beginPath();
+    ctx.arc(particlePos.x, particlePos.y, particleRadius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Add a brighter core to make the particle look more like a floating magnet
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = (collapseSword ? 0.9 : 1.0) * 0.7; // Increased from 0.6 to 0.7 for brighter core
+    ctx.beginPath();
+    ctx.arc(particlePos.x, particlePos.y, particleRadius * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
 }
 
 function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string, showNumeric: boolean): void {
@@ -1724,6 +1796,11 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     if (!isOnScreen(unit.position, ctx.canvas, state, OFFSCREEN_CULLING_MARGIN)) {
       return;
     }
+
+    // Hide cloaked enemy units from the player's view.
+    if (unit.cloaked && unit.owner !== 0) {
+      return;
+    }
     
     let screenPos = positionToPixels(unit.position);
     const color = state.players[unit.owner].color;
@@ -1766,6 +1843,10 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
       drawParticles(ctx, unit);
     }
 
+    if (!useLOD && unit.type === 'warrior' && state.settings.enableParticleEffects) {
+      drawBladeSword(ctx, unit, screenPos, color);
+    }
+
     if (unit.cloaked) {
       ctx.globalAlpha = 0.3;
     }
@@ -1774,9 +1855,7 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
 
-    if (unit.type === 'miningDrone') {
-      drawMiningDrone(ctx, unit, screenPos, color, state);
-    } else if (unit.type === 'snaker') {
+    if (unit.type === 'snaker') {
       drawSnaker(ctx, unit, screenPos, color);
     } else if (unit.type === 'tank') {
       drawTank(ctx, unit, screenPos, color);
@@ -1818,45 +1897,23 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.translate(screenPos.x, screenPos.y);
       ctx.rotate(rotation);
       
-      // Check if we should render with faction sprite
-      const faction = unit.owner === 0 ? state.settings.playerFaction : state.settings.enemyFaction;
-      const unitSprite = factionSprites[faction]?.units?.get(unit.type);
+      // Draw unit as circle with directional indicator
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.fill();
       
-      if (unitSprite && unitSprite.complete && (unit.type === 'marine' || unit.type === 'warrior')) {
-        // Draw sprite centered on unit position
-        ctx.globalAlpha = 0.9;
-        const size = radius * 2.5; // Make sprites slightly larger
-        ctx.drawImage(unitSprite, -size / 2, -size / 2, size, size);
-        
-        // Add colored glow
-        ctx.globalAlpha = 0.3;
-        ctx.shadowColor = glowColor;
-        ctx.shadowBlur = glowIntensity;
-        ctx.drawImage(unitSprite, -size / 2, -size / 2, size, size);
-        
-        // Reset shadow and alpha
-        ctx.shadowColor = 'transparent';
-        ctx.shadowBlur = 0;
-        ctx.globalAlpha = 1.0;
-      } else {
-        // Draw unit as circle with directional indicator (fallback)
-        ctx.beginPath();
-        ctx.arc(0, 0, radius, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Draw directional indicator (small line pointing forward)
-        ctx.strokeStyle = glowColor;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(radius * 0.7, 0);
-        ctx.stroke();
-      }
+      // Draw directional indicator (small line pointing forward)
+      ctx.strokeStyle = glowColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(radius * 0.7, 0);
+      ctx.stroke();
       
       ctx.restore();
       
-      // Add extra glow for marines if using fallback rendering
-      if (unit.type === 'marine' && !(unitSprite && unitSprite.complete)) {
+      // Add extra glow for marines
+      if (unit.type === 'marine') {
         ctx.save();
         ctx.shadowColor = glowColor;
         ctx.shadowBlur = glowIntensity * 1.5;
@@ -1865,21 +1922,6 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
         ctx.arc(screenPos.x, screenPos.y, radius * 1.2, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1.0;
-        ctx.restore();
-      }
-
-      if (unit.type === 'warrior' && !(unitSprite && unitSprite.complete)) {
-        ctx.save();
-        ctx.translate(screenPos.x, screenPos.y);
-        ctx.rotate(rotation);
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(-radius, -radius);
-        ctx.lineTo(radius, radius);
-        ctx.moveTo(radius, -radius);
-        ctx.lineTo(-radius, radius);
-        ctx.stroke();
         ctx.restore();
       }
 
@@ -2293,66 +2335,6 @@ function drawInterceptor(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: {
   ctx.lineTo(screenPos.x - radius * 0.6, screenPos.y);
   ctx.closePath();
   ctx.fill();
-}
-
-function drawMiningDrone(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string, state: GameState): void {
-  const unitSizeMeters = getUnitSizeMeters(unit);
-  const radius = metersToPixels(unitSizeMeters / 2);
-  
-  // Get faction sprite based on owner
-  const faction = unit.owner === 0 ? state.settings.playerFaction : state.settings.enemyFaction;
-  const sprite = factionSprites[faction]?.miningDrone;
-  
-  if (sprite && sprite.complete) {
-    // Draw sprite centered on unit position
-    ctx.save();
-    ctx.translate(screenPos.x, screenPos.y);
-    
-    // Add team color tint overlay
-    ctx.globalAlpha = 0.9;
-    const size = radius * 2;
-    ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
-    
-    // Add colored glow
-    ctx.globalAlpha = 0.3;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 15;
-    ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
-    
-    // Reset shadow and alpha
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1.0;
-    
-    ctx.restore();
-  } else {
-    // Fallback to simple rendering if sprite not loaded
-    const rotation = unit.rotation || 0;
-    ctx.save();
-    ctx.translate(screenPos.x, screenPos.y);
-    ctx.rotate(rotation);
-    
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 12;
-    
-    // Draw as diamond shape (drone body)
-    ctx.beginPath();
-    ctx.moveTo(0, -radius);
-    ctx.lineTo(radius, 0);
-    ctx.lineTo(0, radius);
-    ctx.lineTo(-radius, 0);
-    ctx.closePath();
-    ctx.fill();
-    
-    // Draw center core
-    ctx.fillStyle = 'white';
-    ctx.globalAlpha = 0.9;
-    ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.3, 0, Math.PI * 2);
-    ctx.fill();
-    
-    ctx.restore();
-  }
 }
 
 function drawShieldDome(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
@@ -3659,6 +3641,31 @@ function drawBounceParticles(ctx: CanvasRenderingContext2D, state: GameState): v
   });
 }
 
+// Draw field particles for mid-field physics effects
+function drawFieldParticles(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.fieldParticles || state.fieldParticles.length === 0) return;
+  if (!state.settings.enableParticleEffects) return; // Skip if particles disabled
+  
+  state.fieldParticles.forEach((particle) => {
+    const screenPos = positionToPixels(particle.position);
+    const size = metersToPixels(particle.size);
+    
+    ctx.save();
+    ctx.globalAlpha = particle.opacity;
+    
+    // Draw white particle with subtle glow
+    ctx.fillStyle = COLORS.white;
+    ctx.shadowColor = COLORS.white;
+    ctx.shadowBlur = size * 3;
+    
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
+  });
+}
+
 // Draw celebration particles for victory screen
 function drawCelebrationParticles(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (!state.celebrationParticles || state.celebrationParticles.length === 0) return;
@@ -3931,7 +3938,7 @@ function drawMinimap(ctx: CanvasRenderingContext2D, state: GameState, canvas: HT
   
   // Calculate arena bounds
   const arenaWidth = ARENA_WIDTH_METERS; // meters
-  const arenaHeight = ARENA_HEIGHT_METERS; // meters
+  const arenaHeight = getArenaHeight(); // meters
   
   ctx.save();
   
@@ -4038,6 +4045,11 @@ function drawMinimap(ctx: CanvasRenderingContext2D, state: GameState, canvas: HT
   
   // Draw units with slight glow
   state.units.forEach(unit => {
+    // Hide cloaked enemy units from the player's minimap view.
+    if (unit.cloaked && unit.owner !== 0) {
+      return;
+    }
+
     const pos = toMinimapPos(unit.position);
     const color = state.players[unit.owner].color;
     

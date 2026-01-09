@@ -1,5 +1,5 @@
 import { Floater, Vector2, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS, GameState } from './types';
-import { generateId } from './gameUtils';
+import { generateId, getArenaHeight } from './gameUtils';
 
 // Floater constants
 const FLOATER_COUNT = 25; // 20-30 floaters
@@ -34,6 +34,7 @@ const FLOATER_COLORS = [
  */
 export function initializeFloaters(): Floater[] {
   const floaters: Floater[] = [];
+  const arenaHeight = getArenaHeight();
   
   for (let i = 0; i < FLOATER_COUNT; i++) {
     const angle = Math.random() * Math.PI * 2;
@@ -43,7 +44,7 @@ export function initializeFloaters(): Floater[] {
       id: generateId(),
       position: {
         x: Math.random() * ARENA_WIDTH_METERS,
-        y: Math.random() * ARENA_HEIGHT_METERS,
+        y: Math.random() * arenaHeight,
       },
       velocity: {
         x: Math.cos(angle) * speed,
@@ -66,6 +67,8 @@ export function initializeFloaters(): Floater[] {
 export function updateFloaters(state: GameState, deltaTime: number): void {
   if (!state.floaters) return;
   
+  const arenaHeight = getArenaHeight();
+  
   for (const floater of state.floaters) {
     // Apply velocity to position
     floater.position.x += floater.velocity.x * deltaTime;
@@ -83,8 +86,8 @@ export function updateFloaters(state: GameState, deltaTime: number): void {
     if (floater.position.y < 0) {
       floater.position.y = 0;
       floater.velocity.y = Math.abs(floater.velocity.y);
-    } else if (floater.position.y > ARENA_HEIGHT_METERS) {
-      floater.position.y = ARENA_HEIGHT_METERS;
+    } else if (floater.position.y > arenaHeight) {
+      floater.position.y = arenaHeight;
       floater.velocity.y = -Math.abs(floater.velocity.y);
     }
     

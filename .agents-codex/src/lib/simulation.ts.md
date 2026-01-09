@@ -31,8 +31,11 @@ Contains the core game simulation loop and logic. Handles unit movement, combat,
 - **Notes:** 
   - Handles ability cooldowns and active effects
   - Updates particle physics for marines (attraction-based orbital motion)
+  - Records Blade movement history snapshots for per-particle lag in the renderer
   - Processes line jump telegraphs (0.5s delay before execution)
   - Executes movement from command queues
+  - Applies local collision push to keep units from stacking while still moving
+  - Blocks movement only on obstacle collisions (unit overlap handled by avoidance)
   - Applies promotion system based on distance traveled
   - Queue bonus grants extra distance credit (10% per queued move node)
 
@@ -81,11 +84,12 @@ Contains the core game simulation loop and logic. Handles unit movement, combat,
 
 ### Ability System Functions
 Multiple functions for unit abilities:
-- `executeScoutCloak()` - Scout invisibility
-- `executeTankShield()` - Tank's protective dome
+- `executeDaggerAmbush()` - Dagger reveal timing and delayed knife throw
+- `executeTankShield()` - Tank's protective dome with ranged damage reduction
 - `executeArtilleryBombardment()` - Artillery siege attack
 - `executeMedicHeal()` - Medic's healing pulse
 - `executeInterceptorMissiles()` - Interceptor's missile barrage
+- `applyBladeSwingDamage()` - Applies Blade swing damage in a forward semicircle or full circle based on swing number
 
 ## Terminology
 - **Delta Time**: Time elapsed between frames (in seconds)
@@ -104,13 +108,23 @@ Multiple functions for unit abilities:
 - Line jump has 500ms telegraph delay before execution
 - Income rate formula: floor(elapsedSeconds / 10) + 1
 - All abilities have unique implementations and effects
-- Warrior abilities intentionally stop at the shared laser effect to avoid dash-related crashes
+- Blade (warrior) now skips the shared laser effect and triggers a knife volley instead
 - Combat uses attack rate to determine damage intervals
 - Bases can move but slowly (for gameplay balance)
 - Spawn rally points are clamped inside the 1m boundary to prevent off-screen movement targets
-- Ability commands execute immediately when dequeued, using current position if the unit drifted from the queued anchor
+- Ability commands execute after the unit reaches the queued anchor, moving the unit toward that point if needed
+- Ability cooldowns are temporarily disabled, so ability use is no longer blocked by cooldown timers
+- Tank shield domes now reduce ranged damage for allies in range and projectiles curve toward nearby enemy tanks
+- Dagger units remain cloaked by default, revealing briefly to throw an ambush knife before recloaking
 - Mining income now counts every active worker id per deposit, and dead drones are pruned from deposit worker lists
 - Mining drones can wait briefly using cadence delays so paired drones alternate between depot and deposit
+- Unit movement collision checks now block on any unit overlap without attempting friendly sliding paths
+- Local collision push keeps units from overlapping while allowing them to keep moving through crowds
+- Obstacle collisions still block movement to prevent clipping through walls
+- Blade melee swings now queue through a full three-hit combo with short pauses via the swordSwingCombo state, preventing mid-swing resets
+- Blade swings now apply area damage per swing with 1s pauses between combo hits and after the final spin
+- Blade movement history is recorded each frame to support lagged sword particle rendering
+- Blade sword swing completions now store a hold state so the sword stays at its final angle between combo swings
 
 ### Known Issues
 - None currently identified
@@ -138,6 +152,14 @@ Multiple functions for unit abilities:
 - **2026-01-07**: Removed the warrior's execute dash extra effect so warriors only trigger the shared laser ability and cleaned up dash timing logic
 - **2025-03-10**: Scaled particle orbit distance and orbital forces with unit size to keep unit-following particles proportional after size changes
 - **2025-03-17**: Updated mining income and mining drone cadence handling to support two drones per deposit
+- **2025-03-19**: Removed friendly sliding collision resolution so units block on overlap instead of shifting around each other
+- **2025-03-20**: Replaced hard unit blocking with local collision pushes so group movement stays smooth while still respecting obstacles
+- **2025-03-21**: Moved ability execution to fire on arrival at the queued anchor and disabled cooldown enforcement
+- **2025-03-22**: Added Blade knife volley ability logic, marine projectile speed boost, and shell casing physics with field particle bounces
+- **2026-01-08**: Added tank projectile attraction, ranged-only shield dome mitigation, and Dagger ambush reveal/knife timing with permanent cloak
+- **2026-01-10**: Queued Blade sword swing combo sequencing so each attack plays all three swings with pauses before reset
+- **2026-01-11**: Applied Blade swing damage in semicircle/full-circle arcs, extended combo pauses to 1s, and recorded Blade trail history for particle lag rendering
+- **2026-01-12**: Held Blade sword angles after each swing and added a final-swing hold delay before returning to rest
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds

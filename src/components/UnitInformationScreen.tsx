@@ -23,9 +23,9 @@ function getAbilityDescription(unitType: UnitType): string {
   const abilityDescriptions: Record<UnitType, string> = {
     // Radiant faction
     marine: 'Fires 10 rapid shots in a cone, each dealing 2 damage (affected by damage multiplier) to enemies in the target direction (max range: 8m). Also fires a laser dealing 10 damage.',
-    warrior: 'Fires a laser dealing 10 damage in the target direction.',
-    tank: 'Creates a protective shield dome with 4m radius for 5 seconds, reducing incoming damage by 70%. Also fires a laser dealing 10 damage.',
-    scout: 'Becomes invisible for 6 seconds, avoiding enemy detection and attacks. Also fires a laser dealing 10 damage.',
+    warrior: 'Compresses the sword into one point, then throws five knives at -10°, -5°, 0°, 5°, and 10° in quick succession. Knife speed scales with the drag distance and each knife deals 6 damage (affected by damage multiplier).',
+    tank: 'Creates a protective shield dome with 4m radius for 5 seconds, reducing incoming ranged damage by 50% for friendly units inside (melee damage is unaffected). Also fires a laser dealing 10 damage.',
+    scout: 'Always cloaked and cannot be targeted by enemies. Activating the ability reveals the Dagger, throws a knife after 2s in the cast direction (8 damage, affected by damage multiplier), then remains visible for 1s before recloaking. Also fires a laser dealing 10 damage.',
     artillery: 'Launches a bombardment at target location after 1.5s delay, dealing area damage. Also fires a laser dealing 10 damage.',
     medic: 'Heals all friendly units within 5m radius for 50 HP and bases for 100 HP. Also fires a laser dealing 10 damage.',
     interceptor: 'Fires up to 6 missiles at nearby enemies in target direction, each dealing 15 damage (max range: 12m). Also fires a laser dealing 10 damage.',
@@ -73,6 +73,10 @@ function getAttackDescription(unitType: UnitType): string {
   
   if (def.attackType === 'none') {
     return 'This unit does not have a normal attack.';
+  }
+
+  if (unitType === 'warrior') {
+    return `Melee combo: Performs three swings. Swings 1-2 hit a 180° arc in front, swing 3 hits a full 360° radius. Each swing deals ${def.attackDamage} damage within ${def.attackRange}m (ignores armor).`;
   }
   
   const attackTypeText = def.attackType === 'melee' ? 'Melee attack' : 'Ranged attack';
@@ -190,7 +194,7 @@ function getUnitIcon(unitType: UnitType): string {
     warrior: '⚔️',
     snaker: '🐍',
     tank: '🛡️',
-    scout: '👁️',
+    scout: '🗡️',
     artillery: '💥',
     medic: '⚕️',
     interceptor: '✈️',

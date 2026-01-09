@@ -1,9 +1,11 @@
 # Agents Documentation Guidelines
 
 ## Build Information
-**Current Build Number:** 19
+**Current Build Number:** 29
 
-**Note:** With each pull request, increment the build number by one.
+**IMPORTANT:** With each pull request, you must increment the build number by one in TWO places:
+1. Update the build number in this file (agents.md)
+2. Update the build number in index.html (the `<div id="build-badge">BUILD X</div>` line)
 
 ## Purpose
 This document provides guidelines for AI agents working with the SoL-RTS codebase. Following these guidelines ensures code quality, maintainability, and effective collaboration between agents and developers.

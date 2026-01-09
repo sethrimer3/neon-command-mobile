@@ -1,6 +1,8 @@
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { ScrollArea } from './ui/scroll-area';
+import { Label } from './ui/label';
+import { Switch } from './ui/switch';
 import { ArrowLeft, MapPin } from '@phosphor-icons/react';
 import { ARENA_HEIGHT_METERS, ARENA_WIDTH_METERS, BASE_SIZE_METERS } from '@/lib/types';
 import { getMapList, getValidBasePositions, MapDefinition } from '@/lib/maps';
@@ -125,12 +127,16 @@ interface LevelSelectionScreenProps {
   onBack: () => void;
   onSelectLevel: (mapId: string) => void;
   currentMap: string;
+  chessMode: boolean;
+  onChessModeChange: (enabled: boolean) => void;
 }
 
 export function LevelSelectionScreen({
   onBack,
   onSelectLevel,
   currentMap,
+  chessMode,
+  onChessModeChange,
 }: LevelSelectionScreenProps) {
   const maps = getMapList();
 
@@ -142,8 +148,25 @@ export function LevelSelectionScreen({
           <CardTitle className="orbitron text-2xl">Select Level</CardTitle>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col space-y-4">
+          {/* Chess Mode Toggle */}
+          <div className="p-4 rounded-lg border-2 border-border bg-secondary/30">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="chess-mode-level" className="flex flex-col gap-1">
+                <span className="text-base font-semibold">Chess Mode</span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  Queue 1 move per unit every 10s
+                </span>
+              </Label>
+              <Switch
+                id="chess-mode-level"
+                checked={chessMode}
+                onCheckedChange={onChessModeChange}
+              />
+            </div>
+          </div>
+
           {/* Constrain height so the list reliably scrolls on smaller viewports. */}
-          <ScrollArea className="h-[60vh]">
+          <ScrollArea className="h-[50vh]">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-1 pr-3">
               {maps.map((map) => (
                 <div

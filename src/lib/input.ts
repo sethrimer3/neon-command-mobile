@@ -758,37 +758,51 @@ function isDoubleTap(state: GameState, screenPos: { x: number; y: number }): boo
   return false;
 }
 
-// Handle double-tap: deselect all units and remove last move command
-function handleDoubleTap(state: GameState): void {
-  // Remove the last move command from all selected units
-  state.units.forEach((unit) => {
-    if (state.selectedUnits.has(unit.id) && unit.commandQueue.length > 0) {
-      // Find and remove the last move command
-      for (let i = unit.commandQueue.length - 1; i >= 0; i--) {
-        if (unit.commandQueue[i].type === 'move') {
-          unit.commandQueue.splice(i, 1);
-          break;
-        }
-      }
-    }
+// Determine whether a unit should be visible/selectable to the given player.
+function isUnitVisibleToPlayer(unit: Unit, playerIndex: number): boolean {
+  if (unit.owner === playerIndex) {
+    return true;
+  }
+
+  return !unit.cloaked;
+}
+
+// Find the first visible unit under the cursor for selection and double-tap logic.
+function getVisibleUnitAtPosition(state: GameState, worldPos: { x: number; y: number }, playerIndex: number): Unit | undefined {
+  return state.units.find((unit) => {
+    if (!isUnitVisibleToPlayer(unit, playerIndex)) return false;
+    return distance(unit.position, worldPos) < getUnitSelectionRadius(unit);
   });
-  
-  // Deselect all units and bases
+}
+
+// Handle double-tap: select same-type friendly units or deselect everything
+function handleDoubleTap(state: GameState, worldPos: { x: number; y: number }, playerIndex: number): void {
+  const tappedUnit = getVisibleUnitAtPosition(state, worldPos, playerIndex);
+
+  // Clear current selections either way
   state.selectedUnits.clear();
   state.bases.forEach((b) => (b.isSelected = false));
-  
+
+  if (tappedUnit && tappedUnit.owner === playerIndex) {
+    state.units.forEach((unit) => {
+      if (unit.owner === playerIndex && unit.type === tappedUnit.type) {
+        state.selectedUnits.add(unit.id);
+      }
+    });
+  }
+
   soundManager.playUnitSelect(); // Play feedback sound
 }
 
 function handleTap(state: GameState, screenPos: { x: number; y: number }, canvas: HTMLCanvasElement, playerIndex: number): void {
+  const worldPos = screenToWorldPosition(state, canvas, screenPos);
+
   // Check for double-tap first
   if (isDoubleTap(state, screenPos)) {
-    handleDoubleTap(state);
+    handleDoubleTap(state, worldPos, playerIndex);
     return;
   }
   
-  const worldPos = screenToWorldPosition(state, canvas, screenPos);
-
   const tappedUnit = state.units.find((unit) => {
     if (unit.owner !== playerIndex) return false;
     return distance(unit.position, worldPos) < getUnitSelectionRadius(unit);
@@ -840,9 +854,6 @@ function handleAbilityDrag(state: GameState, dragVector: { x: number; y: number 
 
   state.units.forEach((unit) => {
     if (!state.selectedUnits.has(unit.id)) return;
-    
-    // Check if unit's ability is on cooldown - can only queue if cooldown is 0
-    if (unit.abilityCooldown > 0) return;
 
     // Use the command origin helper for consistency (last movement node)
     const startPosition = getCommandOrigin(unit);
@@ -944,9 +955,6 @@ function handleVectorBasedAbilityDrag(state: GameState, dragVector: { x: number;
 
   // Apply ability command to all selected units
   selectedUnitsArray.forEach((unit) => {
-    // Check if unit's ability is on cooldown - can only queue if cooldown is 0
-    if (unit.abilityCooldown > 0) return;
-
     // Use the command origin (last movement node or current position)
     const startPosition = getCommandOrigin(unit);
 
@@ -991,13 +999,9 @@ function handleVectorBasedAbilityDrag(state: GameState, dragVector: { x: number;
 
 // Helper function to get return position for patrol commands
 function getPatrolReturnPosition(unit: Unit): Vector2 {
-  // Use current position or last queued position as return point
-  if (unit.commandQueue.length > 0) {
-    const lastNode = unit.commandQueue[unit.commandQueue.length - 1];
-    if (lastNode.type === 'move' || lastNode.type === 'attack-move' || lastNode.type === 'patrol') {
-      return lastNode.position;
-    }
-  }
+  // Always use current position as the return point for new patrol commands
+  // This prevents the bug where units with queued commands would patrol back to
+  // an old queued position instead of their current location
   return unit.position;
 }
 
@@ -1072,6 +1076,7 @@ export function handleMouseDown(e: MouseEvent, state: GameState, canvas: HTMLCan
 
   const touchedBase = findTouchedBase(state, worldPos, playerIndex);
   const touchedDot = findTouchedMovementDot(state, worldPos, playerIndex);
+  const touchedDepot = findTouchedMiningDepot(state, worldPos, playerIndex);
 
   mouseState = {
     startPos: { x, y },
@@ -1081,6 +1086,8 @@ export function handleMouseDown(e: MouseEvent, state: GameState, canvas: HTMLCan
     touchedBase,
     touchedBaseWasSelected: touchedBase?.isSelected || false,
     touchedMovementDot: touchedDot,
+    touchedDepot,
+    touchedDepotPos: touchedDepot ? worldPos : undefined,
   };
 }
 
@@ -1136,7 +1143,7 @@ export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCan
     const selectedBase = getSelectedBase(state, playerIndex);
 
     // Skip selection rects when the base is selected so swipes spawn units anywhere
-    if (!mouseState.touchedBase && state.selectedUnits.size === 0 && !selectedBase) {
+    if (!mouseState.touchedBase && !mouseState.touchedDepot && state.selectedUnits.size === 0 && !selectedBase) {
       mouseState.selectionRect = {
         x1: mouseState.startPos.x,
         y1: mouseState.startPos.y,
@@ -1174,6 +1181,21 @@ export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCan
     updateAbilityCastPreview(state, dx, dy, mouseState.startPos, canvas);
   }
   
+  // Update mining depot drag preview so the line snaps toward the closest available deposit
+  if (mouseState.isDragging && mouseState.touchedDepot && mouseState.touchedDepotPos) {
+    const endWorldPos = screenToWorldPosition(state, canvas, { x, y });
+    const snappedDeposit = findSnappedResourceDeposit(mouseState.touchedDepot, mouseState.touchedDepotPos, endWorldPos);
+
+    if (snappedDeposit) {
+      state.miningDragPreview = {
+        depotId: mouseState.touchedDepot.id,
+        depositId: snappedDeposit.id,
+      };
+    } else {
+      delete state.miningDragPreview;
+    }
+  }
+  
   // Update base ability preview when base is selected and dragging (but not from the base itself)
   updateBaseAbilityPreview(state, mouseState.isDragging, mouseState.touchedBase, mouseState.startPos, dx, dy, canvas);
 }
@@ -1202,6 +1224,10 @@ export function handleMouseUp(e: MouseEvent, state: GameState, canvas: HTMLCanva
     handleRectSelection(state, mouseState.selectionRect, canvas, playerIndex);
   } else if (mouseState.touchedMovementDot) {
     handleLaserSwipe(state, mouseState.touchedMovementDot, { x: dx, y: dy });
+  } else if (mouseState.touchedDepot && mouseState.isDragging && dist > SWIPE_THRESHOLD_PX && mouseState.touchedDepotPos) {
+    // Handle mining depot drag to create mining drone
+    const endWorldPos = screenToWorldPosition(state, canvas, { x, y });
+    handleMiningDepotDrag(state, mouseState.touchedDepot, mouseState.touchedDepotPos, endWorldPos, playerIndex);
   } else if (mouseState.touchedBase && !mouseState.isDragging) {
     const base = mouseState.touchedBase;
     if (base.isSelected) {
@@ -1259,6 +1285,7 @@ export function handleMouseUp(e: MouseEvent, state: GameState, canvas: HTMLCanva
   
   // Clear all input-related previews when mouse is released
   clearBaseAbilityPreview(state);
+  delete state.miningDragPreview;
 
   mouseState = null;
 }

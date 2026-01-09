@@ -101,11 +101,13 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - Unit spawning shows menu on hold (200ms+)
 - Swipe distance and direction determines command type
 - Command queue respects QUEUE_MAX_LENGTH
+- Ability command input no longer checks cooldowns, allowing queuing at any time
 - Ability command queue nodes clone their origin/direction vectors to avoid later mutation
 - Coordinates converted from screen pixels to game meters via camera-aware transforms
 - Touch events prevented to avoid browser scrolling
 - Mining depot drags snap toward the closest available deposit by drag angle, with a preview line stored in `state.miningDragPreview`
 - Mining drone creation can be canceled by releasing near the depot, and deposits cap at two drones with cadence delays for staggering
+- Double-tap selection clears current selection unless tapping a friendly unit, which selects all same-type friendly units
 
 ### Input Modes
 1. **Tap**: Select units/bases
@@ -157,6 +159,8 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - **2025-03-17**: Added mining depot snap-to-deposit drag logic, preview state updates, and cancellation behavior near depots
 - **2025-03-18**: Disabled box selection when dragging from mining depots and scaled mining drone selection to match larger render size
 - **2026-01-04**: Added camera-aware screen/world conversions and pinch-to-zoom handling for touch input
+- **2026-01-08**: Updated double-tap selection to select all same-type friendly units and deselect on enemy/empty taps
+- **2025-03-21**: Removed ability cooldown checks when queueing ability commands so input always enqueues them
 
 ## Watch Out For
 - Always prevent default on touch events to avoid scrolling

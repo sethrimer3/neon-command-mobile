@@ -23,6 +23,9 @@ Defines all core type definitions, interfaces, and constants for the SoL-RTS gam
 - **PIXELS_PER_METER:** `20` - Conversion ratio between game meters and screen pixels
 - **BASE_SIZE_METERS:** `6` - Size of player bases in game units
 - **UNIT_SIZE_METERS:** `2` - Standard unit collision size
+- **BLADE_SWORD_PARTICLE_COUNT:** `5` - Number of Blade sword particles used for rendering and range alignment
+- **BLADE_SWORD_PARTICLE_SPACING_METERS:** `UNIT_SIZE_METERS * 0.24 * 3.2` - Spacing between Blade sword particles for magnet-like separation
+- **BLADE_SWORD_RANGE_METERS:** `BLADE_SWORD_PARTICLE_SPACING_METERS * BLADE_SWORD_PARTICLE_COUNT` - Melee range aligned to the outermost sword particle
 - **MINING_DEPOT_SIZE_METERS:** `3` - Mining depot footprint used for rendering and input hit tests
 - **RESOURCE_DEPOSIT_SIZE_METERS:** `1.2` - Hex resource deposit size around each depot
 - **RESOURCE_DEPOSIT_RING_RADIUS_METERS:** `5` - Radius of the deposit ring around each depot
@@ -70,7 +73,10 @@ Represents a game unit with:
 - Command system: commandQueue for queued actions
 - Progression: damageMultiplier, distanceTraveled, distanceCredit
 - Ability states: lineJumpTelegraph, shieldActive, cloaked, bombardmentActive, healPulseActive, missileBarrageActive
+- Ability states: lineJumpTelegraph, shieldActive (with damage multipliers), cloaked, daggerAmbush, bombardmentActive, healPulseActive, missileBarrageActive
 - Visual effects: particles (optional array of Particle objects, currently used for marines)
+- Blade melee swing sequencing: swordSwing (active swing animation), swordSwingHold (hold angle between swings), and swordSwingCombo (queued combo timing)
+- Blade movement lag: bladeTrailHistory snapshot buffer for delayed sword particle rendering
 - Mining state: depot/deposit identifiers with cadence delays for alternating mining drone behavior
 
 ### Base Interface
@@ -95,10 +101,10 @@ Configuration for each unit type including:
 ### UNIT_DEFINITIONS
 Complete configuration object for all 8 unit types with balanced stats:
 - **Marine**: Ranged basic unit with Burst Fire ability
-- **Warrior**: Melee tank with Laser Beam
+- **Blade**: Melee unit with Blade Volley
 - **Snaker**: Fast non-combat unit with Line Jump mobility
 - **Tank**: Heavy unit with Shield Dome
-- **Scout**: Fast reconnaissance with Cloak
+- **Dagger**: Fast reconnaissance unit with Ambush Throw and permanent cloak
 - **Artillery**: Long-range siege with Bombardment
 - **Medic**: Support unit with Heal Pulse
 - **Interceptor**: Air superiority with Missile Barrage
@@ -141,6 +147,7 @@ The complete game state structure containing:
 - Promotion system rewards long-distance movement with damage buffs
 - Queue bonus system encourages strategic planning (more queued moves = faster promotions)
 - Optional properties (with `?`) indicate temporary ability states
+- Shield domes can now specify ranged/melee damage multipliers per source unit
 - Resource deposits now track up to two mining drones via `workerIds`
 
 ### Known Issues
@@ -166,6 +173,12 @@ None currently identified
 - **2025-03-10**: Doubled base and unit size constants to scale up all core gameplay footprints.
 - **2025-03-17**: Added mining drag preview state, deposit worker lists, and mining cadence delay fields for drones.
 - **2025-03-18**: Added mining structure/drone sizing constants to scale depots, deposits, and drones together.
+- **2025-03-19**: Added projectile variants, marine shell casings, and Blade volley/swing state while renaming the warrior unit to Blade.
+- **2026-01-08**: Renamed Scout to Dagger, added dagger ambush timing state, and extended shield definitions with damage multipliers
+- **2026-01-09**: Aligned Blade melee range with the expanded sword particle spacing via shared constants
+- **2026-01-10**: Replaced legacy Blade swing tracking with swordSwingCombo to coordinate full three-swing sequences
+- **2026-01-11**: Added Blade trail history snapshots to drive lagged sword particle positioning while moving/turning
+- **2026-01-12**: Added Blade sword swing hold state to keep the blade at its last angle between combo swings
 
 ## Watch Out For
 - Always use meters for game logic, only convert to pixels for rendering

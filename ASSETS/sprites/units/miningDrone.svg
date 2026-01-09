@@ -1,8 +1,0 @@
-<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-  <!-- Drone body (diamond shape) -->
-  <polygon points="10,3 16,10 10,17 4,10" fill="currentColor" opacity="0.8" />
-  <!-- Center core -->
-  <circle cx="10" cy="10" r="3" fill="white" opacity="0.9" />
-  <!-- Small detail to indicate mining capability -->
-  <circle cx="10" cy="10" r="1.5" fill="currentColor" />
-</svg>

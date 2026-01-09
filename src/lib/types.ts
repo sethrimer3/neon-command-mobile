@@ -3,18 +3,25 @@ export const PIXELS_PER_METER = 20;
 export const BASE_SIZE_METERS = 6;
 // Double the unit footprint so all unit rendering/collision scales up.
 export const UNIT_SIZE_METERS = 2;
+// Separate Blade sword particles into distinct, magnet-like segments.
+export const BLADE_SWORD_PARTICLE_COUNT = 5;
+export const BLADE_SWORD_PARTICLE_SPACING_METERS = UNIT_SIZE_METERS * 0.24 * 4.5; // Increased from 3.2 to 4.5 for more visible separation
+// Keep Blade melee range aligned with the outermost sword particle radius.
+export const BLADE_SWORD_RANGE_METERS = BLADE_SWORD_PARTICLE_SPACING_METERS * BLADE_SWORD_PARTICLE_COUNT;
 // Scale mining depots to read as large structures in the resource loop.
 export const MINING_DEPOT_SIZE_METERS = 3;
 // Scale resource deposits so their hex tiles feel substantial on the map.
-export const RESOURCE_DEPOSIT_SIZE_METERS = 1.2;
+export const RESOURCE_DEPOSIT_SIZE_METERS = 2.4; // 2x larger for better visibility
 // Expand the deposit ring radius to keep doubled deposits from overlapping the depot.
 export const RESOURCE_DEPOSIT_RING_RADIUS_METERS = 5;
-// Make mining drones render and select at a larger footprint than standard units.
-export const MINING_DRONE_SIZE_MULTIPLIER = 2;
+// Make mining drones render and select at a smaller footprint than standard units.
+export const MINING_DRONE_SIZE_MULTIPLIER = 0.67; // 3x smaller than before
 
 // Fixed arena dimensions in meters for consistent gameplay across all devices
 export const ARENA_WIDTH_METERS = 60;  // Fixed logical width in meters
-export const ARENA_HEIGHT_METERS = 90; // Fixed logical height in meters
+export const ARENA_HEIGHT_METERS = 90; // Fixed logical height in meters (desktop/default)
+// Mobile uses a taller arena to match 20:9 aspect ratio
+export const ARENA_HEIGHT_METERS_MOBILE = 133.33; // 60 * (20/9) for 20:9 height:width ratio
 
 export const ABILITY_MAX_RANGE = 10;
 export const QUEUE_MAX_LENGTH = 3;
@@ -64,6 +71,9 @@ export interface Particle {
   angle: number; // Orbital angle for swirling motion
 }
 
+// Projectile visual variants for ranged attacks
+export type ProjectileKind = 'standard' | 'knife';
+
 // Projectile for ranged attacks
 export interface Projectile {
   id: string;
@@ -77,6 +87,20 @@ export interface Projectile {
   createdAt: number; // timestamp
   sourceUnit: string; // unit id that created it
   targetUnit?: string; // optional specific target unit id
+  kind?: ProjectileKind; // Visual type for specialized projectiles
+}
+
+// Ejected shell casing from marine weapons
+export interface Shell {
+  id: string;
+  position: Vector2;
+  velocity: Vector2;
+  rotation: number;
+  rotationSpeed: number;
+  createdAt: number;
+  lifetime: number; // seconds
+  mass: number;
+  owner: number;
 }
 
 export type CommandNode = 
@@ -100,7 +124,12 @@ export interface Unit {
   distanceCredit: number;
   abilityCooldown: number;
   lineJumpTelegraph?: { startTime: number; endPos: Vector2; direction: Vector2 };
-  shieldActive?: { endTime: number; radius: number };
+  shieldActive?: {
+    endTime: number;
+    radius: number;
+    rangedDamageMultiplier?: number;
+    meleeDamageMultiplier?: number;
+  };
   cloaked?: { endTime: number };
   bombardmentActive?: { endTime: number; targetPos: Vector2; impactTime: number };
   healPulseActive?: { endTime: number; radius: number };
@@ -122,6 +151,42 @@ export interface Unit {
   queueDrawReverse?: boolean; // Whether queue should un-draw in reverse (true when unit dies)
   temporaryAvoidance?: { originalPosition: Vector2; returnDelay: number }; // For friendly unit avoidance - returnDelay is time remaining in seconds
   previousFlockingForce?: Vector2; // Previous flocking force for smoothing to prevent oscillations
+  swordSwing?: { 
+    startTime: number; 
+    duration: number; 
+    direction: Vector2; 
+    swingType: 'first' | 'second' | 'third'; // Three-swing attack sequence: 210° CCW -> 180° CW -> 360° spin
+    swingNumber: number; // Current swing in the sequence (1, 2, or 3)
+  }; // Blade sword swing timing data for 3-swing combo
+  swordSwingHold?: {
+    swingType: 'first' | 'second' | 'third';
+    releaseTime?: number; // Timestamp to return the sword to rest after the final swing hold
+  }; // Blade sword hold state to keep the blade at the last swing angle
+  swordSwingCombo?: {
+    direction: Vector2;
+    nextSwingTime: number;
+    nextSwingNumber: number; // Next swing in the combo (1-3), or 0 when waiting for reset
+    resetAvailableTime: number; // Timestamp after which a new combo can be triggered
+  }; // Blade sword combo state to allow chained swings with pauses
+  bladeTrailHistory?: Array<{
+    timestamp: number;
+    position: Vector2;
+    rotation: number;
+  }>; // Time-stamped transform history for Blade sword particle lag
+  bladeVolley?: {
+    startTime: number;
+    direction: Vector2;
+    magnitude: number;
+    scrunchEndTime: number;
+    nextShotTime: number;
+    shotsFired: number;
+  };
+  daggerAmbush?: {
+    throwTime: number;
+    recloakTime: number;
+    direction: Vector2;
+    knifeFired: boolean;
+  };
   miningState?: { // Mining drone specific state
     depotId: string; // ID of the mining depot
     depositId: string; // ID of the resource deposit being mined
@@ -178,7 +243,7 @@ export const BASE_TYPE_DEFINITIONS: Record<BaseType, BaseTypeDefinition> = {
     description: 'Fast mobile base with enhanced shield',
     hp: 800,
     armor: 10,
-    moveSpeed: 4.5, // Faster than standard
+    moveSpeed: 9, // Faster than standard (doubled from 4.5)
     ability: 'shield',
     canMove: true,
   },
@@ -187,7 +252,7 @@ export const BASE_TYPE_DEFINITIONS: Record<BaseType, BaseTypeDefinition> = {
     description: 'Slow base with regeneration aura',
     hp: 1200,
     armor: 20,
-    moveSpeed: 1.0,
+    moveSpeed: 2.0, // Doubled from 1.0
     ability: 'regeneration',
     canMove: true,
   },
@@ -205,7 +270,7 @@ export interface FactionDefinition {
 export const FACTION_DEFINITIONS: Record<FactionType, FactionDefinition> = {
   radiant: {
     name: 'Radiant',
-    baseMoveSpeed: 1.5,
+    baseMoveSpeed: 3.0, // Doubled from 1.5
     baseShape: 'square',
     ability: 'laser',
     availableUnits: ['marine', 'warrior', 'tank', 'scout', 'artillery', 'medic', 'interceptor', 'guardian', 'marksman', 'engineer', 'skirmisher', 'paladin'],
@@ -213,7 +278,7 @@ export const FACTION_DEFINITIONS: Record<FactionType, FactionDefinition> = {
   },
   aurum: {
     name: 'Aurum',
-    baseMoveSpeed: 3.0,
+    baseMoveSpeed: 6.0, // Doubled from 3.0
     baseShape: 'triangle',
     ability: 'shield',
     availableUnits: ['snaker', 'berserker', 'assassin', 'juggernaut', 'striker', 'reaper', 'oracle', 'harbinger', 'gladiator', 'ravager', 'warlord', 'duelist'],
@@ -221,7 +286,7 @@ export const FACTION_DEFINITIONS: Record<FactionType, FactionDefinition> = {
   },
   solari: {
     name: 'Solari',
-    baseMoveSpeed: 2.0,
+    baseMoveSpeed: 4.0, // Doubled from 2.0
     baseShape: 'circle',
     ability: 'pulse',
     availableUnits: ['flare', 'nova', 'eclipse', 'corona', 'supernova', 'zenith', 'pulsar', 'celestial', 'voidwalker', 'chronomancer', 'nebula', 'quasar'],
@@ -246,6 +311,7 @@ export interface Base {
   shieldActive?: { endTime: number }; // Shield ability for aurum faction
   autoAttackCooldown?: number; // Cooldown for auto-attack (defense base)
   regenerationPulse?: { endTime: number; radius: number }; // Visual effect for regeneration pulse
+  currentSpeed?: number; // Current movement speed for acceleration/deceleration
 }
 
 // Mining depot for resource gathering
@@ -286,7 +352,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Ranged Marine',
     hp: 40,
     armor: 2,
-    moveSpeed: 4,
+    moveSpeed: 8,
     attackType: 'ranged',
     attackRange: 8,
     attackDamage: 2,
@@ -298,16 +364,16 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     modifiers: ['ranged'],
   },
   warrior: {
-    name: 'Melee Warrior',
+    name: 'Blade',
     hp: 120,
     armor: 5,
-    moveSpeed: 3,
+    moveSpeed: 6,
     attackType: 'melee',
-    attackRange: 1,
+    attackRange: BLADE_SWORD_RANGE_METERS,
     attackDamage: 18,
     attackRate: 1,
     cost: 40,
-    abilityName: 'Laser Beam',
+    abilityName: 'Blade Volley',
     abilityCooldown: 5,
     canDamageStructures: true,
     modifiers: ['melee'],
@@ -316,7 +382,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Snaker',
     hp: 70,
     armor: 1,
-    moveSpeed: 4.5,
+    moveSpeed: 9,
     attackType: 'none',
     attackRange: 0,
     attackDamage: 0,
@@ -331,7 +397,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Heavy Tank',
     hp: 200,
     armor: 8,
-    moveSpeed: 2,
+    moveSpeed: 4,
     attackType: 'ranged',
     attackRange: 6,
     attackDamage: 12,
@@ -343,16 +409,16 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     modifiers: ['ranged'],
   },
   scout: {
-    name: 'Scout',
+    name: 'Dagger',
     hp: 30,
     armor: 1,
-    moveSpeed: 6,
+    moveSpeed: 12,
     attackType: 'ranged',
     attackRange: 5,
     attackDamage: 4,
     attackRate: 3,
     cost: 20,
-    abilityName: 'Cloak',
+    abilityName: 'Ambush Throw',
     abilityCooldown: 5,
     canDamageStructures: false,
     modifiers: ['ranged', 'small'],
@@ -361,7 +427,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Artillery',
     hp: 50,
     armor: 2,
-    moveSpeed: 2.5,
+    moveSpeed: 5,
     attackType: 'ranged',
     attackRange: 15,
     attackDamage: 8,
@@ -376,7 +442,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Medic',
     hp: 60,
     armor: 2,
-    moveSpeed: 3.5,
+    moveSpeed: 7,
     attackType: 'none',
     attackRange: 0,
     attackDamage: 0,
@@ -391,7 +457,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Interceptor',
     hp: 55,
     armor: 1,
-    moveSpeed: 5.5,
+    moveSpeed: 11,
     attackType: 'ranged',
     attackRange: 10,
     attackDamage: 5,
@@ -406,7 +472,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Berserker',
     hp: 150,
     armor: 4,
-    moveSpeed: 3.5,
+    moveSpeed: 7,
     attackType: 'melee',
     attackRange: 1.2,
     attackDamage: 25,
@@ -421,7 +487,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Assassin',
     hp: 80,
     armor: 2,
-    moveSpeed: 5,
+    moveSpeed: 10,
     attackType: 'melee',
     attackRange: 1,
     attackDamage: 15,
@@ -436,7 +502,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Juggernaut',
     hp: 250,
     armor: 10,
-    moveSpeed: 2,
+    moveSpeed: 4,
     attackType: 'melee',
     attackRange: 1.5,
     attackDamage: 30,
@@ -451,7 +517,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Striker',
     hp: 100,
     armor: 3,
-    moveSpeed: 4,
+    moveSpeed: 8,
     attackType: 'melee',
     attackRange: 1,
     attackDamage: 20,
@@ -466,7 +532,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Flare',
     hp: 50,
     armor: 1,
-    moveSpeed: 5,
+    moveSpeed: 10,
     attackType: 'ranged',
     attackRange: 7,
     attackDamage: 7,
@@ -481,7 +547,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Nova',
     hp: 110,
     armor: 4,
-    moveSpeed: 3.5,
+    moveSpeed: 7,
     attackType: 'melee',
     attackRange: 1.2,
     attackDamage: 22,
@@ -496,7 +562,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Eclipse',
     hp: 80,
     armor: 2,
-    moveSpeed: 4.5,
+    moveSpeed: 9,
     attackType: 'ranged',
     attackRange: 9,
     attackDamage: 5,
@@ -511,7 +577,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Corona',
     hp: 180,
     armor: 6,
-    moveSpeed: 2.5,
+    moveSpeed: 5,
     attackType: 'ranged',
     attackRange: 6,
     attackDamage: 10,
@@ -526,7 +592,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Supernova',
     hp: 60,
     armor: 2,
-    moveSpeed: 3,
+    moveSpeed: 6,
     attackType: 'ranged',
     attackRange: 12,
     attackDamage: 15,
@@ -541,7 +607,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Guardian',
     hp: 160,
     armor: 7,
-    moveSpeed: 2.5,
+    moveSpeed: 5,
     attackType: 'melee',
     attackRange: 1.3,
     attackDamage: 16,
@@ -556,7 +622,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Reaper',
     hp: 65,
     armor: 2,
-    moveSpeed: 4.5,
+    moveSpeed: 9,
     attackType: 'ranged',
     attackRange: 9,
     attackDamage: 8,
@@ -571,7 +637,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Oracle',
     hp: 70,
     armor: 2,
-    moveSpeed: 3,
+    moveSpeed: 6,
     attackType: 'none',
     attackRange: 0,
     attackDamage: 0,
@@ -586,7 +652,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Harbinger',
     hp: 75,
     armor: 2,
-    moveSpeed: 5,
+    moveSpeed: 10,
     attackType: 'ranged',
     attackRange: 8,
     attackDamage: 6,
@@ -601,7 +667,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Zenith',
     hp: 65,
     armor: 2,
-    moveSpeed: 3.5,
+    moveSpeed: 7,
     attackType: 'none',
     attackRange: 0,
     attackDamage: 0,
@@ -616,7 +682,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Pulsar',
     hp: 70,
     armor: 2,
-    moveSpeed: 5.5,
+    moveSpeed: 11,
     attackType: 'ranged',
     attackRange: 7,
     attackDamage: 7,
@@ -631,7 +697,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Celestial',
     hp: 130,
     armor: 5,
-    moveSpeed: 3,
+    moveSpeed: 6,
     attackType: 'melee',
     attackRange: 1.2,
     attackDamage: 20,
@@ -647,7 +713,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Marksman',
     hp: 45,
     armor: 1,
-    moveSpeed: 3,
+    moveSpeed: 6,
     attackType: 'ranged',
     attackRange: 18,
     attackDamage: 12,
@@ -662,7 +728,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Engineer',
     hp: 70,
     armor: 3,
-    moveSpeed: 3,
+    moveSpeed: 6,
     attackType: 'ranged',
     attackRange: 6,
     attackDamage: 5,
@@ -677,7 +743,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Skirmisher',
     hp: 55,
     armor: 2,
-    moveSpeed: 5,
+    moveSpeed: 10,
     attackType: 'ranged',
     attackRange: 7,
     attackDamage: 6,
@@ -692,7 +758,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Paladin',
     hp: 140,
     armor: 6,
-    moveSpeed: 3,
+    moveSpeed: 6,
     attackType: 'ranged',
     attackRange: 5,
     attackDamage: 10,
@@ -708,7 +774,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Gladiator',
     hp: 130,
     armor: 5,
-    moveSpeed: 3.5,
+    moveSpeed: 7,
     attackType: 'melee',
     attackRange: 1.2,
     attackDamage: 28,
@@ -723,7 +789,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Ravager',
     hp: 100,
     armor: 3,
-    moveSpeed: 4.5,
+    moveSpeed: 9,
     attackType: 'melee',
     attackRange: 1,
     attackDamage: 18,
@@ -738,7 +804,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Warlord',
     hp: 280,
     armor: 12,
-    moveSpeed: 2,
+    moveSpeed: 4,
     attackType: 'melee',
     attackRange: 1.5,
     attackDamage: 35,
@@ -753,7 +819,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Duelist',
     hp: 90,
     armor: 4,
-    moveSpeed: 4,
+    moveSpeed: 8,
     attackType: 'melee',
     attackRange: 1.2,
     attackDamage: 16,
@@ -769,7 +835,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Voidwalker',
     hp: 75,
     armor: 2,
-    moveSpeed: 3.5,
+    moveSpeed: 7,
     attackType: 'ranged',
     attackRange: 7,
     attackDamage: 8,
@@ -784,7 +850,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Chronomancer',
     hp: 60,
     armor: 2,
-    moveSpeed: 3,
+    moveSpeed: 6,
     attackType: 'ranged',
     attackRange: 8,
     attackDamage: 6,
@@ -799,7 +865,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Nebula',
     hp: 80,
     armor: 3,
-    moveSpeed: 2.5,
+    moveSpeed: 5,
     attackType: 'ranged',
     attackRange: 6,
     attackDamage: 7,
@@ -814,7 +880,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Quasar',
     hp: 70,
     armor: 2,
-    moveSpeed: 3,
+    moveSpeed: 6,
     attackType: 'ranged',
     attackRange: 10,
     attackDamage: 9,
@@ -829,7 +895,7 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     name: 'Mining Drone',
     hp: 20,
     armor: 0,
-    moveSpeed: 3,
+    moveSpeed: 6,
     attackType: 'none',
     attackRange: 0,
     attackDamage: 0,
@@ -854,8 +920,18 @@ export interface Floater {
   targetOpacity: number; // Target opacity for fade-in
 }
 
+// Field particles for mid-field physics effects
+export interface FieldParticle {
+  id: string;
+  position: Vector2;
+  velocity: Vector2;
+  mass: number; // Very low mass for easy repulsion
+  size: number;
+  opacity: number;
+}
+
 export interface GameState {
-  mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection' | 'multiplayerLobby' | 'countdown' | 'statistics' | 'levelSelection' | 'onlineMode' | 'modifierHelp' | 'unitInformation' | 'lanMode';
+  mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection' | 'multiplayerLobby' | 'countdown' | 'statistics' | 'levelSelection' | 'onlineMode' | 'modifierHelp' | 'unitInformation' | 'lanMode' | 'tutorial';
   backgroundBattle?: GameState; // Background AI battle for menu
   vsMode: 'ai' | 'player' | 'online' | null;
   
@@ -865,6 +941,7 @@ export interface GameState {
   miningDepots: MiningDepot[]; // Mining depots for resource gathering
   obstacles: import('./maps').Obstacle[];
   projectiles: Projectile[]; // Active projectiles in the game
+  shells?: Shell[]; // Ejected shell casings from marine shots
   
   players: {
     photons: number;
@@ -970,6 +1047,9 @@ export interface GameState {
   
   // Background floaters for water-like physics
   floaters?: Floater[];
+  
+  // Field particles for mid-field physics effects (between 1st and 3rd quartiles)
+  fieldParticles?: FieldParticle[];
   
   // Impact effects for hits and explosions
   impactEffects?: Array<{

@@ -26,12 +26,16 @@ export function initializeStartupOverlay(): void {
         return;
     }
 
-    // Make overlay visible with fade-in animation
-    requestAnimationFrame(() => {
-        overlay.classList.add('visible');
-        overlayVisibleTime = Date.now();
-        isInitialized = true;
-    });
+    // Record the time as visible (either already visible from HTML or we're making it visible)
+    overlayVisibleTime = Date.now();
+    isInitialized = true;
+    
+    // Ensure the visible class is present (may already be from HTML)
+    if (!overlay.classList.contains('visible')) {
+        requestAnimationFrame(() => {
+            overlay.classList.add('visible');
+        });
+    }
 }
 
 /**
@@ -41,8 +45,14 @@ export function initializeStartupOverlay(): void {
  */
 export function dismissStartupOverlay(): void {
     const overlay = document.getElementById('startup-overlay');
-    if (!overlay || !isInitialized) {
+    if (!overlay) {
         return;
+    }
+
+    // If not initialized yet (JS loaded very quickly), initialize now
+    if (!isInitialized) {
+        overlayVisibleTime = Date.now();
+        isInitialized = true;
     }
 
     const timeVisible = overlayVisibleTime ? Date.now() - overlayVisibleTime : 0;
