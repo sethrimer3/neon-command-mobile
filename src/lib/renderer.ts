@@ -1472,7 +1472,7 @@ function drawBaseHealthBar(ctx: CanvasRenderingContext2D, base: Base, screenPos:
   if (state.settings.showNumericHP) {
     ctx.fillStyle = COLORS.white;
     ctx.font = 'bold 11px Space Mono, monospace';
-    ctx.textAlign = 'right'; // Align to the right so it appears on the left side
+    ctx.textAlign = 'right'; // Right-align text so it ends at the x-coordinate (positioning it to the left of the bar)
     ctx.textBaseline = 'middle';
     ctx.shadowColor = 'oklch(0 0 0)';
     ctx.shadowBlur = 3;
@@ -1789,7 +1789,7 @@ function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos:
   if (showNumeric) {
     ctx.fillStyle = COLORS.white;
     ctx.font = 'bold 9px Space Mono, monospace';
-    ctx.textAlign = 'right'; // Align to the right so it appears on the left side
+    ctx.textAlign = 'right'; // Right-align text so it ends at the x-coordinate (positioning it to the left of the bar)
     ctx.textBaseline = 'middle';
     ctx.shadowColor = 'oklch(0 0 0)';
     ctx.shadowBlur = 3;
