@@ -81,6 +81,7 @@ function App() {
   const [enableSprites, setEnableSprites] = useKV<boolean>('enable-sprites', true);
   const [mirrorAbilityCasting, setMirrorAbilityCasting] = useKV<boolean>('mirror-ability-casting', false);
   const [chessMode, setChessMode] = useKV<boolean>('chess-mode', false);
+  const [aiDifficulty, setAiDifficulty] = useKV<'easy' | 'medium' | 'hard'>('ai-difficulty', 'medium');
 
   const gameState = gameStateRef.current;
   const lastVictoryStateRef = useRef<boolean>(false);
@@ -152,13 +153,14 @@ function App() {
       enableSprites: enableSprites ?? true,
       mirrorAbilityCasting: mirrorAbilityCasting ?? false,
       chessMode: chessMode ?? false,
+      aiDifficulty: aiDifficulty || 'medium',
     };
     gameStateRef.current.showMinimap = showMinimap ?? true;
     gameStateRef.current.players = gameStateRef.current.players.map((p, i) => ({
       ...p,
       color: i === 0 ? (playerColor || COLORS.playerDefault) : (enemyColor || COLORS.enemyDefault),
     }));
-  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showHealthBarsOnlyWhenDamaged, showMinimap, playerFaction, enemyFaction, enableGlowEffects, enableParticleEffects, enableMotionBlur, enableSprites, mirrorAbilityCasting, chessMode]);
+  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showHealthBarsOnlyWhenDamaged, showMinimap, playerFaction, enemyFaction, enableGlowEffects, enableParticleEffects, enableMotionBlur, enableSprites, mirrorAbilityCasting, chessMode, aiDifficulty]);
 
   // Cleanup interval on unmount
   useEffect(() => {
@@ -1604,6 +1606,50 @@ function App() {
                     soundManager.playButtonClick();
                   }}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ai-difficulty" className="flex flex-col gap-1">
+                  <span>AI Difficulty</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    Affects AI decision making and economy
+                  </span>
+                </Label>
+                <div className="flex gap-2">
+                  <Button
+                    id="ai-difficulty-easy"
+                    onClick={() => {
+                      setAiDifficulty('easy');
+                      soundManager.playButtonClick();
+                    }}
+                    className={`flex-1 ${aiDifficulty === 'easy' ? '' : 'opacity-50'}`}
+                    variant={aiDifficulty === 'easy' ? 'default' : 'outline'}
+                  >
+                    Easy
+                  </Button>
+                  <Button
+                    id="ai-difficulty-medium"
+                    onClick={() => {
+                      setAiDifficulty('medium');
+                      soundManager.playButtonClick();
+                    }}
+                    className={`flex-1 ${aiDifficulty === 'medium' ? '' : 'opacity-50'}`}
+                    variant={aiDifficulty === 'medium' ? 'default' : 'outline'}
+                  >
+                    Medium
+                  </Button>
+                  <Button
+                    id="ai-difficulty-hard"
+                    onClick={() => {
+                      setAiDifficulty('hard');
+                      soundManager.playButtonClick();
+                    }}
+                    className={`flex-1 ${aiDifficulty === 'hard' ? '' : 'opacity-50'}`}
+                    variant={aiDifficulty === 'hard' ? 'default' : 'outline'}
+                  >
+                    Hard
+                  </Button>
+                </div>
               </div>
 
               <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
