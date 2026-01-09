@@ -966,6 +966,7 @@ export interface GameState {
     unitSlots: Record<'left' | 'up' | 'down' | 'right', UnitType>;
     selectedMap: string;
     showNumericHP: boolean;
+    showHealthBarsOnlyWhenDamaged?: boolean; // Show health bars only when units are damaged
     playerFaction: FactionType;
     enemyFaction: FactionType;
     playerBaseType: BaseType;

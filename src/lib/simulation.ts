@@ -494,6 +494,9 @@ function applyLocalCollisionPush(
 
   for (const otherUnit of allUnits) {
     if (otherUnit.id === unit.id) continue;
+    
+    // Mining drones don't collide with other mining drones
+    if (unit.type === 'miningDrone' && otherUnit.type === 'miningDrone') continue;
 
     const dist = distance(desiredPosition, otherUnit.position);
     if (dist > 0 && dist < collisionRadius) {
@@ -1763,11 +1766,8 @@ export function updateGame(state: GameState, deltaTime: number): void {
 }
 
 function updateIncome(state: GameState, deltaTime: number): void {
-  const elapsedSeconds = Math.floor(state.elapsedTime);
-  const baseIncomeRate = Math.floor(elapsedSeconds / 10) + 1;
-
   state.players.forEach((player, playerIndex) => {
-    // Calculate mining income from active mining drones
+    // Calculate mining income from active mining drones (only source of income)
     let miningIncome = 0;
     state.miningDepots.forEach((depot) => {
       if (depot.owner === playerIndex) {
@@ -1787,7 +1787,7 @@ function updateIncome(state: GameState, deltaTime: number): void {
       }
     });
     
-    player.incomeRate = baseIncomeRate + miningIncome;
+    player.incomeRate = miningIncome;
   });
 
   state.lastIncomeTime += deltaTime;

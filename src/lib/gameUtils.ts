@@ -1,4 +1,4 @@
-import { Vector2, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS, ARENA_HEIGHT_METERS_MOBILE, PIXELS_PER_METER, RESOURCE_DEPOSIT_RING_RADIUS_METERS } from './types';
+import { Vector2, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS, ARENA_HEIGHT_METERS_MOBILE, PIXELS_PER_METER, RESOURCE_DEPOSIT_RING_RADIUS_METERS, UNIT_DEFINITIONS } from './types';
 
 // Calculate viewport scale to fit the fixed arena to the viewport
 let viewportScale = 1.0;
@@ -404,4 +404,49 @@ export function createMiningDepots(arenaWidth: number, arenaHeight: number): imp
   });
   
   return depots;
+}
+
+// Create initial mining drones on diagonal deposits (X shape: positions 1, 3, 5, 7)
+export function createInitialMiningDrones(miningDepots: import('./types').MiningDepot[]): import('./types').Unit[] {
+  const drones: import('./types').Unit[] = [];
+  const diagonalPositions = [1, 3, 5, 7]; // Diagonal positions in the 0-7 ring
+  const droneDefinition = UNIT_DEFINITIONS.miningDrone;
+  
+  miningDepots.forEach((depot) => {
+    diagonalPositions.forEach((depositIndex) => {
+      const deposit = depot.deposits[depositIndex];
+      if (deposit) {
+        const droneId = generateId();
+        const drone: import('./types').Unit = {
+          id: droneId,
+          type: 'miningDrone',
+          owner: depot.owner,
+          position: { ...deposit.position },
+          hp: droneDefinition.hp,
+          maxHp: droneDefinition.hp,
+          armor: droneDefinition.armor,
+          commandQueue: [],
+          damageMultiplier: 1.0,
+          distanceTraveled: 0,
+          distanceCredit: 0,
+          abilityCooldown: 0,
+          miningState: {
+            depotId: depot.id,
+            depositId: deposit.id,
+            atDepot: false, // Start at deposit
+          },
+        };
+        
+        drones.push(drone);
+        
+        // Register this drone in the deposit's worker list
+        if (!deposit.workerIds) {
+          deposit.workerIds = [];
+        }
+        deposit.workerIds.push(droneId);
+      }
+    });
+  });
+  
+  return drones;
 }

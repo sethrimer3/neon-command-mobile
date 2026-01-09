@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useKV } from './hooks/useKV';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS, FactionType, FACTION_DEFINITIONS, BASE_TYPE_DEFINITIONS, BaseType, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS } from './lib/types';
-import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, shouldUsePortraitCoordinates, updateViewportScale, calculateDefaultRallyPoint, createMiningDepots, getArenaHeight } from './lib/gameUtils';
+import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, shouldUsePortraitCoordinates, updateViewportScale, calculateDefaultRallyPoint, createMiningDepots, createInitialMiningDrones, getArenaHeight } from './lib/gameUtils';
 import { updateGame } from './lib/simulation';
 import { updateAI } from './lib/ai';
 import { renderGame } from './lib/renderer';
@@ -67,6 +67,7 @@ function App() {
   const [sfxVolume, setSfxVolume] = useKV<number>('sfx-volume', 0.7);
   const [musicVolume, setMusicVolume] = useKV<number>('music-volume', 0.5);
   const [showNumericHP, setShowNumericHP] = useKV<boolean>('show-numeric-hp', true);
+  const [showHealthBarsOnlyWhenDamaged, setShowHealthBarsOnlyWhenDamaged] = useKV<boolean>('show-health-bars-only-when-damaged', false);
   const [showMinimap, setShowMinimap] = useKV<boolean>('show-minimap', true);
   const [showPerformance, setShowPerformance] = useKV<boolean>('show-performance', false);
   const [enableCameraControls, setEnableCameraControls] = useKV<boolean>('enable-camera-controls', true);
@@ -132,6 +133,7 @@ function App() {
       unitSlots: (unitSlots || { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' }) as Record<'left' | 'up' | 'down' | 'right', UnitType>,
       selectedMap: selectedMap || 'open',
       showNumericHP: showNumericHP ?? true,
+      showHealthBarsOnlyWhenDamaged: showHealthBarsOnlyWhenDamaged ?? false,
       playerFaction: playerFaction || 'radiant',
       enemyFaction: enemyFaction || 'radiant',
       playerBaseType: playerBaseType || 'standard',
@@ -147,7 +149,7 @@ function App() {
       ...p,
       color: i === 0 ? (playerColor || COLORS.playerDefault) : (enemyColor || COLORS.enemyDefault),
     }));
-  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showMinimap, playerFaction, enemyFaction, enableGlowEffects, enableParticleEffects, enableMotionBlur, mirrorAbilityCasting, chessMode]);
+  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showHealthBarsOnlyWhenDamaged, showMinimap, playerFaction, enemyFaction, enableGlowEffects, enableParticleEffects, enableMotionBlur, mirrorAbilityCasting, chessMode]);
 
   // Cleanup interval on unmount
   useEffect(() => {
@@ -1453,6 +1455,18 @@ function App() {
               </div>
 
               <div className="flex items-center justify-between">
+                <Label htmlFor="health-bars-damaged-toggle">Health Bars Only When Damaged</Label>
+                <Switch
+                  id="health-bars-damaged-toggle"
+                  checked={showHealthBarsOnlyWhenDamaged ?? false}
+                  onCheckedChange={(checked) => {
+                    setShowHealthBarsOnlyWhenDamaged(checked);
+                    soundManager.playButtonClick();
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
                 <Label htmlFor="minimap-toggle">Show Minimap</Label>
                 <Switch
                   id="minimap-toggle"
@@ -1727,13 +1741,16 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
   
   // Create mining depots in corners
   const miningDepots = createMiningDepots(arenaWidth, arenaHeight);
+  
+  // Create initial mining drones on diagonal deposits
+  const initialDrones = createInitialMiningDrones(miningDepots);
 
   const playerBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
 
   return {
     mode: 'game',
     vsMode: 'ai',
-    units: [],
+    units: initialDrones,
     projectiles: [],
     shells: [],
     obstacles: obstacles,
@@ -1771,8 +1788,8 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
       },
     ],
     players: [
-      { photons: 200, incomeRate: 1, color: COLORS.playerDefault },
-      { photons: 200, incomeRate: 1, color: COLORS.enemyDefault },
+      { photons: 200, incomeRate: 0, color: COLORS.playerDefault },
+      { photons: 200, incomeRate: 0, color: COLORS.enemyDefault },
     ],
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
@@ -1817,8 +1834,8 @@ function createInitialState(): GameState {
     miningDepots: [],
     obstacles: [],
     players: [
-      { photons: 0, incomeRate: 1, color: COLORS.playerDefault },
-      { photons: 0, incomeRate: 1, color: COLORS.enemyDefault },
+      { photons: 0, incomeRate: 0, color: COLORS.playerDefault },
+      { photons: 0, incomeRate: 0, color: COLORS.enemyDefault },
     ],
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
@@ -1866,6 +1883,9 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
   
   // Create mining depots in corners
   const miningDepots = createMiningDepots(arenaWidth, arenaHeight);
+  
+  // Create initial mining drones on diagonal deposits
+  const initialDrones = createInitialMiningDrones(miningDepots);
 
   const playerBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.playerBaseType || 'standard'];
   const enemyBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.enemyBaseType || 'standard'];
@@ -1873,7 +1893,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
   return {
     mode: 'countdown',
     vsMode: mode,
-    units: [],
+    units: initialDrones,
     projectiles: [],
     shells: [],
     obstacles: obstacles,
@@ -1911,8 +1931,8 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
       },
     ],
     players: [
-      { photons: 50, incomeRate: 1, color: settings.playerColor },
-      { photons: 50, incomeRate: 1, color: settings.enemyColor },
+      { photons: 50, incomeRate: 0, color: settings.playerColor },
+      { photons: 50, incomeRate: 0, color: settings.enemyColor },
     ],
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
@@ -1964,6 +1984,9 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
   
   // Create mining depots in corners
   const miningDepots = createMiningDepots(arenaWidth, arenaHeight);
+  
+  // Create initial mining drones on diagonal deposits
+  const initialDrones = createInitialMiningDrones(miningDepots);
 
   const playerBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.playerBaseType || 'standard'];
   const enemyBaseTypeDef = BASE_TYPE_DEFINITIONS[settings.enemyBaseType || 'standard'];
@@ -1971,7 +1994,7 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
   return {
     mode: 'game',
     vsMode: mode,
-    units: [],
+    units: initialDrones,
     projectiles: [],
     shells: [],
     obstacles: obstacles,
@@ -2009,8 +2032,8 @@ function createGameState(mode: 'ai' | 'player', settings: GameState['settings'])
       },
     ],
     players: [
-      { photons: 50, incomeRate: 1, color: settings.playerColor },
-      { photons: 50, incomeRate: 1, color: settings.enemyColor },
+      { photons: 50, incomeRate: 0, color: settings.playerColor },
+      { photons: 50, incomeRate: 0, color: settings.enemyColor },
     ],
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
@@ -2050,6 +2073,9 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
   
   // Create mining depots in corners
   const miningDepots = createMiningDepots(arenaWidth, arenaHeight);
+  
+  // Create initial mining drones on diagonal deposits
+  const initialDrones = createInitialMiningDrones(miningDepots);
 
   // For online games, use standard base type for now
   const playerBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
@@ -2058,7 +2084,7 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
   return {
     mode: 'game',
     vsMode: 'online',
-    units: [],
+    units: initialDrones,
     projectiles: [],
     shells: [],
     obstacles: obstacles,
@@ -2096,8 +2122,8 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
       },
     ],
     players: [
-      { photons: 50, incomeRate: 1, color: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault },
-      { photons: 50, incomeRate: 1, color: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor },
+      { photons: 50, incomeRate: 0, color: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault },
+      { photons: 50, incomeRate: 0, color: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor },
     ],
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },
@@ -2153,6 +2179,9 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
   
   // Create mining depots in corners
   const miningDepots = createMiningDepots(arenaWidth, arenaHeight);
+  
+  // Create initial mining drones on diagonal deposits
+  const initialDrones = createInitialMiningDrones(miningDepots);
 
   // For online games, use standard base type for now
   const playerBaseTypeDef = BASE_TYPE_DEFINITIONS['standard'];
@@ -2161,7 +2190,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
   return {
     mode: 'countdown',
     vsMode: 'online',
-    units: [],
+    units: initialDrones,
     projectiles: [],
     shells: [],
     obstacles: obstacles,
@@ -2199,8 +2228,8 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
       },
     ],
     players: [
-      { photons: 50, incomeRate: 1, color: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault },
-      { photons: 50, incomeRate: 1, color: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor },
+      { photons: 50, incomeRate: 0, color: isHost ? lobby.hostColor : lobby.guestColor || COLORS.playerDefault },
+      { photons: 50, incomeRate: 0, color: isHost ? lobby.guestColor || COLORS.enemyDefault : lobby.hostColor },
     ],
     selectedUnits: new Set(),
     controlGroups: { 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set(), 7: new Set(), 8: new Set() },

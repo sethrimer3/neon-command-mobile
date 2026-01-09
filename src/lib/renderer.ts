@@ -707,11 +707,12 @@ function drawMiningDepots(ctx: CanvasRenderingContext2D, state: GameState): void
       // Deposit is a hexagon shape
       const workerCount = deposit.workerIds?.length ?? 0;
       const isOccupied = workerCount > 0;
+      // 0 workers: darker, 1 worker: normal brightness, 2 workers: brightest
       const depositColor = workerCount >= 2
-        ? 'oklch(0.90 0.22 95)'
-        : isOccupied
-          ? 'oklch(0.85 0.20 95)'
-          : 'oklch(0.50 0.15 95)'; // Yellow photon color
+        ? 'oklch(0.90 0.22 95)' // Bright when 2 workers
+        : workerCount === 1
+          ? 'oklch(0.85 0.20 95)' // Normal brightness with 1 worker
+          : 'oklch(0.40 0.15 95)'; // Darker when no workers
       
       ctx.fillStyle = depositColor;
       ctx.strokeStyle = depotColor;
@@ -1427,6 +1428,11 @@ function drawBaseHealthBar(ctx: CanvasRenderingContext2D, base: Base, screenPos:
   const barY = screenPos.y - baseSize / 2 - 20;
   const hpPercent = base.hp / base.maxHp;
   
+  // Skip health bar if base is at full health and setting is enabled
+  if (state.settings.showHealthBarsOnlyWhenDamaged && base.hp >= base.maxHp) {
+    return;
+  }
+  
   ctx.save();
   
   ctx.fillStyle = 'oklch(0.20 0 0)';
@@ -1466,11 +1472,12 @@ function drawBaseHealthBar(ctx: CanvasRenderingContext2D, base: Base, screenPos:
   if (state.settings.showNumericHP) {
     ctx.fillStyle = COLORS.white;
     ctx.font = 'bold 11px Space Mono, monospace';
-    ctx.textAlign = 'center';
+    ctx.textAlign = 'right'; // Align to the right so it appears on the left side
     ctx.textBaseline = 'middle';
     ctx.shadowColor = 'oklch(0 0 0)';
     ctx.shadowBlur = 3;
-    ctx.fillText(`${Math.ceil(base.hp)} / ${base.maxHp}`, screenPos.x, barY + barHeight / 2);
+    // Position HP number to the left of the health bar
+    ctx.fillText(`${Math.ceil(base.hp)} / ${base.maxHp}`, barX - 3, barY + barHeight / 2);
     ctx.shadowBlur = 0;
   }
   
@@ -1738,7 +1745,7 @@ function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { 
   ctx.restore();
 }
 
-function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string, showNumeric: boolean): void {
+function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string, showNumeric: boolean, state: GameState): void {
   const barWidth = 24;
   const barHeight = 4;
   const barX = screenPos.x - barWidth / 2;
@@ -1750,6 +1757,11 @@ function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos:
   // Use display HP for smooth interpolation
   const displayHp = unit.displayHp !== undefined ? unit.displayHp : unit.hp;
   const hpPercent = displayHp / unit.maxHp;
+  
+  // Skip health bar if unit is at full health and setting is enabled
+  if (state.settings.showHealthBarsOnlyWhenDamaged && unit.hp >= unit.maxHp) {
+    return;
+  }
   
   ctx.save();
   
@@ -1777,11 +1789,12 @@ function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos:
   if (showNumeric) {
     ctx.fillStyle = COLORS.white;
     ctx.font = 'bold 9px Space Mono, monospace';
-    ctx.textAlign = 'center';
+    ctx.textAlign = 'right'; // Align to the right so it appears on the left side
     ctx.textBaseline = 'middle';
     ctx.shadowColor = 'oklch(0 0 0)';
     ctx.shadowBlur = 3;
-    ctx.fillText(`${Math.ceil(unit.hp)}`, screenPos.x, barY - 6);
+    // Position HP number to the left of the health bar
+    ctx.fillText(`${Math.ceil(unit.hp)}`, barX - 3, barY + barHeight / 2);
     ctx.shadowBlur = 0;
   }
   
@@ -2041,80 +2054,39 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
 
     ctx.globalAlpha = 1.0;
 
-    drawUnitHealthBar(ctx, unit, screenPos, color, state.settings.showNumericHP);
+    drawUnitHealthBar(ctx, unit, screenPos, color, state.settings.showNumericHP, state);
 
-    // Draw modifier icons above the unit
-    const unitDef = UNIT_DEFINITIONS[unit.type];
-    if (unitDef.modifiers && unitDef.modifiers.length > 0) {
-      const iconSize = 12;
-      const iconSpacing = 14;
-      const totalWidth = unitDef.modifiers.length * iconSpacing - 2;
-      const startX = screenPos.x - totalWidth / 2;
-      const iconY = screenPos.y - metersToPixels(getUnitSizeMeters(unit) / 2) - 30;
-      
-      ctx.save();
-      ctx.font = `${iconSize}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.shadowColor = 'black';
-      ctx.shadowBlur = 3;
-      
-      unitDef.modifiers.forEach((modifier, idx) => {
-        const icon = getModifierIcon(modifier);
-        const x = startX + idx * iconSpacing;
-        ctx.fillText(icon, x, iconY);
-      });
-      
-      ctx.restore();
-    }
-
-    ctx.fillStyle = COLORS.white;
-    ctx.font = '10px Space Mono, monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${unit.damageMultiplier.toFixed(1)}x`, screenPos.x, screenPos.y + 20);
-    
-    // Draw ability cooldown bar below the unit
-    if (unitDef.abilityName && unitDef.abilityCooldown > 0) {
-      const cooldownPercent = unit.abilityCooldown / unitDef.abilityCooldown;
-      const barWidth = 30; // Width of the cooldown bar in pixels
-      const barHeight = 4; // Height of the bar
-      const radius = metersToPixels(UNIT_SIZE_METERS / 2);
-      const yOffset = radius + 8; // Position below the unit
-      
-      ctx.save();
-      
-      // Background bar (empty/dark)
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-      ctx.fillRect(screenPos.x - barWidth / 2, screenPos.y + yOffset, barWidth, barHeight);
-      
-      // Filled portion showing cooldown remaining (empties as ability is used, fills as it recovers)
-      const fillWidth = barWidth * (1 - cooldownPercent); // Inverted: full when cooldown is 0, empty when cooling down
-      if (fillWidth > 0) {
-        ctx.fillStyle = color;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 4;
-        ctx.globalAlpha = 0.9;
-        ctx.fillRect(screenPos.x - barWidth / 2, screenPos.y + yOffset, fillWidth, barHeight);
-      }
-      
-      // Border around the bar
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1;
-      ctx.globalAlpha = 0.6;
-      ctx.strokeRect(screenPos.x - barWidth / 2, screenPos.y + yOffset, barWidth, barHeight);
-      
-      // If ability is ready, add a subtle pulse effect
-      if (cooldownPercent === 0) {
-        const time = Date.now() / 1000;
-        const pulse = Math.sin(time * 4) * 0.3 + 0.7;
+    // Skip modifier icons and multiplier for mining drones
+    if (unit.type !== 'miningDrone') {
+      // Draw modifier icons above the unit
+      const unitDef = UNIT_DEFINITIONS[unit.type];
+      if (unitDef.modifiers && unitDef.modifiers.length > 0) {
+        const iconSize = 12;
+        const iconSpacing = 14;
+        const totalWidth = unitDef.modifiers.length * iconSpacing - 2;
+        const startX = screenPos.x - totalWidth / 2;
+        const iconY = screenPos.y - metersToPixels(getUnitSizeMeters(unit) / 2) - 30;
         
-        ctx.globalAlpha = pulse * 0.4;
-        ctx.shadowBlur = 8;
-        ctx.fillStyle = color;
-        ctx.fillRect(screenPos.x - barWidth / 2, screenPos.y + yOffset, barWidth, barHeight);
+        ctx.save();
+        ctx.font = `${iconSize}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'black';
+        ctx.shadowBlur = 3;
+        
+        unitDef.modifiers.forEach((modifier, idx) => {
+          const icon = getModifierIcon(modifier);
+          const x = startX + idx * iconSpacing;
+          ctx.fillText(icon, x, iconY);
+        });
+        
+        ctx.restore();
       }
-      
-      ctx.restore();
+
+      ctx.fillStyle = COLORS.white;
+      ctx.font = '10px Space Mono, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${unit.damageMultiplier.toFixed(1)}x`, screenPos.x, screenPos.y + 20);
     }
   });
 }
