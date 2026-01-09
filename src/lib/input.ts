@@ -1101,11 +1101,30 @@ export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCan
   if (!mouseState || !mouseState.isDragging) {
     const worldPos = screenToWorldPosition(state, canvas, { x, y });
     
-    // Check for unit hover
+    // Check for unit hover - show info for all visible units (player and enemy)
     const hoveredUnit = state.units.find(unit => {
-      if (unit.owner !== 0) return false; // Only show tooltips for player units
       const dist = distance(worldPos, unit.position);
-      return dist < 0.8; // Within unit radius
+      if (dist >= 0.8) return false; // Outside unit radius
+      
+      // For enemy units, check if they're visible (fog of war)
+      if (unit.owner !== 0 && state.settings.enableFogOfWar) {
+        const FOG_OF_WAR_VISION_RANGE = 15; // meters - must match renderer.ts
+        
+        // Check if visible from player base
+        const playerBase = state.bases.find(b => b.owner === 0);
+        if (playerBase && distance(playerBase.position, unit.position) <= FOG_OF_WAR_VISION_RANGE) {
+          return true;
+        }
+        
+        // Check if visible from any player unit
+        const visibleFromUnit = state.units.some(u => 
+          u.owner === 0 && distance(u.position, unit.position) <= FOG_OF_WAR_VISION_RANGE
+        );
+        
+        return visibleFromUnit;
+      }
+      
+      return true; // Show player units and enemy units when fog of war is disabled
     });
     
     if (hoveredUnit) {
