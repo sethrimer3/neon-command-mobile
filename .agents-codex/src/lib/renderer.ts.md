@@ -23,6 +23,14 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
   - Only renders game elements when in 'game' or 'countdown' mode
   - Draws in specific layer order for proper visual hierarchy
 
+### getTintedSprite(sprite, tintColor): HTMLCanvasElement | null
+- **Purpose:** Produces a cached, tinted version of a sprite using an offscreen canvas.
+- **Parameters:** Base sprite image and the team tint color.
+- **Returns:** A canvas containing the tinted sprite, or null if the sprite/context is unavailable.
+- **Notes:** 
+  - Uses multiply + destination-in compositing to preserve shading and alpha.
+  - Caches by `sprite.src` + color to reuse across frames.
+
 ### Drawing Functions
 
 #### drawBackground(ctx, canvas, state?): void
@@ -117,7 +125,8 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - Blade sword particles honor the swing hold state to keep the sword at the final swing angle between combo hits
 - Sprite rendering uses cached Image instances and respects the `settings.enableSprites` toggle
 - Sprite glow uses the same glow toggle as other shader-like effects
-- Radiant sprites are tinted to the owning team color using multiplicative blending to preserve shading
+- Radiant sprites are tinted to the owning team color using an offscreen canvas with multiplicative blending to preserve shading
+- Tinted sprite canvases are cached per sprite path + team color to avoid re-tinting every frame
 - Radiant sprite rotation adds a fixed offset so sprite-forward (up) aligns with unit-forward directions
 
 ### Rendering Optimizations
@@ -169,6 +178,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - **2026-01-12**: Held Blade sword particles at the final swing angles between combo swings before resetting to rest
 - **2025-03-22**: Added Radiant sprite rendering for units, bases, and mining drones with a settings toggle.
 - **2025-03-23**: Tinted Radiant sprites to team colors and added a rotation offset to align sprite-forward direction.
+- **2025-03-24**: Moved sprite tinting to cached offscreen canvases to preserve scene transparency and reduce per-frame work.
 
 ## Watch Out For
 - Always convert game positions to pixels before drawing

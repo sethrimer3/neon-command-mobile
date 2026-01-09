@@ -67,6 +67,13 @@ const radiantBaseSpritePaths: Partial<Record<BaseType, string>> = {
 const radiantMiningDroneSpritePath = `${assetBaseUrl}ASSETS/sprites/factions/radiant/mining/radiantMiningDrone.png`;
 // Cache sprite images so we only construct them once.
 const spriteCache = new Map<string, HTMLImageElement>();
+// Cache pre-tinted sprites so we can reuse colored variants across frames.
+const tintedSpriteCache = new Map<string, HTMLCanvasElement>();
+
+// Create a canvas element for tinting without touching the main render surface.
+const createTintCanvas = (): HTMLCanvasElement => {
+  return document.createElement('canvas');
+};
 
 function getSpriteFromCache(path: string): HTMLImageElement {
   const cached = spriteCache.get(path);
@@ -81,6 +88,46 @@ function getSpriteFromCache(path: string): HTMLImageElement {
 
 function isSpriteReady(sprite: HTMLImageElement): boolean {
   return sprite.complete && sprite.naturalWidth > 0;
+}
+
+/**
+ * Creates (or reuses) a colorized sprite using an offscreen canvas to preserve transparency.
+ * @param sprite - The base sprite image.
+ * @param tintColor - The color used to tint white-shaded pixels.
+ * @returns A canvas containing the tinted sprite.
+ */
+function getTintedSprite(sprite: HTMLImageElement, tintColor: string): HTMLCanvasElement | null {
+  if (!isSpriteReady(sprite)) {
+    return null;
+  }
+
+  const cacheKey = `${sprite.src}::${tintColor}`;
+  const cached = tintedSpriteCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const canvas = createTintCanvas();
+  canvas.width = sprite.naturalWidth;
+  canvas.height = sprite.naturalHeight;
+  const tintCtx = canvas.getContext('2d');
+  if (!tintCtx) {
+    return null;
+  }
+
+  // Draw the base sprite first so we can multiply the tint while keeping shading.
+  tintCtx.clearRect(0, 0, canvas.width, canvas.height);
+  tintCtx.drawImage(sprite, 0, 0);
+  tintCtx.globalCompositeOperation = 'multiply';
+  tintCtx.fillStyle = tintColor;
+  tintCtx.fillRect(0, 0, canvas.width, canvas.height);
+  // Reapply the sprite alpha so the tinted pixels only appear inside the silhouette.
+  tintCtx.globalCompositeOperation = 'destination-in';
+  tintCtx.drawImage(sprite, 0, 0);
+  tintCtx.globalCompositeOperation = 'source-over';
+
+  tintedSpriteCache.set(cacheKey, canvas);
+  return canvas;
 }
 
 /**
@@ -110,22 +157,9 @@ function drawCenteredSprite(
     ctx.shadowColor = tintColor;
     ctx.shadowBlur = 18;
   }
-  // Draw the base sprite before tinting.
-  ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
-  if (enableGlow) {
-    // Disable glow for the tint pass to avoid extra shadow artifacts.
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-  }
-  // Tint the white-shaded sprites so the team color replaces white while preserving shading.
-  ctx.globalCompositeOperation = 'multiply';
-  ctx.fillStyle = tintColor;
-  ctx.fillRect(-size / 2, -size / 2, size, size);
-  // Reapply the sprite alpha so the tint stays inside the sprite silhouette.
-  ctx.globalCompositeOperation = 'destination-in';
-  ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
-  // Reset to default composition for subsequent draws.
-  ctx.globalCompositeOperation = 'source-over';
+  // Use a cached, tinted sprite so canvas composite operations don't affect the main scene.
+  const tintedSprite = getTintedSprite(sprite, tintColor) ?? sprite;
+  ctx.drawImage(tintedSprite, -size / 2, -size / 2, size, size);
   ctx.restore();
 }
 
