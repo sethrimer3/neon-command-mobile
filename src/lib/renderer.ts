@@ -440,25 +440,31 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
   
   ctx.save();
   
-  // Layer 1: Draw dim black fog for unexplored areas (almost black, very dark)
+  // Step 1: Draw dim black fog for all unexplored areas
   ctx.fillStyle = 'rgba(5, 5, 10, 0.95)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   
-  // Layer 2: Cut out explored areas and replace with purple fog
-  // Use destination-out to remove the black fog where explored
-  ctx.globalCompositeOperation = 'destination-out';
+  // Step 2: Identify all explored areas (where player units/base have been)
+  // Create an offscreen canvas for the explored mask
+  const exploredCanvas = document.createElement('canvas');
+  exploredCanvas.width = canvas.width;
+  exploredCanvas.height = canvas.height;
+  const exploredCtx = exploredCanvas.getContext('2d');
+  if (!exploredCtx) {
+    ctx.restore();
+    return;
+  }
   
-  // Mark explored areas by drawing circles at player unit/base positions
+  // Draw circles for all player unit and base positions (marking explored areas)
   const playerBase = state.bases.find(b => b.owner === 0);
   if (playerBase) {
     const screenPos = worldToScreen(playerBase.position, state, canvas);
     const visionRadius = metersToPixels(FOG_OF_WAR_VISION_RANGE) * (state.camera?.zoom || 1);
     
-    // Solid circle to mark as explored
-    ctx.fillStyle = 'rgba(0, 0, 0, 1)';
-    ctx.beginPath();
-    ctx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
-    ctx.fill();
+    exploredCtx.fillStyle = 'rgba(255, 255, 255, 1)';
+    exploredCtx.beginPath();
+    exploredCtx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
+    exploredCtx.fill();
   }
   
   state.units.forEach(unit => {
@@ -466,18 +472,61 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
       const screenPos = worldToScreen(unit.position, state, canvas);
       const visionRadius = metersToPixels(FOG_OF_WAR_VISION_RANGE) * (state.camera?.zoom || 1);
       
-      // Solid circle to mark as explored
-      ctx.fillStyle = 'rgba(0, 0, 0, 1)';
-      ctx.beginPath();
-      ctx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
-      ctx.fill();
+      exploredCtx.fillStyle = 'rgba(255, 255, 255, 1)';
+      exploredCtx.beginPath();
+      exploredCtx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
+      exploredCtx.fill();
     }
   });
   
-  // Layer 2: Apply purple fog to explored areas
+  // Use destination-out to remove black fog from explored areas
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.drawImage(exploredCanvas, 0, 0);
+  
+  // Step 3: Draw purple fog over explored areas (but not currently visible)
   ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = 'rgba(60, 30, 90, 0.7)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalAlpha = 0.7;
+  
+  // Use the explored mask to only draw purple fog in explored areas
+  ctx.save();
+  
+  // Clip to explored areas
+  ctx.globalCompositeOperation = 'source-over';
+  
+  // Draw purple fog
+  ctx.fillStyle = 'rgba(60, 30, 90, 1)';
+  ctx.globalAlpha = 0.7;
+  
+  // Apply the explored mask
+  ctx.globalCompositeOperation = 'destination-over';
+  ctx.drawImage(exploredCanvas, 0, 0);
+  
+  ctx.restore();
+  
+  // Draw purple fog over the entire explored area
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.save();
+  ctx.globalAlpha = 0.7;
+  
+  // Create a temporary canvas for purple fog
+  const purpleCanvas = document.createElement('canvas');
+  purpleCanvas.width = canvas.width;
+  purpleCanvas.height = canvas.height;
+  const purpleCtx = purpleCanvas.getContext('2d');
+  if (purpleCtx) {
+    purpleCtx.fillStyle = 'rgba(60, 30, 90, 1)';
+    purpleCtx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Clip it to explored areas
+    purpleCtx.globalCompositeOperation = 'destination-in';
+    purpleCtx.drawImage(exploredCanvas, 0, 0);
+    
+    // Draw it on main canvas
+    ctx.globalAlpha = 0.7;
+    ctx.drawImage(purpleCanvas, 0, 0);
+  }
+  
+  ctx.restore();
   
   // Draw swirling fog particles in explored areas
   if (state.fogParticles && state.settings.enableParticleEffects) {
@@ -498,7 +547,7 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
     });
   }
   
-  // Layer 3: Cut out currently visible areas (clear vision)
+  // Step 4: Cut out currently visible areas (clear vision)
   ctx.globalCompositeOperation = 'destination-out';
   
   // Draw vision circles for player base
