@@ -977,6 +977,7 @@ export interface GameState {
     enableSprites?: boolean; // Enable/disable sprite-based rendering for units and bases
     mirrorAbilityCasting?: boolean; // Mirror ability casting along both X and Y axes
     chessMode?: boolean; // Enable chess mode: queue commands, then execute all at once every 10 seconds
+    aiDifficulty?: 'easy' | 'medium' | 'hard'; // AI difficulty level
   };
 
   surrenderClicks: number;
