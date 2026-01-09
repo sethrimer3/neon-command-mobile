@@ -432,6 +432,15 @@ function isVisibleToPlayer(position: Vector2, state: GameState): boolean {
   return false;
 }
 
+// Helper function to create a radial gradient for fog of war vision
+function createVisionGradient(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number): CanvasGradient {
+  const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+  gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
+  gradient.addColorStop(0.7, 'rgba(0, 0, 0, 1)');
+  gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  return gradient;
+}
+
 // Helper function to draw fog of war overlay
 function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: HTMLCanvasElement): void {
   if (!state.settings.enableFogOfWar) {
@@ -452,13 +461,7 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
     const screenPos = worldToScreen(playerBase.position, state, canvas);
     const visionRadius = metersToPixels(FOG_OF_WAR_VISION_RANGE) * (state.camera?.zoom || 1);
     
-    // Create gradient for smooth fog edge
-    const gradient = ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, visionRadius);
-    gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-    gradient.addColorStop(0.7, 'rgba(0, 0, 0, 1)');
-    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    
-    ctx.fillStyle = gradient;
+    ctx.fillStyle = createVisionGradient(ctx, screenPos.x, screenPos.y, visionRadius);
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
     ctx.fill();
@@ -470,13 +473,7 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
       const screenPos = worldToScreen(unit.position, state, canvas);
       const visionRadius = metersToPixels(FOG_OF_WAR_VISION_RANGE) * (state.camera?.zoom || 1);
       
-      // Create gradient for smooth fog edge
-      const gradient = ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, visionRadius);
-      gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-      gradient.addColorStop(0.7, 'rgba(0, 0, 0, 1)');
-      gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      
-      ctx.fillStyle = gradient;
+      ctx.fillStyle = createVisionGradient(ctx, screenPos.x, screenPos.y, visionRadius);
       ctx.beginPath();
       ctx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
       ctx.fill();
