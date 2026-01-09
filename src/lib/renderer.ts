@@ -407,6 +407,82 @@ function clearGlowEffect(ctx: CanvasRenderingContext2D, state: GameState): void 
   }
 }
 
+// Fog of war constants
+const FOG_OF_WAR_VISION_RANGE = 15; // meters - how far player units/base can see
+
+// Helper function to check if a position is visible to the player (for fog of war)
+function isVisibleToPlayer(position: Vector2, state: GameState): boolean {
+  if (!state.settings.enableFogOfWar) {
+    return true; // Fog of war disabled, everything is visible
+  }
+  
+  // Player's base provides vision
+  const playerBase = state.bases.find(b => b.owner === 0);
+  if (playerBase && distance(playerBase.position, position) <= FOG_OF_WAR_VISION_RANGE) {
+    return true;
+  }
+  
+  // Player's units provide vision
+  for (const unit of state.units) {
+    if (unit.owner === 0 && distance(unit.position, position) <= FOG_OF_WAR_VISION_RANGE) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// Helper function to create a radial gradient for fog of war vision
+function createVisionGradient(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number): CanvasGradient {
+  const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+  gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
+  gradient.addColorStop(0.7, 'rgba(0, 0, 0, 1)');
+  gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  return gradient;
+}
+
+// Helper function to draw fog of war overlay
+function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: HTMLCanvasElement): void {
+  if (!state.settings.enableFogOfWar) {
+    return;
+  }
+  
+  // Create a full-screen dark overlay
+  ctx.save();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Cut out visible areas using destination-out compositing
+  ctx.globalCompositeOperation = 'destination-out';
+  
+  // Draw vision circles for player base
+  const playerBase = state.bases.find(b => b.owner === 0);
+  if (playerBase) {
+    const screenPos = worldToScreen(playerBase.position, state, canvas);
+    const visionRadius = metersToPixels(FOG_OF_WAR_VISION_RANGE) * (state.camera?.zoom || 1);
+    
+    ctx.fillStyle = createVisionGradient(ctx, screenPos.x, screenPos.y, visionRadius);
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  
+  // Draw vision circles for player units
+  state.units.forEach(unit => {
+    if (unit.owner === 0) {
+      const screenPos = worldToScreen(unit.position, state, canvas);
+      const visionRadius = metersToPixels(FOG_OF_WAR_VISION_RANGE) * (state.camera?.zoom || 1);
+      
+      ctx.fillStyle = createVisionGradient(ctx, screenPos.x, screenPos.y, visionRadius);
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+  
+  ctx.restore();
+}
+
 export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canvas: HTMLCanvasElement, selectionRect?: { x1: number; y1: number; x2: number; y2: number } | null): void {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -468,6 +544,11 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
       drawAbilityCastPreview(ctx, state);
       drawBaseAbilityPreview(ctx, state);
       drawVisualFeedback(ctx, state);
+      
+      // Draw fog of war overlay (before camera transform is removed)
+      if (state.settings.enableFogOfWar) {
+        drawFogOfWar(ctx, state, canvas);
+      }
     }
     
     // Remove camera transform so screen-space UI does not zoom/pan
@@ -1253,6 +1334,11 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
   const spritesEnabled = state.settings.enableSprites ?? true;
 
   state.bases.forEach((base) => {
+    // Fog of war: hide enemy bases that are not visible to the player
+    if (base.owner !== 0 && !isVisibleToPlayer(base.position, state)) {
+      return;
+    }
+    
     let screenPos = positionToPixels(base.position);
     const size = metersToPixels(BASE_SIZE_METERS);
     const color = state.players[base.owner].color;
@@ -2030,6 +2116,11 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
 
     // Hide cloaked enemy units from the player's view.
     if (unit.cloaked && unit.owner !== 0) {
+      return;
+    }
+    
+    // Fog of war: hide enemy units that are not visible to the player
+    if (unit.owner !== 0 && !isVisibleToPlayer(unit.position, state)) {
       return;
     }
     

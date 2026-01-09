@@ -16,6 +16,7 @@ import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Label } from './components/ui/label';
 import { Switch } from './components/ui/switch';
+import { Checkbox } from './components/ui/checkbox';
 import { Slider } from './components/ui/slider';
 import { GameController, Robot, ListChecks, GearSix, ArrowLeft, Flag, MapPin, WifiHigh, ChartBar, SpeakerHigh, SpeakerSlash, Info, Book, GraduationCap } from '@phosphor-icons/react';
 import { toast } from 'sonner';
@@ -82,6 +83,7 @@ function App() {
   const [mirrorAbilityCasting, setMirrorAbilityCasting] = useKV<boolean>('mirror-ability-casting', false);
   const [chessMode, setChessMode] = useKV<boolean>('chess-mode', false);
   const [aiDifficulty, setAiDifficulty] = useKV<'easy' | 'medium' | 'hard'>('ai-difficulty', 'medium');
+  const [enableFogOfWar, setEnableFogOfWar] = useKV<boolean>('enable-fog-of-war', false);
 
   const gameState = gameStateRef.current;
   const lastVictoryStateRef = useRef<boolean>(false);
@@ -154,13 +156,14 @@ function App() {
       mirrorAbilityCasting: mirrorAbilityCasting ?? false,
       chessMode: chessMode ?? false,
       aiDifficulty: aiDifficulty || 'medium',
+      enableFogOfWar: enableFogOfWar ?? false,
     };
     gameStateRef.current.showMinimap = showMinimap ?? true;
     gameStateRef.current.players = gameStateRef.current.players.map((p, i) => ({
       ...p,
       color: i === 0 ? (playerColor || COLORS.playerDefault) : (enemyColor || COLORS.enemyDefault),
     }));
-  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showHealthBarsOnlyWhenDamaged, showMinimap, playerFaction, enemyFaction, enableGlowEffects, enableParticleEffects, enableMotionBlur, enableSprites, mirrorAbilityCasting, chessMode, aiDifficulty]);
+  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showHealthBarsOnlyWhenDamaged, showMinimap, playerFaction, enemyFaction, enableGlowEffects, enableParticleEffects, enableMotionBlur, enableSprites, mirrorAbilityCasting, chessMode, aiDifficulty, enableFogOfWar]);
 
   // Cleanup interval on unmount
   useEffect(() => {
@@ -1182,21 +1185,35 @@ function App() {
       />
 
       {gameState.mode === 'game' && (
-        <Button
-          onClick={handleSurrenderClick}
-          className={`absolute top-4 left-4 orbitron transition-all duration-300 overflow-hidden animate-in fade-in slide-in-from-left-2 ${
-            gameState.surrenderExpanded ? 'w-48' : 'w-12'
-          }`}
-          variant="destructive"
-          size="sm"
-        >
-          <Flag className={gameState.surrenderExpanded ? "mr-2" : ""} size={16} />
-          {gameState.surrenderExpanded && (
-            <span className="whitespace-nowrap">
-              Surrender? ({5 - gameState.surrenderClicks})
-            </span>
-          )}
-        </Button>
+        <>
+          <Button
+            onClick={handleSurrenderClick}
+            className={`absolute top-4 left-4 orbitron transition-all duration-300 overflow-hidden animate-in fade-in slide-in-from-left-2 ${
+              gameState.surrenderExpanded ? 'w-48' : 'w-12'
+            }`}
+            variant="destructive"
+            size="sm"
+          >
+            <Flag className={gameState.surrenderExpanded ? "mr-2" : ""} size={16} />
+            {gameState.surrenderExpanded && (
+              <span className="whitespace-nowrap">
+                Surrender? ({5 - gameState.surrenderClicks})
+              </span>
+            )}
+          </Button>
+          
+          {/* Developer Mode: Fog of War Toggle */}
+          <div className="absolute top-16 left-4 flex items-center space-x-2 bg-background/80 backdrop-blur-sm px-3 py-2 rounded-md border border-border animate-in fade-in slide-in-from-left-2 delay-100">
+            <Checkbox
+              id="fog-of-war"
+              checked={enableFogOfWar ?? false}
+              onCheckedChange={(checked) => setEnableFogOfWar(checked === true)}
+            />
+            <Label htmlFor="fog-of-war" className="text-xs cursor-pointer select-none">
+              Fog of War
+            </Label>
+          </div>
+        </>
       )}
 
       {gameState.mode === 'countdown' && (

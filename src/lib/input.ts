@@ -1255,29 +1255,32 @@ export function handleMouseUp(e: MouseEvent, state: GameState, canvas: HTMLCanva
     // When base is selected and drag is NOT from the base, queue the base's ability
     if (selectedBase && state.selectedUnits.size === 0 && !mouseState.touchedBase) {
       handleBaseAbilityDrag(state, selectedBase, { x: dx, y: dy }, mouseState.startPos, canvas);
+    } else if (state.selectedUnits.size > 0 && !mouseState.touchedBase && !mouseState.touchedMovementDot) {
+      // Handle ability drag for selected units
+      const worldStart = screenToWorldPosition(state, canvas, mouseState.startPos);
+      const worldEnd = screenToWorldPosition(state, canvas, { x, y });
+      let dragVectorWorld = subtract(worldEnd, worldStart);
+      
+      // Apply mirroring if the setting is enabled (mirror both X and Y)
+      if (state.settings.mirrorAbilityCasting) {
+        dragVectorWorld = {
+          x: -dragVectorWorld.x,
+          y: -dragVectorWorld.y
+        };
+      }
+
+      if (distance({ x: 0, y: 0 }, dragVectorWorld) > 0.5) {
+        handleVectorBasedAbilityDrag(state, dragVectorWorld);
+      } else {
+        // Clear preview if drag was too short
+        delete state.abilityCastPreview;
+      }
+    } else {
+      // Clear preview if no valid action was taken in this branch
+      delete state.abilityCastPreview;
     }
   } else if (elapsed < TAP_TIME_MS && dist < 10) {
     handleTap(state, { x, y }, canvas, playerIndex);
-  } else if (mouseState.isDragging && state.selectedUnits.size > 0 && !mouseState.touchedBase && !mouseState.touchedMovementDot) {
-    // Use vector-based ability drag: convert screen drag to world vector
-    const worldStart = screenToWorldPosition(state, canvas, mouseState.startPos);
-    const worldEnd = screenToWorldPosition(state, canvas, { x, y });
-    let dragVectorWorld = subtract(worldEnd, worldStart);
-    
-    // Apply mirroring if the setting is enabled (mirror both X and Y)
-    if (state.settings.mirrorAbilityCasting) {
-      dragVectorWorld = {
-        x: -dragVectorWorld.x,
-        y: -dragVectorWorld.y
-      };
-    }
-
-    if (distance({ x: 0, y: 0 }, dragVectorWorld) > 0.5) {
-      handleVectorBasedAbilityDrag(state, dragVectorWorld);
-    } else {
-      // Clear preview if drag was too short
-      delete state.abilityCastPreview;
-    }
   } else {
     // Clear preview if no valid action was taken
     delete state.abilityCastPreview;

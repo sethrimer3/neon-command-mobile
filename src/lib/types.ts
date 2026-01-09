@@ -978,6 +978,7 @@ export interface GameState {
     mirrorAbilityCasting?: boolean; // Mirror ability casting along both X and Y axes
     chessMode?: boolean; // Enable chess mode: queue commands, then execute all at once every 10 seconds
     aiDifficulty?: 'easy' | 'medium' | 'hard'; // AI difficulty level
+    enableFogOfWar?: boolean; // Enable fog of war (developer mode)
   };
 
   surrenderClicks: number;
