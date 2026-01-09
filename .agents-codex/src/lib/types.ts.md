@@ -24,7 +24,7 @@ Defines all core type definitions, interfaces, and constants for the SoL-RTS gam
 - **BASE_SIZE_METERS:** `6` - Size of player bases in game units
 - **UNIT_SIZE_METERS:** `2` - Standard unit collision size
 - **BLADE_SWORD_PARTICLE_COUNT:** `5` - Number of Blade sword particles used for rendering and range alignment
-- **BLADE_SWORD_PARTICLE_SPACING_METERS:** `UNIT_SIZE_METERS * 0.24 * 3.2` - Spacing between Blade sword particles for magnet-like separation
+- **BLADE_SWORD_PARTICLE_SPACING_METERS:** `UNIT_SIZE_METERS * 0.24 * 4.5 * 0.75` - Spacing between Blade sword particles after the 25% reduction
 - **BLADE_SWORD_RANGE_METERS:** `BLADE_SWORD_PARTICLE_SPACING_METERS * BLADE_SWORD_PARTICLE_COUNT` - Melee range aligned to the outermost sword particle
 - **MINING_DEPOT_SIZE_METERS:** `3` - Mining depot footprint used for rendering and input hit tests
 - **RESOURCE_DEPOSIT_SIZE_METERS:** `1.2` - Hex resource deposit size around each depot
@@ -182,6 +182,7 @@ None currently identified
 - **2026-01-11**: Added Blade trail history snapshots to drive lagged sword particle positioning while moving/turning
 - **2026-01-12**: Added Blade sword swing hold state to keep the blade at its last angle between combo swings
 - **2025-03-22**: Added `settings.enableSprites` to control sprite-based rendering toggles.
+- **2025-03-24**: Reduced Blade sword particle spacing and doubled Blade move speed for faster melee engagement.
 
 ## Watch Out For
 - Always use meters for game logic, only convert to pixels for rendering

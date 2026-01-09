@@ -123,6 +123,8 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - Blade sword particle spacing pulls from shared constants so the visuals match the melee range tuning
 - Blade sword particles sample lagged transform history so each segment trails behind movement/turns
 - Blade sword particles honor the swing hold state to keep the sword at the final swing angle between combo hits
+- Blade sword particles collapse when no valid enemies are in melee range and extend when targets enter range
+- Blade sword particles render with reduced radii and a pale team-colored connector line for a unified blade read
 - Sprite rendering uses cached Image instances and respects the `settings.enableSprites` toggle
 - Sprite glow uses the same glow toggle as other shader-like effects
 - Radiant sprites are tinted to the owning team color using an offscreen canvas with multiplicative blending to preserve shading
@@ -182,6 +184,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - **2025-03-23**: Tinted Radiant sprites to team colors and added a rotation offset to align sprite-forward direction.
 - **2025-03-24**: Moved sprite tinting to cached offscreen canvases to preserve scene transparency and reduce per-frame work.
 - **2025-03-24**: Applied the playfield rotation offset to unit rendering and motion trails for desktop landscape alignment.
+- **2025-03-24**: Reduced Blade sword particle size, added pale connector lines, and retracted the blade when no enemies are in range.
 
 ## Watch Out For
 - Always convert game positions to pixels before drawing

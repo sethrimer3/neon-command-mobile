@@ -12,6 +12,7 @@ import {
   UNIT_DEFINITIONS,
   BLADE_SWORD_PARTICLE_COUNT,
   BLADE_SWORD_PARTICLE_SPACING_METERS,
+  BLADE_SWORD_RANGE_METERS,
   LASER_RANGE,
   ABILITY_MAX_RANGE,
   ABILITY_LASER_DURATION,
@@ -325,7 +326,7 @@ const PROJECTILE_TRAIL_LENGTH_METERS = UNIT_SIZE_METERS * 0.9;
 const PROJECTILE_OUTER_TRAIL_WIDTH_METERS = UNIT_SIZE_METERS * 0.3;
 
 // Blade sword particle visuals
-const BLADE_SWORD_PARTICLE_RADIUS_METERS = UNIT_SIZE_METERS * 0.18; // Increased from 0.12 for better visibility as floating magnets
+const BLADE_SWORD_PARTICLE_RADIUS_METERS = UNIT_SIZE_METERS * 0.18 * 0.75; // Reduce particle radius by 25% to keep the sword compact
 const BLADE_SWORD_SWING_ARC = Math.PI * 1.2; // Wider arc for more visible swings
 const BLADE_SWORD_WHIP_DELAY = 0.04; // seconds of delay per particle index for whip effect
 const BLADE_SWORD_MOVEMENT_LAG_SECONDS = 0.1; // seconds of movement lag per particle index
@@ -361,6 +362,20 @@ function addAlphaToColor(color: string, alpha: number): string {
   // For other color formats, return as-is and let canvas handle it with globalAlpha
   console.warn('Unexpected color format for alpha manipulation:', color);
   return color;
+}
+
+// Helper function to create a pale, bright line color based on the team's tint.
+function getPaleBrightTeamColor(color: string, alpha: number): string {
+  const oklchMatch = color.match(/oklch\(([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*[\d.]+)?\)/);
+
+  if (oklchMatch) {
+    const lightness = Math.min(1, parseFloat(oklchMatch[1]) + 0.15);
+    const chroma = Math.max(0, parseFloat(oklchMatch[2]) * 0.6);
+    const hue = parseFloat(oklchMatch[3]);
+    return `oklch(${lightness} ${chroma} ${hue} / ${alpha})`;
+  }
+
+  return addAlphaToColor(color, alpha);
 }
 
 // Helper function to get camera-adjusted positions for visibility tests and overlays
@@ -1952,13 +1967,33 @@ function sampleBladeTrail(unit: Unit, targetTime: number): { position: Vector2; 
   return { position: unit.position, rotation: unit.rotation ?? 0 };
 }
 
-function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { x: number; y: number }, color: string): void {
+function drawBladeSword(
+  ctx: CanvasRenderingContext2D,
+  unit: Unit,
+  screenPos: { x: number; y: number },
+  color: string,
+  state: GameState
+): void {
   const now = Date.now();
-  const collapseSword = !!unit.bladeVolley;
   const particleRadius = metersToPixels(BLADE_SWORD_PARTICLE_RADIUS_METERS);
   const particleSpacing = metersToPixels(BLADE_SWORD_PARTICLE_SPACING_METERS);
   const swing = unit.swordSwing;
   const swingHold = unit.swordSwingHold;
+  // Determine if the Blade should extend by checking for valid melee targets nearby.
+  const canHitEnemyInRange = state.units.some((enemy) => {
+    if (enemy.owner === unit.owner || enemy.hp <= 0) {
+      return false;
+    }
+    const enemyDef = UNIT_DEFINITIONS[enemy.type];
+    if (enemyDef.modifiers.includes('flying')) {
+      return false;
+    }
+    return distance(unit.position, enemy.position) <= BLADE_SWORD_RANGE_METERS;
+  });
+  const collapseSword = !canHitEnemyInRange && !swing && !swingHold && !unit.bladeVolley;
+  const connectionColor = getPaleBrightTeamColor(color, 0.75);
+  const collapsedOffset = particleSpacing * 0.35;
+  const bladeParticlePositions: Array<{ x: number; y: number }> = [];
   // Apply the desktop rotation offset so blade trails align with the rotated playfield.
   const playfieldRotation = getPlayfieldRotationRadians();
 
@@ -1990,12 +2025,13 @@ function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { 
       angle = baseRotation + BLADE_SWORD_REST_ANGLE;
     }
 
-    // Each particle has its own orbital radius (different distances from unit center)
-    const offset = collapseSword ? particleSpacing : particleSpacing * (i + 1);
+    // Each particle has its own orbital radius (different distances from unit center).
+    const offset = collapseSword ? collapsedOffset : particleSpacing * (i + 1);
     const particlePos = {
       x: baseScreenPos.x + Math.cos(angle) * offset,
       y: baseScreenPos.y + Math.sin(angle) * offset,
     };
+    bladeParticlePositions.push(particlePos);
 
     // Draw trail if swinging
     if (hasSwingMotion && swing) {
@@ -2037,6 +2073,23 @@ function drawBladeSword(ctx: CanvasRenderingContext2D, unit: Unit, screenPos: { 
     ctx.beginPath();
     ctx.arc(particlePos.x, particlePos.y, particleRadius * 0.5, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  // Connect the particles with a thin, pale line so the sword reads as a single blade.
+  if (bladeParticlePositions.length > 1) {
+    ctx.globalAlpha = 1.0;
+    ctx.strokeStyle = connectionColor;
+    ctx.lineWidth = particleRadius * 0.35;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    bladeParticlePositions.forEach((particlePos, index) => {
+      if (index === 0) {
+        ctx.moveTo(particlePos.x, particlePos.y);
+      } else {
+        ctx.lineTo(particlePos.x, particlePos.y);
+      }
+    });
+    ctx.stroke();
   }
 
   ctx.restore();
@@ -2163,7 +2216,7 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     }
 
     if (!useLOD && unit.type === 'warrior' && state.settings.enableParticleEffects) {
-      drawBladeSword(ctx, unit, screenPos, color);
+      drawBladeSword(ctx, unit, screenPos, color, state);
     }
 
     if (unit.cloaked) {

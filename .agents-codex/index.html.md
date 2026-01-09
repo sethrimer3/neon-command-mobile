@@ -60,6 +60,7 @@ Defines the HTML entry point for the Vite-powered React application, including m
 - **2025-03-23:** Bumped the startup overlay build badge to build 32.
 - **2025-03-24:** Bumped the startup overlay build badge to build 33.
 - **2025-03-24:** Bumped the startup overlay build badge to build 34.
+- **2025-03-24:** Bumped the startup overlay build badge to build 35.
 
 ## Watch Out For
 - Keep asset paths relative if the site is hosted under a non-root base path.
