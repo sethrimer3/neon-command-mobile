@@ -1,7 +1,7 @@
 # sound.ts
 
 ## Purpose
-Manages all game audio including sound effects and music. Uses Web Audio API to generate procedural sounds for game events. Provides volume controls and enable/disable functionality.
+Manages all game audio including sound effects and music. Uses Web Audio API to generate procedural sounds for game events while supporting optional audio file playback. Provides volume controls and enable/disable functionality.
 
 ## Dependencies
 ### Imports
@@ -21,7 +21,7 @@ None - pure browser APIs
 - **sfxVolume**: Sound effects volume (0-1)
 - **musicVolume**: Music volume (0-1)
 - **enabled**: Master on/off switch
-- **audioFiles**: Map of loaded audio files
+- **audioFiles**: Map of loaded audio files for direct playback
 
 #### Constructor
 - **Purpose:** Initialize audio context
@@ -64,6 +64,7 @@ Each method plays a specific game sound:
 - **playLaserFire()**: Base laser (noise + tone)
 - **playCountdownTick()**: Timer sound (600→800Hz)
 - **playMatchStart()**: Game begin (ascending sweep)
+- **playSettingChange()**: Settings toggle feedback (audio file or tone fallback)
 
 ### soundManager Export
 - **Purpose:** Singleton instance
@@ -80,12 +81,13 @@ Each method plays a specific game sound:
 ## Implementation Notes
 
 ### Critical Details
-- All sounds are procedurally generated (no audio files)
+- Procedural sounds are the default, with optional audio file playback for key cues
 - Audio context may be suspended until user interaction
 - Volume values clamped to [0, 1] range
 - SFX volume multiplied with individual sound volumes
 - Exponential decay creates natural sound fade
 - White noise generated from random samples
+- Audio file playback uses `playAudioFile` when a matching key is loaded
 
 ### Web Audio API Usage
 1. Create oscillator or buffer source
@@ -122,6 +124,7 @@ Each method plays a specific game sound:
 - Initial creation with procedural sounds
 - Added all game event sounds
 - Implemented volume controls
+- **2025-03-22**: Added audio file fallbacks for key UI/gameplay cues and settings feedback.
 
 ## Watch Out For
 - Audio context must be resumed on first user interaction

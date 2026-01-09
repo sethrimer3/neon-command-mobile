@@ -177,23 +177,57 @@ export class SoundManager {
   }
 
   playButtonClick() {
+    // Prefer the menu selection audio clip when it has been loaded.
+    if (this.audioFiles.has('menu-selection')) {
+      this.playAudioFile('menu-selection');
+      return;
+    }
     this.playTone(1000, 0.05, 'sine', 0.15);
   }
 
+  playSettingChange() {
+    // Use the dedicated settings toggle audio clip when available.
+    if (this.audioFiles.has('setting-change')) {
+      this.playAudioFile('setting-change');
+      return;
+    }
+    this.playTone(900, 0.05, 'sine', 0.14);
+  }
+
   playCountdown() {
+    // Swap in the countdown tick audio file when it is loaded.
+    if (this.audioFiles.has('timer-tick')) {
+      this.playAudioFile('timer-tick');
+      return;
+    }
     this.playTone(880, 0.1, 'square', 0.2);
   }
 
   playMatchStart() {
+    // Use the enter game mode audio cue when available.
+    if (this.audioFiles.has('enter-game-mode')) {
+      this.playAudioFile('enter-game-mode');
+      return;
+    }
     this.playTone(1046, 0.15, 'sine', 0.3);
     setTimeout(() => this.playTone(1318, 0.2, 'sine', 0.3), 100);
   }
 
   playIncomeTick() {
+    // Play the note cue for income ticks if it has been loaded.
+    if (this.audioFiles.has('income-note')) {
+      this.playAudioFile('income-note');
+      return;
+    }
     this.playTone(1500, 0.03, 'sine', 0.08);
   }
 
   playError() {
+    // Prefer the error audio clip when available.
+    if (this.audioFiles.has('error')) {
+      this.playAudioFile('error');
+      return;
+    }
     this.playTone(200, 0.15, 'square', 0.25);
     setTimeout(() => this.playTone(150, 0.2, 'square', 0.2), 100);
   }

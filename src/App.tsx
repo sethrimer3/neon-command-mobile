@@ -78,6 +78,7 @@ function App() {
   const [enableGlowEffects, setEnableGlowEffects] = useKV<boolean>('enable-glow-effects', true);
   const [enableParticleEffects, setEnableParticleEffects] = useKV<boolean>('enable-particle-effects', true);
   const [enableMotionBlur, setEnableMotionBlur] = useKV<boolean>('enable-motion-blur', true);
+  const [enableSprites, setEnableSprites] = useKV<boolean>('enable-sprites', true);
   const [mirrorAbilityCasting, setMirrorAbilityCasting] = useKV<boolean>('mirror-ability-casting', false);
   const [chessMode, setChessMode] = useKV<boolean>('chess-mode', false);
 
@@ -102,6 +103,13 @@ function App() {
       multiplayerManagerRef.current = new MultiplayerManager(uid, createRealtimeStore());
     };
     initUser();
+    // Preload available UI and system sound effects from the bundled assets folder.
+    soundManager.loadAudioFile('menu-selection', `${assetBaseUrl}ASSETS/soundEffects/menu_selection.mp3`);
+    soundManager.loadAudioFile('setting-change', `${assetBaseUrl}ASSETS/soundEffects/settingChange.mp3`);
+    soundManager.loadAudioFile('enter-game-mode', `${assetBaseUrl}ASSETS/soundEffects/enterGameMode.mp3`);
+    soundManager.loadAudioFile('error', `${assetBaseUrl}ASSETS/soundEffects/error.mp3`);
+    soundManager.loadAudioFile('timer-tick', `${assetBaseUrl}ASSETS/soundEffects/timerTick.m4a`);
+    soundManager.loadAudioFile('income-note', `${assetBaseUrl}ASSETS/soundEffects/note_D#.mp3`);
     soundManager.setEnabled(soundEnabled ?? true);
     soundManager.setSfxVolume(sfxVolume ?? 0.7);
     soundManager.setMusicVolume(musicVolume ?? 0.5);
@@ -141,6 +149,7 @@ function App() {
       enableGlowEffects: enableGlowEffects ?? true,
       enableParticleEffects: enableParticleEffects ?? true,
       enableMotionBlur: enableMotionBlur ?? true,
+      enableSprites: enableSprites ?? true,
       mirrorAbilityCasting: mirrorAbilityCasting ?? false,
       chessMode: chessMode ?? false,
     };
@@ -149,7 +158,7 @@ function App() {
       ...p,
       color: i === 0 ? (playerColor || COLORS.playerDefault) : (enemyColor || COLORS.enemyDefault),
     }));
-  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showHealthBarsOnlyWhenDamaged, showMinimap, playerFaction, enemyFaction, enableGlowEffects, enableParticleEffects, enableMotionBlur, mirrorAbilityCasting, chessMode]);
+  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showHealthBarsOnlyWhenDamaged, showMinimap, playerFaction, enemyFaction, enableGlowEffects, enableParticleEffects, enableMotionBlur, enableSprites, mirrorAbilityCasting, chessMode]);
 
   // Cleanup interval on unmount
   useEffect(() => {
@@ -1349,7 +1358,7 @@ function App() {
                     <button
                       key={color.name}
                       onClick={() => {
-                        soundManager.playButtonClick();
+                        soundManager.playSettingChange();
                         setPlayerColor(color.value);
                       }}
                       className="w-12 h-12 rounded border-2 transition-all"
@@ -1374,7 +1383,7 @@ function App() {
                     <button
                       key={color.name}
                       onClick={() => {
-                        soundManager.playButtonClick();
+                        soundManager.playSettingChange();
                         setEnemyColor(color.value);
                       }}
                       className="w-12 h-12 rounded border-2 transition-all"
@@ -1398,7 +1407,7 @@ function App() {
                   onCheckedChange={(checked) => {
                     setSoundEnabled(checked);
                     if (checked) {
-                      soundManager.playButtonClick();
+                      soundManager.playSettingChange();
                     }
                   }}
                 />
@@ -1415,6 +1424,9 @@ function App() {
                     value={[sfxVolume ?? 0.7]}
                     onValueChange={(values) => {
                       setSfxVolume(values[0]);
+                    }}
+                    onValueCommit={() => {
+                      soundManager.playSettingChange();
                     }}
                     min={0}
                     max={1}
@@ -1434,6 +1446,9 @@ function App() {
                     onValueChange={(values) => {
                       setMusicVolume(values[0]);
                     }}
+                    onValueCommit={() => {
+                      soundManager.playSettingChange();
+                    }}
                     min={0}
                     max={1}
                     step={0.01}
@@ -1449,7 +1464,7 @@ function App() {
                   checked={showNumericHP ?? true}
                   onCheckedChange={(checked) => {
                     setShowNumericHP(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
@@ -1461,7 +1476,7 @@ function App() {
                   checked={showHealthBarsOnlyWhenDamaged ?? false}
                   onCheckedChange={(checked) => {
                     setShowHealthBarsOnlyWhenDamaged(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
@@ -1473,7 +1488,7 @@ function App() {
                   checked={showMinimap ?? true}
                   onCheckedChange={(checked) => {
                     setShowMinimap(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
@@ -1485,7 +1500,7 @@ function App() {
                   checked={enableCameraControls ?? true}
                   onCheckedChange={(checked) => {
                     setEnableCameraControls(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
@@ -1497,7 +1512,7 @@ function App() {
                   checked={showPerformance ?? false}
                   onCheckedChange={(checked) => {
                     setShowPerformance(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
@@ -1513,7 +1528,7 @@ function App() {
                   checked={enableGlowEffects ?? true}
                   onCheckedChange={(checked) => {
                     setEnableGlowEffects(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
@@ -1525,7 +1540,7 @@ function App() {
                   checked={enableParticleEffects ?? true}
                   onCheckedChange={(checked) => {
                     setEnableParticleEffects(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
@@ -1537,7 +1552,19 @@ function App() {
                   checked={enableMotionBlur ?? true}
                   onCheckedChange={(checked) => {
                     setEnableMotionBlur(checked);
-                    soundManager.playButtonClick();
+                    soundManager.playSettingChange();
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Label htmlFor="sprite-toggle">Use Sprite Art</Label>
+                <Switch
+                  id="sprite-toggle"
+                  checked={enableSprites ?? true}
+                  onCheckedChange={(checked) => {
+                    setEnableSprites(checked);
+                    soundManager.playSettingChange();
                   }}
                 />
               </div>
@@ -1805,6 +1832,7 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
       unitSlots: { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' },
       selectedMap: 'open',
       showNumericHP: false,
+      enableSprites: true,
       playerFaction: player1Faction,
       enemyFaction: player2Faction,
       playerBaseType: 'standard',
@@ -1851,6 +1879,7 @@ function createInitialState(): GameState {
       unitSlots: { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' },
       selectedMap: 'open',
       showNumericHP: true,
+      enableSprites: true,
       playerFaction: 'radiant',
       enemyFaction: 'radiant',
       playerBaseType: 'standard',
@@ -2139,6 +2168,7 @@ function createOnlineGameState(lobby: LobbyData, isHost: boolean): GameState {
       unitSlots: { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' },
       selectedMap: lobby.mapId,
       showNumericHP: true,
+      enableSprites: true,
       playerFaction: 'radiant',
       enemyFaction: 'radiant',
       playerBaseType: 'standard',
@@ -2245,6 +2275,7 @@ function createOnlineCountdownState(lobby: LobbyData, isHost: boolean, canvas: H
       unitSlots: { left: 'marine', up: 'warrior', down: 'snaker', right: 'tank' },
       selectedMap: lobby.mapId,
       showNumericHP: true,
+      enableSprites: true,
       playerFaction: 'radiant',
       enemyFaction: 'radiant',
       playerBaseType: 'standard',

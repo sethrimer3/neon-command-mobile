@@ -121,6 +121,7 @@ The complete game state structure containing:
 - **elapsedTime**: Game time tracking
 - **winner**: Game outcome
 - **settings**: Game configuration
+  - **enableSprites**: Toggle for sprite-based rendering
 - **surrenderClicks**: Surrender mechanism tracking
 - **countdownStartTime**: Multiplayer countdown
 - **countdownSeconds**: UI countdown snapshot used for rendering and audio cues
@@ -149,6 +150,7 @@ The complete game state structure containing:
 - Optional properties (with `?`) indicate temporary ability states
 - Shield domes can now specify ranged/melee damage multipliers per source unit
 - Resource deposits now track up to two mining drones via `workerIds`
+- Sprite rendering toggles live in settings for renderer access
 
 ### Known Issues
 None currently identified
@@ -179,6 +181,7 @@ None currently identified
 - **2026-01-10**: Replaced legacy Blade swing tracking with swordSwingCombo to coordinate full three-swing sequences
 - **2026-01-11**: Added Blade trail history snapshots to drive lagged sword particle positioning while moving/turning
 - **2026-01-12**: Added Blade sword swing hold state to keep the blade at its last angle between combo swings
+- **2025-03-22**: Added `settings.enableSprites` to control sprite-based rendering toggles.
 
 ## Watch Out For
 - Always use meters for game logic, only convert to pixels for rendering

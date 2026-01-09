@@ -2,6 +2,7 @@ import {
   GameState,
   Unit,
   Base,
+  BaseType,
   COLORS,
   UNIT_SIZE_METERS,
   BASE_SIZE_METERS,
@@ -15,6 +16,7 @@ import {
   ABILITY_MAX_RANGE,
   ABILITY_LASER_DURATION,
   FACTION_DEFINITIONS,
+  UnitType,
   UnitModifier,
   Vector2,
   CommandNode,
@@ -38,6 +40,129 @@ projectileSprite.onload = () => {
   projectileSpriteLoaded = true;
 };
 
+// Sprite sizing constants so art assets scale consistently with gameplay units.
+const UNIT_SPRITE_SCALE = 1.55;
+const BASE_SPRITE_SCALE = 1.15;
+const MINING_DRONE_SPRITE_SCALE = 1.35;
+// Radiant sprites are authored facing "up" in texture space, so rotate to match the engine's forward direction.
+const RADIANT_SPRITE_ROTATION_OFFSET = Math.PI / 2;
+
+// Sprite asset paths for the Radiant faction (exclude "knots" files on purpose).
+const radiantUnitSpritePaths: Partial<Record<UnitType, string>> = {
+  marine: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Marine.png`,
+  warrior: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Blade.png`,
+  tank: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Tank.png`,
+  scout: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Dagger.png`,
+  artillery: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Artillery.png`,
+  medic: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Medic.png`,
+  interceptor: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Interceptor.png`,
+  guardian: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Guardian.png`,
+  marksman: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Marksman.png`,
+  engineer: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Engineer.png`,
+};
+const radiantBaseSpritePaths: Partial<Record<BaseType, string>> = {
+  standard: `${assetBaseUrl}ASSETS/sprites/factions/radiant/bases/radiantBaseSimple.png`,
+  defense: `${assetBaseUrl}ASSETS/sprites/factions/radiant/bases/radiantBaseAdvanced.png`,
+};
+const radiantMiningDroneSpritePath = `${assetBaseUrl}ASSETS/sprites/factions/radiant/mining/radiantMiningDrone.png`;
+// Cache sprite images so we only construct them once.
+const spriteCache = new Map<string, HTMLImageElement>();
+// Cache pre-tinted sprites so we can reuse colored variants across frames.
+const tintedSpriteCache = new Map<string, HTMLCanvasElement>();
+
+// Create a canvas element for tinting without touching the main render surface.
+const createTintCanvas = (): HTMLCanvasElement => {
+  return document.createElement('canvas');
+};
+
+function getSpriteFromCache(path: string): HTMLImageElement {
+  const cached = spriteCache.get(path);
+  if (cached) {
+    return cached;
+  }
+  const sprite = new Image();
+  sprite.src = path;
+  spriteCache.set(path, sprite);
+  return sprite;
+}
+
+function isSpriteReady(sprite: HTMLImageElement): boolean {
+  return sprite.complete && sprite.naturalWidth > 0;
+}
+
+/**
+ * Creates (or reuses) a colorized sprite using an offscreen canvas to preserve transparency.
+ * @param sprite - The base sprite image.
+ * @param tintColor - The color used to tint white-shaded pixels.
+ * @returns A canvas containing the tinted sprite.
+ */
+function getTintedSprite(sprite: HTMLImageElement, tintColor: string): HTMLCanvasElement | null {
+  if (!isSpriteReady(sprite)) {
+    return null;
+  }
+
+  const cacheKey = `${sprite.src}::${tintColor}`;
+  const cached = tintedSpriteCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const canvas = createTintCanvas();
+  canvas.width = sprite.naturalWidth;
+  canvas.height = sprite.naturalHeight;
+  const tintCtx = canvas.getContext('2d');
+  if (!tintCtx) {
+    return null;
+  }
+
+  // Draw the base sprite first so we can multiply the tint while keeping shading.
+  tintCtx.clearRect(0, 0, canvas.width, canvas.height);
+  tintCtx.drawImage(sprite, 0, 0);
+  tintCtx.globalCompositeOperation = 'multiply';
+  tintCtx.fillStyle = tintColor;
+  tintCtx.fillRect(0, 0, canvas.width, canvas.height);
+  // Reapply the sprite alpha so the tinted pixels only appear inside the silhouette.
+  tintCtx.globalCompositeOperation = 'destination-in';
+  tintCtx.drawImage(sprite, 0, 0);
+  tintCtx.globalCompositeOperation = 'source-over';
+
+  tintedSpriteCache.set(cacheKey, canvas);
+  return canvas;
+}
+
+/**
+ * Draws a sprite centered at the provided screen position with rotation, optional glow, and team tinting.
+ * @param ctx - Canvas rendering context.
+ * @param sprite - The sprite image to render.
+ * @param center - Screen-space center point for the sprite.
+ * @param size - Rendered sprite size in pixels.
+ * @param rotation - Rotation in radians applied around the center.
+ * @param tintColor - Team color used to tint white-shaded sprites.
+ * @param enableGlow - Whether to apply a glow effect.
+ */
+function drawCenteredSprite(
+  ctx: CanvasRenderingContext2D,
+  sprite: HTMLImageElement,
+  center: Vector2,
+  size: number,
+  rotation: number,
+  tintColor: string,
+  enableGlow: boolean,
+): void {
+  ctx.save();
+  ctx.translate(center.x, center.y);
+  ctx.rotate(rotation);
+  if (enableGlow) {
+    // Apply glow first so the base sprite gets a soft halo.
+    ctx.shadowColor = tintColor;
+    ctx.shadowBlur = 18;
+  }
+  // Use a cached, tinted sprite so canvas composite operations don't affect the main scene.
+  const tintedSprite = getTintedSprite(sprite, tintColor) ?? sprite;
+  ctx.drawImage(tintedSprite, -size / 2, -size / 2, size, size);
+  ctx.restore();
+}
+
 function getUnitSizeMeters(unit: Unit): number {
   // Expand mining drones so their visuals match the larger resource structures.
   if (unit.type === 'miningDrone') {
@@ -45,6 +170,83 @@ function getUnitSizeMeters(unit: Unit): number {
   }
 
   return UNIT_SIZE_METERS;
+}
+
+function getRadiantUnitSpritePath(type: UnitType): string | null {
+  return radiantUnitSpritePaths[type] ?? null;
+}
+
+function drawRadiantUnitSprite(
+  ctx: CanvasRenderingContext2D,
+  unit: Unit,
+  screenPos: Vector2,
+  color: string,
+  state: GameState,
+): boolean {
+  if (unit.type === 'miningDrone') {
+    const miningSprite = getSpriteFromCache(radiantMiningDroneSpritePath);
+    if (!isSpriteReady(miningSprite)) {
+      return false;
+    }
+    const spriteSize = metersToPixels(getUnitSizeMeters(unit)) * MINING_DRONE_SPRITE_SCALE;
+    // Rotate mining drones so sprite-forward (up) matches the unit's forward direction.
+    drawCenteredSprite(
+      ctx,
+      miningSprite,
+      screenPos,
+      spriteSize,
+      (unit.rotation || 0) + RADIANT_SPRITE_ROTATION_OFFSET,
+      color,
+      !!state.settings.enableGlowEffects,
+    );
+    return true;
+  }
+
+  const spritePath = getRadiantUnitSpritePath(unit.type);
+  if (!spritePath) {
+    return false;
+  }
+
+  const sprite = getSpriteFromCache(spritePath);
+  if (!isSpriteReady(sprite)) {
+    return false;
+  }
+
+  const spriteSize = metersToPixels(getUnitSizeMeters(unit)) * UNIT_SPRITE_SCALE;
+  // Rotate unit sprites so sprite-forward (up) matches the unit's forward direction.
+  drawCenteredSprite(
+    ctx,
+    sprite,
+    screenPos,
+    spriteSize,
+    (unit.rotation || 0) + RADIANT_SPRITE_ROTATION_OFFSET,
+    color,
+    !!state.settings.enableGlowEffects,
+  );
+  return true;
+}
+
+function drawRadiantBaseSprite(
+  ctx: CanvasRenderingContext2D,
+  base: Base,
+  screenPos: Vector2,
+  size: number,
+  color: string,
+  state: GameState,
+): boolean {
+  const spritePath = radiantBaseSpritePaths[base.baseType];
+  if (!spritePath) {
+    return false;
+  }
+
+  const sprite = getSpriteFromCache(spritePath);
+  if (!isSpriteReady(sprite)) {
+    return false;
+  }
+
+  const spriteSize = size * BASE_SPRITE_SCALE;
+  drawCenteredSprite(ctx, sprite, screenPos, spriteSize, 0, color, !!state.settings.enableGlowEffects);
+  return true;
 }
 
 // Helper function to get modifier icon emoji
@@ -1046,6 +1248,9 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
 }
 
 function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
+  // Keep sprite usage consistent with the settings toggle.
+  const spritesEnabled = state.settings.enableSprites ?? true;
+
   state.bases.forEach((base) => {
     let screenPos = positionToPixels(base.position);
     const size = metersToPixels(BASE_SIZE_METERS);
@@ -1110,6 +1315,10 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
     }
 
     const factionDef = FACTION_DEFINITIONS[base.faction];
+    // Draw the sprite art for Radiant bases when enabled; fallback to vector base shapes otherwise.
+    const spriteDrawn = spritesEnabled && base.faction === 'radiant'
+      ? drawRadiantBaseSprite(ctx, base, screenPos, size, color, state)
+      : false;
     
     if (base.isSelected) {
       ctx.save();
@@ -1169,8 +1378,8 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.restore();
     }
 
-    // Add radial gradient background glow for aesthetic enhancement
-    if (state.settings.enableGlowEffects) {
+    // Add radial gradient background glow for aesthetic enhancement.
+    if (state.settings.enableGlowEffects && !spriteDrawn) {
       ctx.save();
       const gradient = ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, size * 1.2);
       gradient.addColorStop(0, addAlphaToColor(color, 0.15 * pulseIntensity));
@@ -1184,37 +1393,39 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.restore();
     }
 
-    ctx.globalAlpha = 0.3;
-    if (factionDef.baseShape === 'circle') {
-      ctx.beginPath();
-      ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (factionDef.baseShape === 'star') {
-      drawStar(ctx, screenPos.x, screenPos.y, size / 2, size / 4, 5);
-      ctx.fill();
-    } else if (factionDef.baseShape === 'triangle') {
-      drawTriangle(ctx, screenPos.x, screenPos.y, size / 2);
-      ctx.fill();
-    } else {
-      ctx.fillRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
-    }
-    ctx.globalAlpha = 1.0;
-    if (factionDef.baseShape === 'circle') {
-      ctx.beginPath();
-      ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
-      ctx.stroke();
-    } else if (factionDef.baseShape === 'star') {
-      drawStar(ctx, screenPos.x, screenPos.y, size / 2, size / 4, 5);
-      ctx.stroke();
-    } else if (factionDef.baseShape === 'triangle') {
-      drawTriangle(ctx, screenPos.x, screenPos.y, size / 2);
-      ctx.stroke();
-    } else {
-      ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+    if (!spriteDrawn) {
+      ctx.globalAlpha = 0.3;
+      if (factionDef.baseShape === 'circle') {
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (factionDef.baseShape === 'star') {
+        drawStar(ctx, screenPos.x, screenPos.y, size / 2, size / 4, 5);
+        ctx.fill();
+      } else if (factionDef.baseShape === 'triangle') {
+        drawTriangle(ctx, screenPos.x, screenPos.y, size / 2);
+        ctx.fill();
+      } else {
+        ctx.fillRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+      }
+      ctx.globalAlpha = 1.0;
+      if (factionDef.baseShape === 'circle') {
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y, size / 2, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (factionDef.baseShape === 'star') {
+        drawStar(ctx, screenPos.x, screenPos.y, size / 2, size / 4, 5);
+        ctx.stroke();
+      } else if (factionDef.baseShape === 'triangle') {
+        drawTriangle(ctx, screenPos.x, screenPos.y, size / 2);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+      }
     }
 
     // Draw cannon indicator for defense base
-    if (base.baseType === 'defense') {
+    if (base.baseType === 'defense' && !spriteDrawn) {
       ctx.save();
       ctx.fillStyle = color;
       ctx.strokeStyle = color;
@@ -1235,7 +1446,7 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
     }
     
     // Draw shield indicator for assault base
-    if (base.baseType === 'assault' && !base.shieldActive) {
+    if (base.baseType === 'assault' && !base.shieldActive && !spriteDrawn) {
       // Draw small shield icon to indicate it has shield ability
       ctx.save();
       ctx.strokeStyle = color;
@@ -1249,7 +1460,7 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
     }
     
     // Draw healing cross for support base
-    if (base.baseType === 'support') {
+    if (base.baseType === 'support' && !spriteDrawn) {
       ctx.save();
       ctx.fillStyle = '#4ade80';
       ctx.strokeStyle = '#4ade80';
@@ -1803,6 +2014,8 @@ function drawUnitHealthBar(ctx: CanvasRenderingContext2D, unit: Unit, screenPos:
 
 function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
   const time = Date.now() / 1000;
+  // Use the settings toggle to decide whether sprite rendering is allowed.
+  const spritesEnabled = state.settings.enableSprites ?? true;
   
   state.units.forEach((unit) => {
     // Skip units that are off-screen for performance
@@ -1868,19 +2081,22 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
 
-    if (unit.type === 'snaker') {
+    // Try sprite rendering first; fall back to vector shapes when sprites are disabled or unavailable.
+    const spriteDrawn = spritesEnabled && drawRadiantUnitSprite(ctx, unit, screenPos, color, state);
+
+    if (!spriteDrawn && unit.type === 'snaker') {
       drawSnaker(ctx, unit, screenPos, color);
-    } else if (unit.type === 'tank') {
+    } else if (!spriteDrawn && unit.type === 'tank') {
       drawTank(ctx, unit, screenPos, color);
-    } else if (unit.type === 'scout') {
+    } else if (!spriteDrawn && unit.type === 'scout') {
       drawScout(ctx, unit, screenPos, color);
-    } else if (unit.type === 'artillery') {
+    } else if (!spriteDrawn && unit.type === 'artillery') {
       drawArtillery(ctx, unit, screenPos, color);
-    } else if (unit.type === 'medic') {
+    } else if (!spriteDrawn && unit.type === 'medic') {
       drawMedic(ctx, unit, screenPos, color);
-    } else if (unit.type === 'interceptor') {
+    } else if (!spriteDrawn && unit.type === 'interceptor') {
       drawInterceptor(ctx, unit, screenPos, color);
-    } else {
+    } else if (!spriteDrawn) {
       const unitSizeMeters = getUnitSizeMeters(unit);
       const radius = metersToPixels(unitSizeMeters / 2);
 

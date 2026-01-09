@@ -974,6 +974,7 @@ export interface GameState {
     enableGlowEffects?: boolean; // Enable/disable glow/shadow effects
     enableParticleEffects?: boolean; // Enable/disable particle effects
     enableMotionBlur?: boolean; // Enable/disable motion blur trails
+    enableSprites?: boolean; // Enable/disable sprite-based rendering for units and bases
     mirrorAbilityCasting?: boolean; // Mirror ability casting along both X and Y axes
     chessMode?: boolean; // Enable chess mode: queue commands, then execute all at once every 10 seconds
   };
