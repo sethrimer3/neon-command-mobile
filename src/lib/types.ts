@@ -1072,6 +1072,9 @@ export interface GameState {
     phase: number; // Phase offset for wave motion
   }>;
   
+  // Fog of war exploration grid - tracks which areas have been explored
+  fogExploredGrid?: boolean[][];
+  
   // Impact effects for hits and explosions
   impactEffects?: Array<{
     id: string;

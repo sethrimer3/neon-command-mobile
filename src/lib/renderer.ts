@@ -438,14 +438,76 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
     return;
   }
   
-  // Create a full-screen dark purple overlay with swirling effect
   ctx.save();
   
-  // Base dark purple fog layer
-  ctx.fillStyle = 'rgba(40, 20, 60, 0.75)';
+  // Helper to get vision radius in pixels
+  const getVisionRadius = () => metersToPixels(FOG_OF_WAR_VISION_RANGE) * (state.camera?.zoom || 1);
+  
+  // Step 1: Draw dim black fog for all unexplored areas (very dark, almost black)
+  ctx.fillStyle = 'rgba(5, 5, 10, 0.92)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   
-  // Draw swirling fog particles before cutting out vision
+  // Step 2: Create an offscreen canvas for the explored mask
+  const exploredCanvas = document.createElement('canvas');
+  exploredCanvas.width = canvas.width;
+  exploredCanvas.height = canvas.height;
+  const exploredCtx = exploredCanvas.getContext('2d');
+  if (!exploredCtx) {
+    ctx.restore();
+    return;
+  }
+  
+  // Find player base once
+  const playerBase = state.bases.find(b => b.owner === 0);
+  const visionRadius = getVisionRadius();
+  
+  // Mark explored areas by drawing circles at player unit and base positions
+  if (playerBase) {
+    const screenPos = worldToScreen(playerBase.position, state, canvas);
+    exploredCtx.fillStyle = 'rgba(255, 255, 255, 1)';
+    exploredCtx.beginPath();
+    exploredCtx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
+    exploredCtx.fill();
+  }
+  
+  state.units.forEach(unit => {
+    if (unit.owner === 0) {
+      const screenPos = worldToScreen(unit.position, state, canvas);
+      exploredCtx.fillStyle = 'rgba(255, 255, 255, 1)';
+      exploredCtx.beginPath();
+      exploredCtx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
+      exploredCtx.fill();
+    }
+  });
+  
+  // Use destination-out to remove black fog from explored areas
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.drawImage(exploredCanvas, 0, 0);
+  
+  // Step 3: Draw purple fog over explored areas (but not currently visible)
+  ctx.globalCompositeOperation = 'source-over';
+  
+  // Create a temporary canvas for purple fog
+  const purpleCanvas = document.createElement('canvas');
+  purpleCanvas.width = canvas.width;
+  purpleCanvas.height = canvas.height;
+  const purpleCtx = purpleCanvas.getContext('2d');
+  if (purpleCtx) {
+    // Use a brighter, more visible purple
+    purpleCtx.fillStyle = 'rgba(80, 40, 120, 1)';
+    purpleCtx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Clip it to explored areas
+    purpleCtx.globalCompositeOperation = 'destination-in';
+    purpleCtx.drawImage(exploredCanvas, 0, 0);
+    
+    // Draw it on main canvas with medium opacity
+    ctx.globalAlpha = 0.65;
+    ctx.drawImage(purpleCanvas, 0, 0);
+    ctx.globalAlpha = 1.0;
+  }
+  
+  // Draw swirling fog particles in explored areas
   if (state.fogParticles && state.settings.enableParticleEffects) {
     state.fogParticles.forEach(particle => {
       const screenPos = worldToScreen(particle.position, state, canvas);
@@ -453,8 +515,8 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
       
       // Create purple particle with glow
       const gradient = ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, size * 2);
-      gradient.addColorStop(0, `rgba(180, 120, 255, ${particle.opacity * 0.6})`);
-      gradient.addColorStop(0.5, `rgba(140, 80, 220, ${particle.opacity * 0.3})`);
+      gradient.addColorStop(0, `rgba(180, 120, 255, ${particle.opacity * 0.5})`);
+      gradient.addColorStop(0.5, `rgba(140, 80, 220, ${particle.opacity * 0.25})`);
       gradient.addColorStop(1, 'rgba(80, 40, 150, 0)');
       
       ctx.fillStyle = gradient;
@@ -464,15 +526,12 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
     });
   }
   
-  // Cut out visible areas using destination-out compositing
+  // Step 4: Cut out currently visible areas (clear vision)
   ctx.globalCompositeOperation = 'destination-out';
   
   // Draw vision circles for player base
-  const playerBase = state.bases.find(b => b.owner === 0);
   if (playerBase) {
     const screenPos = worldToScreen(playerBase.position, state, canvas);
-    const visionRadius = metersToPixels(FOG_OF_WAR_VISION_RANGE) * (state.camera?.zoom || 1);
-    
     ctx.fillStyle = createVisionGradient(ctx, screenPos.x, screenPos.y, visionRadius);
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
@@ -483,8 +542,6 @@ function drawFogOfWar(ctx: CanvasRenderingContext2D, state: GameState, canvas: H
   state.units.forEach(unit => {
     if (unit.owner === 0) {
       const screenPos = worldToScreen(unit.position, state, canvas);
-      const visionRadius = metersToPixels(FOG_OF_WAR_VISION_RANGE) * (state.camera?.zoom || 1);
-      
       ctx.fillStyle = createVisionGradient(ctx, screenPos.x, screenPos.y, visionRadius);
       ctx.beginPath();
       ctx.arc(screenPos.x, screenPos.y, visionRadius, 0, Math.PI * 2);
