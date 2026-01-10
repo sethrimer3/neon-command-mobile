@@ -51,22 +51,24 @@ const RADIANT_SPRITE_ROTATION_OFFSET = Math.PI / 2;
 
 // Sprite asset paths for the Radiant faction (exclude "knots" files on purpose).
 const radiantUnitSpritePaths: Partial<Record<UnitType, string>> = {
-  marine: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Marine.png`,
-  warrior: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Blade.png`,
-  tank: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Tank.png`,
-  scout: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Dagger.png`,
-  artillery: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Artillery.png`,
-  medic: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Medic.png`,
-  interceptor: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Interceptor.png`,
-  guardian: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Guardian.png`,
-  marksman: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Marksman.png`,
-  engineer: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Engineer.png`,
+  marine: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Marine.svg`,
+  warrior: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Blade.svg`,
+  tank: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Tank.svg`,
+  scout: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Dagger.svg`,
+  artillery: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Artillery.svg`,
+  medic: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Medic.svg`,
+  interceptor: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Interceptor.svg`,
+  guardian: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Guardian.svg`,
+  marksman: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Marksman.svg`,
+  engineer: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Engineer.svg`,
+  skirmisher: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/skirmisher.svg`,
+  paladin: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Paladin.svg`,
 };
 const radiantBaseSpritePaths: Partial<Record<BaseType, string>> = {
-  standard: `${assetBaseUrl}ASSETS/sprites/factions/radiant/bases/radiantBaseSimple.png`,
-  defense: `${assetBaseUrl}ASSETS/sprites/factions/radiant/bases/radiantBaseAdvanced.png`,
+  standard: `${assetBaseUrl}ASSETS/sprites/factions/radiant/bases/radiantBaseSimple.svg`,
+  defense: `${assetBaseUrl}ASSETS/sprites/factions/radiant/bases/radiantBaseAdvanced.svg`,
 };
-const radiantMiningDroneSpritePath = `${assetBaseUrl}ASSETS/sprites/factions/radiant/mining/radiantMiningDrone.png`;
+const radiantMiningDroneSpritePath = `${assetBaseUrl}ASSETS/sprites/factions/radiant/mining/radiantMiningDrone.svg`;
 // Cache sprite images so we only construct them once.
 const spriteCache = new Map<string, HTMLImageElement>();
 // Cache pre-tinted sprites so we can reuse colored variants across frames.
