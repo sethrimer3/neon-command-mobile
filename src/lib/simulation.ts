@@ -12,6 +12,7 @@ import {
   BASE_SIZE_METERS,
   UNIT_SIZE_METERS,
   MINING_DRONE_SIZE_MULTIPLIER,
+  MINING_DEPOT_SIZE_METERS,
   ABILITY_MAX_RANGE,
   ABILITY_LASER_DAMAGE,
   ABILITY_LASER_WIDTH,
@@ -21,6 +22,7 @@ import {
   Projectile,
   ProjectileKind,
   Shell,
+  ResourceOrb,
   FACTION_DEFINITIONS,
   UnitModifier,
   QUEUE_MAX_LENGTH,
@@ -424,9 +426,8 @@ function moveUnitTowardPosition(
   // Align unit orientation with its travel direction for consistent visuals.
   updateUnitRotation(unit, direction, deltaTime);
 
-  // Apply acceleration so movement feels consistent with standard move commands.
-  const currentSpeed = applyMovementAcceleration(unit, direction, def.moveSpeed, deltaTime);
-  const movement = scale(direction, currentSpeed * deltaTime);
+  // Use constant top speed instead of acceleration
+  const movement = scale(direction, def.moveSpeed * deltaTime);
   const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
   const newPosition = add(unit.position, scale(direction, moveDist));
 
@@ -453,7 +454,8 @@ function moveUnitTowardPosition(
 
   while (unit.distanceCredit >= PROMOTION_DISTANCE_THRESHOLD) {
     unit.distanceCredit -= PROMOTION_DISTANCE_THRESHOLD;
-    unit.damageMultiplier *= PROMOTION_MULTIPLIER;
+    // Damage multiplier from movement disabled
+    // unit.damageMultiplier *= PROMOTION_MULTIPLIER;
   }
 
   unit.distanceTraveled += moveDist;
@@ -1277,6 +1279,26 @@ function createExplosionParticles(state: GameState, position: Vector2, color: st
   state.explosionParticles = state.explosionParticles.filter((particle) => {
     const age = (now - particle.createdAt) / 1000;
     return age < particle.lifetime;
+  });
+}
+
+// Create a resource orb when a non-mining-drone unit dies
+function createResourceOrb(state: GameState, position: Vector2, ownerColor: string, enemyColor: string): void {
+  if (!state.resourceOrbs) {
+    state.resourceOrbs = [];
+  }
+  
+  // Mix the two colors for the orb - use a neutral glowing color
+  const mixColor = 'oklch(0.70 0.20 150)'; // A neutral teal/purple glow
+  
+  state.resourceOrbs.push({
+    id: generateId(),
+    position: { ...position },
+    color: mixColor,
+    createdAt: Date.now(),
+    glowPhase: Math.random() * Math.PI * 2,
+    ownerColor: ownerColor,
+    killerColor: enemyColor,
   });
 }
 
@@ -2166,9 +2188,8 @@ function updateUnits(state: GameState, deltaTime: number): void {
       // Update unit rotation to face movement direction
       updateUnitRotation(unit, direction, deltaTime);
       
-      // Apply smooth acceleration to reach target speed
-      const currentSpeed = applyMovementAcceleration(unit, direction, def.moveSpeed, deltaTime);
-      const movement = scale(direction, currentSpeed * deltaTime);
+      // Use constant top speed instead of acceleration
+      const movement = scale(direction, def.moveSpeed * deltaTime);
 
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
@@ -2182,6 +2203,46 @@ function updateUnits(state: GameState, deltaTime: number): void {
       if (!collisionResult.blocked) {
         // Use the desired position when clear
         unit.position = adjustedPosition;
+        
+        // Check if mining drone is near a resource orb and can collect it
+        if (unit.type === 'miningDrone' && unit.miningState && !unit.miningState.carryingOrb && state.resourceOrbs) {
+          const orbCollectionRadius = UNIT_SIZE_METERS * MINING_DRONE_SIZE_MULTIPLIER * 0.8;
+          const nearbyOrb = state.resourceOrbs.find(orb => 
+            distance(unit.position, orb.position) < orbCollectionRadius
+          );
+          
+          if (nearbyOrb) {
+            // Collect the orb
+            unit.miningState.carryingOrb = true;
+            unit.miningState.targetOrbId = nearbyOrb.id;
+            // Remove orb from game state
+            state.resourceOrbs = state.resourceOrbs.filter(o => o.id !== nearbyOrb.id);
+            // Clear movement queue and go to depot
+            unit.commandQueue = [];
+            const depot = state.miningDepots.find(d => d.id === unit.miningState?.depotId);
+            if (depot) {
+              unit.commandQueue.push({ type: 'move', position: depot.position });
+              unit.miningState.atDepot = false;
+            }
+          }
+        }
+        
+        // Check if mining drone at depot can deposit the orb
+        if (unit.type === 'miningDrone' && unit.miningState && unit.miningState.carryingOrb) {
+          const depot = state.miningDepots.find(d => d.id === unit.miningState?.depotId);
+          if (depot && distance(unit.position, depot.position) < MINING_DEPOT_SIZE_METERS * 0.6) {
+            // Deposit the orb
+            unit.miningState.carryingOrb = false;
+            unit.miningState.targetOrbId = undefined;
+            // Add secondary resource to player
+            if (!state.players[unit.owner].secondaryResource) {
+              state.players[unit.owner].secondaryResource = 0;
+            }
+            state.players[unit.owner].secondaryResource! += 1;
+            // Resume normal mining operations
+            unit.miningState.atDepot = true;
+          }
+        }
         
         // Reset stuck timer and jitter - unit is making progress
         unit.stuckTimer = 0;
@@ -2203,7 +2264,8 @@ function updateUnits(state: GameState, deltaTime: number): void {
 
       while (unit.distanceCredit >= PROMOTION_DISTANCE_THRESHOLD) {
         unit.distanceCredit -= PROMOTION_DISTANCE_THRESHOLD;
-        unit.damageMultiplier *= PROMOTION_MULTIPLIER;
+        // Damage multiplier from movement disabled
+        // unit.damageMultiplier *= PROMOTION_MULTIPLIER;
       }
 
       unit.distanceTraveled += moveDist;
@@ -2272,9 +2334,8 @@ function updateUnits(state: GameState, deltaTime: number): void {
       // Update unit rotation to face movement direction
       updateUnitRotation(unit, direction, deltaTime);
       
-      // Apply smooth acceleration
-      const currentSpeed = applyMovementAcceleration(unit, direction, def.moveSpeed, deltaTime);
-      const movement = scale(direction, currentSpeed * deltaTime);
+      // Use constant top speed instead of acceleration
+      const movement = scale(direction, def.moveSpeed * deltaTime);
 
       const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
       const newPosition = add(unit.position, scale(direction, moveDist));
@@ -2308,7 +2369,8 @@ function updateUnits(state: GameState, deltaTime: number): void {
 
       while (unit.distanceCredit >= PROMOTION_DISTANCE_THRESHOLD) {
         unit.distanceCredit -= PROMOTION_DISTANCE_THRESHOLD;
-        unit.damageMultiplier *= PROMOTION_MULTIPLIER;
+        // Damage multiplier from movement disabled
+        // unit.damageMultiplier *= PROMOTION_MULTIPLIER;
       }
 
       unit.distanceTraveled += moveDist;
@@ -2409,7 +2471,8 @@ function updateUnits(state: GameState, deltaTime: number): void {
 
       while (unit.distanceCredit >= PROMOTION_DISTANCE_THRESHOLD) {
         unit.distanceCredit -= PROMOTION_DISTANCE_THRESHOLD;
-        unit.damageMultiplier *= PROMOTION_MULTIPLIER;
+        // Damage multiplier from movement disabled
+        // unit.damageMultiplier *= PROMOTION_MULTIPLIER;
       }
 
       unit.distanceTraveled += moveDist;
@@ -4589,6 +4652,13 @@ function cleanupDeadUnits(state: GameState): void {
       // Enhanced death explosion with multiple layers
       createEnhancedDeathExplosion(state, u.position, color, 1.0);
       soundManager.playUnitDeath();
+      
+      // Create resource orb for all non-mining-drone units
+      if (u.type !== 'miningDrone') {
+        // Determine enemy color (the other player)
+        const enemyColor = state.players[u.owner === 0 ? 1 : 0].color;
+        createResourceOrb(state, u.position, color, enemyColor);
+      }
     });
     
     // Shake screen if multiple units died at once

@@ -195,6 +195,8 @@ export interface Unit {
     depositId: string; // ID of the resource deposit being mined
     atDepot: boolean; // true when at depot, false when at deposit
     cadenceDelay?: number; // Optional delay to keep drones alternating when sharing a deposit
+    carryingOrb?: boolean; // true when carrying a secondary resource orb
+    targetOrbId?: string; // ID of the orb being targeted for collection
   };
 }
 
@@ -993,6 +995,17 @@ export interface FieldParticle {
   opacity: number;
 }
 
+// Resource orb dropped by units on death (secondary resource)
+export interface ResourceOrb {
+  id: string;
+  position: Vector2;
+  color: string; // Mix of player and enemy colors
+  createdAt: number; // timestamp for animation
+  glowPhase: number; // for pulsing glow effect
+  ownerColor: string; // Original owner's color
+  killerColor: string; // Killer's color
+}
+
 export interface GameState {
   mode: 'menu' | 'game' | 'settings' | 'unitSelection' | 'victory' | 'mapSelection' | 'multiplayerLobby' | 'countdown' | 'statistics' | 'levelSelection' | 'onlineMode' | 'modifierHelp' | 'unitInformation' | 'lanMode' | 'tutorial';
   backgroundBattle?: GameState; // Background AI battle for menu
@@ -1005,11 +1018,13 @@ export interface GameState {
   obstacles: import('./maps').Obstacle[];
   projectiles: Projectile[]; // Active projectiles in the game
   shells?: Shell[]; // Ejected shell casings from marine shots
+  resourceOrbs?: ResourceOrb[]; // Glowing orbs dropped by units on death (secondary resource)
   
   players: {
     photons: number;
     incomeRate: number;
     color: string;
+    secondaryResource?: number; // Secondary resource collected from orbs
   }[];
   
   selectedUnits: Set<string>;

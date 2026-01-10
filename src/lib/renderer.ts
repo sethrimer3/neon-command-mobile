@@ -207,7 +207,7 @@ function drawCenteredSprite(
   const tintedSprite = getTintedSprite(sprite, tintColor) ?? sprite;
   
   // Create white outline by drawing a white version of the sprite at offset positions
-  const outlineWidth = 3; // Medium stroke width
+  const outlineWidth = 1.5; // Thin stroke width
   const whiteSprite = getWhiteOutlineSprite(tintedSprite, sprite, tintColor);
   
   // Draw white outline in 8 directions for a smooth outline
@@ -656,6 +656,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
   if (state.mode === 'game' || state.mode === 'countdown') {
     drawObstacles(ctx, state);
     drawMiningDepots(ctx, state);
+    drawResourceOrbs(ctx, state);
     drawBases(ctx, state);
     
     if (state.mode === 'game') {
@@ -1161,6 +1162,56 @@ function drawMiningDepots(ctx: CanvasRenderingContext2D, state: GameState): void
       
       ctx.restore();
     });
+  });
+}
+
+function drawResourceOrbs(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.resourceOrbs || state.resourceOrbs.length === 0) return;
+  
+  const now = Date.now();
+  
+  state.resourceOrbs.forEach((orb) => {
+    const screenPos = positionToPixels(orb.position);
+    const age = (now - orb.createdAt) / 1000; // seconds
+    
+    // Pulsing glow effect
+    const glowPhase = orb.glowPhase + age * 3; // 3 pulses per second
+    const glowIntensity = 0.7 + Math.sin(glowPhase) * 0.3;
+    
+    // Draw the orb
+    const orbSize = metersToPixels(0.4); // Small orb
+    
+    ctx.save();
+    
+    // Draw outer glow
+    const gradient = ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, orbSize * 2);
+    gradient.addColorStop(0, orb.color);
+    gradient.addColorStop(0.5, orb.color.replace('0.70', String(0.50 * glowIntensity)));
+    gradient.addColorStop(1, 'transparent');
+    
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, orbSize * 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw core orb
+    ctx.fillStyle = orb.color;
+    applyGlowEffect(ctx, state, orb.color, 15 * glowIntensity);
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, orbSize, 0, Math.PI * 2);
+    ctx.fill();
+    clearGlowEffect(ctx, state);
+    
+    // Draw a bright center
+    const centerGradient = ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, orbSize * 0.5);
+    centerGradient.addColorStop(0, 'oklch(0.95 0.10 150)');
+    centerGradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = centerGradient;
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, orbSize * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
   });
 }
 
