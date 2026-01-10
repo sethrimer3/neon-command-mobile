@@ -25,7 +25,7 @@ None - pure browser APIs
 
 #### Constructor
 - **Purpose:** Initialize audio context
-- **Notes:** Handles browser prefixes (webkit)
+- **Notes:** Handles browser prefixes (webkit) and skips creation when the Web Audio API is unavailable to avoid startup crashes
 
 #### Volume Control Methods
 - **setEnabled(enabled)**: Master on/off
@@ -99,6 +99,7 @@ Each method plays a specific game sound:
 ### Browser Compatibility
 - Handles webkit prefix for Safari
 - Checks for window availability (SSR safety)
+- Skips audio context creation when the Web Audio API is missing
 - Resumes context for autoplay policy compliance
 
 ### Known Issues
@@ -125,6 +126,7 @@ Each method plays a specific game sound:
 - Added all game event sounds
 - Implemented volume controls
 - **2025-03-22**: Added audio file fallbacks for key UI/gameplay cues and settings feedback.
+- **2025-03-24**: Guarded audio context creation when Web Audio API is unavailable to prevent startup failures.
 
 ## Watch Out For
 - Audio context must be resumed on first user interaction
