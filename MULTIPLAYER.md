@@ -45,6 +45,66 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_SUPABASE_KV_TABLE=multiplayer_kv  # optional, defaults to 'multiplayer_kv'
 ```
 
+#### Supabase Setup from Scratch
+Follow these steps if you are creating a brand new Supabase project for multiplayer:
+
+1. **Create a Supabase project**
+   - Go to https://supabase.com and create a new project.
+   - Wait for the database to finish provisioning.
+   - Open **Project Settings → API** and copy:
+     - **Project URL** → `VITE_SUPABASE_URL`
+     - **anon public key** → `VITE_SUPABASE_ANON_KEY`
+
+2. **Create the multiplayer table**
+   - Open **SQL Editor** in Supabase.
+   - Run the schema below (the table name must match `VITE_SUPABASE_KV_TABLE`):
+
+   ```sql
+   CREATE TABLE multiplayer_kv (
+     key TEXT PRIMARY KEY,
+     value JSONB NOT NULL,
+     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   );
+
+   CREATE INDEX idx_multiplayer_kv_key_prefix ON multiplayer_kv (key text_pattern_ops);
+   ```
+
+3. **Allow the anon key to read/write**
+   - The game uses the anon key for read/write access in the browser.
+   - For a quick start you can **disable RLS** on the table, or add explicit policies:
+
+   ```sql
+   ALTER TABLE multiplayer_kv ENABLE ROW LEVEL SECURITY;
+
+   CREATE POLICY "Allow anon read" ON multiplayer_kv
+     FOR SELECT USING (true);
+
+   CREATE POLICY "Allow anon insert" ON multiplayer_kv
+     FOR INSERT WITH CHECK (true);
+
+   CREATE POLICY "Allow anon update" ON multiplayer_kv
+     FOR UPDATE USING (true) WITH CHECK (true);
+
+   CREATE POLICY "Allow anon delete" ON multiplayer_kv
+     FOR DELETE USING (true);
+   ```
+
+   - **Note:** For production, replace these open policies with authenticated access.
+
+4. **Configure your local environment**
+   - Create a `.env.local` file (or your preferred env file) and set the variables:
+
+   ```bash
+   VITE_SUPABASE_URL=your_supabase_project_url
+   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   VITE_SUPABASE_KV_TABLE=multiplayer_kv
+   ```
+
+5. **Run the game and verify**
+   - Start the app and open the Multiplayer screen.
+   - If you can create/join lobbies without the Spark runtime, Supabase is working.
+   - Check **Table Editor → multiplayer_kv** to confirm data is being written.
+
 #### Supabase Table Schema
 Create a table named `multiplayer_kv` with the following structure:
 
@@ -205,6 +265,11 @@ Game loop in `App.tsx` calls `updateMultiplayerSync()` which:
 #### "Multiplayer requires Spark runtime or Supabase credentials"
 - Ensure you're either running in Spark or have set Supabase environment variables
 - Check that `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are set correctly
+
+#### Spark KV 404 on GitHub Pages
+- GitHub Pages does not host the Spark runtime, so `/_spark/kv/...` will return 404s.
+- Configure Supabase credentials and rebuild so the app prefers Supabase instead of Spark.
+- Verify the Supabase table and RLS policies allow anon read/write.
 
 #### "Failed to join game"
 - Game may already be full (has both host and guest)
