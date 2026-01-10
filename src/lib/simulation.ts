@@ -2701,6 +2701,18 @@ function executeAbility(state: GameState, unit: Unit, node: CommandNode): void {
   } else if (unit.type === 'quasar') {
     createAbilityEffect(state, unit, node.position, 'stellar-convergence');
     executeStellarConvergence(state, unit, node.position);
+  } else if (unit.type === 'luminary') {
+    createAbilityEffect(state, unit, node.position, 'gravity-well');
+    executeGravityWell(state, unit, node.position);
+  } else if (unit.type === 'photon') {
+    createAbilityEffect(state, unit, node.position, 'chain-lightning');
+    executeChainLightning(state, unit, node.direction);
+  } else if (unit.type === 'starborn') {
+    createAbilityEffect(state, unit, node.position, 'orbital-strike');
+    executeOrbitalStrike(state, unit, node.position);
+  } else if (unit.type === 'prism') {
+    createAbilityEffect(state, unit, node.position, 'light-refraction');
+    executeLightRefraction(state, unit, node.direction);
   } else if (unit.type === 'berserker') {
     createAbilityEffect(state, unit, node.position, 'rage');
     executeRage(state, unit);
@@ -3321,6 +3333,276 @@ function executeStellarConvergence(state: GameState, unit: Unit, targetPos: { x:
     
     createEnergyPulse(state, targetPos, state.players[unit.owner].color, 4, 0.8);
   }, 2500);
+}
+
+// Luminary - Gravity Well: Pull enemies toward a point and hold them briefly
+function executeGravityWell(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  const PULL_RADIUS = 8; // Radius to detect enemies
+  const PULL_FORCE = 0.8; // Strength of pull per frame
+  const PULL_DURATION = 3000; // Duration in milliseconds
+  const HOLD_RADIUS = 2.5; // Enemies within this radius are held in place
+  
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  const affectedEnemies: Unit[] = [];
+  
+  // Find enemies in range
+  enemies.forEach((enemy) => {
+    if (distance(enemy.position, targetPos) <= PULL_RADIUS) {
+      affectedEnemies.push(enemy);
+    }
+  });
+  
+  createEnergyPulse(state, targetPos, state.players[unit.owner].color, PULL_RADIUS, 0.5);
+  
+  // Apply pull effect over time
+  const pullInterval = setInterval(() => {
+    affectedEnemies.forEach((enemy) => {
+      // Check if enemy still exists
+      if (!state.units.includes(enemy)) return;
+      
+      const dist = distance(enemy.position, targetPos);
+      
+      // Hold enemies in place if they're at the center
+      if (dist < HOLD_RADIUS) {
+        enemy.currentSpeed = 0;
+      } else {
+        // Pull toward center
+        const direction = normalize(subtract(targetPos, enemy.position));
+        enemy.position.x += direction.x * PULL_FORCE;
+        enemy.position.y += direction.y * PULL_FORCE;
+        
+        // Visual feedback
+        if (Math.random() < 0.3) {
+          createHitSparks(state, enemy.position, state.players[unit.owner].color, 2);
+        }
+      }
+    });
+  }, 50); // Update every 50ms for smooth pulling
+  
+  // End pull effect after duration
+  setTimeout(() => {
+    clearInterval(pullInterval);
+    affectedEnemies.forEach((enemy) => {
+      if (state.units.includes(enemy)) {
+        enemy.currentSpeed = undefined; // Restore normal speed
+      }
+    });
+    createEnergyPulse(state, targetPos, state.players[unit.owner].color, 3, 0.3);
+  }, PULL_DURATION);
+}
+
+// Photon - Chain Lightning: Lightning that jumps between enemies
+function executeChainLightning(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const MAX_JUMPS = 5; // Maximum number of jumps
+  const JUMP_RANGE = 6; // Maximum distance for jumps
+  const BASE_DAMAGE = 30; // Base damage
+  const DAMAGE_FALLOFF = 0.8; // Damage multiplier per jump
+  
+  const dir = normalize(direction);
+  const enemies = state.units.filter((u) => u.owner !== unit.owner);
+  
+  // Find first target in direction
+  let currentTarget: Unit | null = null;
+  let shortestDist = Infinity;
+  
+  enemies.forEach((enemy) => {
+    const toEnemy = subtract(enemy.position, unit.position);
+    const dist = distance(unit.position, enemy.position);
+    const projectedDist = toEnemy.x * dir.x + toEnemy.y * dir.y;
+    const perpDist = Math.abs(toEnemy.x * dir.y - toEnemy.y * dir.x);
+    
+    // Check if enemy is in the general direction (within a cone)
+    if (projectedDist > 0 && dist < 12 && perpDist < 3 && dist < shortestDist) {
+      currentTarget = enemy;
+      shortestDist = dist;
+    }
+  });
+  
+  if (!currentTarget) {
+    createEnergyPulse(state, unit.position, state.players[unit.owner].color, 2, 0.3);
+    return;
+  }
+  
+  // Chain through targets
+  const hitTargets = new Set<string>();
+  let currentDamage = BASE_DAMAGE * unit.damageMultiplier;
+  let jumpsRemaining = MAX_JUMPS;
+  let lastPosition = unit.position;
+  
+  const processJump = (target: Unit) => {
+    if (!target || hitTargets.has(target.id) || !state.units.includes(target)) {
+      return null;
+    }
+    
+    // Deal damage
+    const shieldMultiplier = getShieldDamageMultiplier(state, target, 'ranged');
+    const finalDamage = currentDamage * shieldMultiplier;
+    target.hp -= finalDamage;
+    hitTargets.add(target.id);
+    
+    // Visual effect
+    createHitSparks(state, target.position, state.players[unit.owner].color, 8);
+    
+    // Track stats
+    if (state.matchStats && unit.owner === 0) {
+      state.matchStats.damageDealtByPlayer += finalDamage;
+    }
+    
+    // Reduce damage for next jump
+    currentDamage *= DAMAGE_FALLOFF;
+    jumpsRemaining--;
+    
+    // Find next target
+    if (jumpsRemaining > 0) {
+      let nextTarget: Unit | null = null;
+      let closestDist = Infinity;
+      
+      enemies.forEach((enemy) => {
+        if (!hitTargets.has(enemy.id)) {
+          const dist = distance(target.position, enemy.position);
+          if (dist <= JUMP_RANGE && dist < closestDist) {
+            nextTarget = enemy;
+            closestDist = dist;
+          }
+        }
+      });
+      
+      lastPosition = target.position;
+      return nextTarget;
+    }
+    
+    return null;
+  };
+  
+  // Execute the chain
+  let current: Unit | null = currentTarget;
+  while (current && jumpsRemaining > 0) {
+    current = processJump(current);
+  }
+  
+  createEnergyPulse(state, lastPosition, state.players[unit.owner].color, 3, 0.6);
+}
+
+// Starborn - Orbital Strike: Call down a powerful beam from above at target location
+function executeOrbitalStrike(state: GameState, unit: Unit, targetPos: { x: number; y: number }): void {
+  const BEAM_DELAY = 1500; // Delay before beam impacts
+  const BEAM_DURATION = 2000; // Duration of beam
+  const BEAM_RADIUS = 2; // Radius of the beam
+  const BEAM_DAMAGE = 50; // Base damage
+  const BEAM_TICK_INTERVAL = 200; // Damage tick interval in ms
+  
+  // Visual telegraph
+  unit.bombardmentActive = {
+    endTime: Date.now() + BEAM_DELAY + BEAM_DURATION,
+    targetPos,
+    impactTime: Date.now() + BEAM_DELAY,
+  };
+  
+  createEnergyPulse(state, targetPos, state.players[unit.owner].color, BEAM_RADIUS, 0.4);
+  
+  // Start dealing damage after delay
+  setTimeout(() => {
+    const damageInterval = setInterval(() => {
+      const enemies = state.units.filter((u) => u.owner !== unit.owner);
+      const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
+      
+      // Damage enemies in beam
+      enemies.forEach((enemy) => {
+        if (distance(enemy.position, targetPos) <= BEAM_RADIUS) {
+          const tickDamage = (BEAM_DAMAGE / (BEAM_DURATION / BEAM_TICK_INTERVAL)) * unit.damageMultiplier;
+          const shieldMultiplier = getShieldDamageMultiplier(state, enemy, 'ranged');
+          const finalDamage = tickDamage * shieldMultiplier;
+          enemy.hp -= finalDamage;
+          
+          if (Math.random() < 0.4) {
+            createHitSparks(state, enemy.position, state.players[unit.owner].color, 3);
+          }
+          
+          if (state.matchStats && unit.owner === 0) {
+            state.matchStats.damageDealtByPlayer += finalDamage;
+          }
+        }
+      });
+      
+      // Damage bases in beam
+      enemyBases.forEach((base) => {
+        if (distance(base.position, targetPos) <= BEAM_RADIUS) {
+          const tickDamage = (BEAM_DAMAGE * 1.5) / (BEAM_DURATION / BEAM_TICK_INTERVAL) * unit.damageMultiplier;
+          base.hp -= tickDamage;
+          
+          if (state.matchStats && unit.owner === 0) {
+            state.matchStats.damageDealtByPlayer += tickDamage;
+          }
+        }
+      });
+      
+      // Visual feedback
+      if (Math.random() < 0.5) {
+        createEnergyPulse(state, targetPos, state.players[unit.owner].color, BEAM_RADIUS * 0.8, 0.3);
+      }
+    }, BEAM_TICK_INTERVAL);
+    
+    // Stop dealing damage after duration
+    setTimeout(() => {
+      clearInterval(damageInterval);
+      createEnergyPulse(state, targetPos, state.players[unit.owner].color, BEAM_RADIUS * 1.5, 0.6);
+    }, BEAM_DURATION);
+  }, BEAM_DELAY);
+}
+
+// Prism - Light Refraction: Split attacks into multiple beams that fan out
+function executeLightRefraction(state: GameState, unit: Unit, direction: { x: number; y: number }): void {
+  const NUM_BEAMS = 5; // Number of beams
+  const SPREAD_ANGLE = Math.PI / 4; // 45 degrees total spread
+  const BEAM_LENGTH = 9; // Length of each beam
+  const BEAM_DAMAGE = 15; // Damage per beam
+  
+  const dir = normalize(direction);
+  const baseAngle = Math.atan2(dir.y, dir.x);
+  
+  // Create multiple beams in a fan pattern
+  for (let i = 0; i < NUM_BEAMS; i++) {
+    const angleOffset = (i - (NUM_BEAMS - 1) / 2) * (SPREAD_ANGLE / (NUM_BEAMS - 1));
+    const beamAngle = baseAngle + angleOffset;
+    const beamDir = {
+      x: Math.cos(beamAngle),
+      y: Math.sin(beamAngle),
+    };
+    
+    // Check for hits along this beam
+    const enemies = state.units.filter((u) => u.owner !== unit.owner);
+    enemies.forEach((enemy) => {
+      const toEnemy = subtract(enemy.position, unit.position);
+      const dist = distance(unit.position, enemy.position);
+      
+      if (dist > BEAM_LENGTH) return;
+      
+      const projectedDist = toEnemy.x * beamDir.x + toEnemy.y * beamDir.y;
+      const perpDist = Math.abs(toEnemy.x * beamDir.y - toEnemy.y * beamDir.x);
+      
+      // Check if enemy is in this beam (narrow beam)
+      if (projectedDist > 0 && projectedDist <= BEAM_LENGTH && perpDist < 0.5) {
+        const damage = BEAM_DAMAGE * unit.damageMultiplier;
+        const shieldMultiplier = getShieldDamageMultiplier(state, enemy, 'ranged');
+        const finalDamage = damage * shieldMultiplier;
+        enemy.hp -= finalDamage;
+        createHitSparks(state, enemy.position, state.players[unit.owner].color, 4);
+        
+        if (state.matchStats && unit.owner === 0) {
+          state.matchStats.damageDealtByPlayer += finalDamage;
+        }
+      }
+    });
+    
+    // Visual effect for each beam
+    const beamEndPos = {
+      x: unit.position.x + beamDir.x * BEAM_LENGTH,
+      y: unit.position.y + beamDir.y * BEAM_LENGTH,
+    };
+    createLaserParticles(state, unit.position, beamDir, BEAM_LENGTH, state.players[unit.owner].color);
+  }
+  
+  createEnergyPulse(state, unit.position, state.players[unit.owner].color, 2, 0.5);
 }
 
 // Berserker - Rage: Temporary damage boost
@@ -4285,7 +4567,7 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
   }
 
   // Initialize particles only for Solari faction units
-  const solariUnits: Set<UnitType> = new Set(['flare', 'nova', 'eclipse', 'corona', 'supernova', 'zenith', 'pulsar', 'celestial', 'voidwalker', 'chronomancer', 'nebula', 'quasar']);
+  const solariUnits: Set<UnitType> = new Set(['flare', 'nova', 'eclipse', 'corona', 'supernova', 'zenith', 'pulsar', 'celestial', 'voidwalker', 'chronomancer', 'nebula', 'quasar', 'luminary', 'photon', 'starborn', 'prism']);
   
   if (solariUnits.has(type)) {
     const particleCounts: Partial<Record<UnitType, number>> = {
@@ -4301,6 +4583,10 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
       chronomancer: 12,
       nebula: 14,
       quasar: 14,
+      luminary: 13,
+      photon: 11,
+      starborn: 15,
+      prism: 12,
     };
     unit.particles = createParticlesForUnit(unit, particleCounts[type] || 12);
   }

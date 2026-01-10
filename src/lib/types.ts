@@ -292,7 +292,7 @@ export const FACTION_DEFINITIONS: Record<FactionType, FactionDefinition> = {
     baseMoveSpeed: 4.0, // Doubled from 2.0
     baseShape: 'circle',
     ability: 'pulse',
-    availableUnits: ['flare', 'nova', 'eclipse', 'corona', 'supernova', 'zenith', 'pulsar', 'celestial', 'voidwalker', 'chronomancer', 'nebula', 'quasar'],
+    availableUnits: ['flare', 'nova', 'eclipse', 'corona', 'supernova', 'zenith', 'pulsar', 'celestial', 'voidwalker', 'chronomancer', 'nebula', 'quasar', 'luminary', 'photon', 'starborn', 'prism'],
     availableBaseTypes: ['standard', 'support'],
   },
 };
@@ -332,7 +332,7 @@ export interface MiningDepot {
   deposits: ResourceDeposit[]; // 8 resource deposits around the depot
 }
 
-export type UnitType = 'marine' | 'warrior' | 'snaker' | 'tank' | 'scout' | 'artillery' | 'medic' | 'interceptor' | 'berserker' | 'assassin' | 'juggernaut' | 'striker' | 'flare' | 'nova' | 'eclipse' | 'corona' | 'supernova' | 'guardian' | 'reaper' | 'oracle' | 'harbinger' | 'zenith' | 'pulsar' | 'celestial' | 'marksman' | 'engineer' | 'skirmisher' | 'paladin' | 'gladiator' | 'ravager' | 'warlord' | 'duelist' | 'voidwalker' | 'chronomancer' | 'nebula' | 'quasar' | 'miningDrone';
+export type UnitType = 'marine' | 'warrior' | 'snaker' | 'tank' | 'scout' | 'artillery' | 'medic' | 'interceptor' | 'berserker' | 'assassin' | 'juggernaut' | 'striker' | 'flare' | 'nova' | 'eclipse' | 'corona' | 'supernova' | 'guardian' | 'reaper' | 'oracle' | 'harbinger' | 'zenith' | 'pulsar' | 'celestial' | 'marksman' | 'engineer' | 'skirmisher' | 'paladin' | 'gladiator' | 'ravager' | 'warlord' | 'duelist' | 'voidwalker' | 'chronomancer' | 'nebula' | 'quasar' | 'luminary' | 'photon' | 'starborn' | 'prism' | 'miningDrone';
 
 export interface UnitDefinition {
   name: string;
@@ -893,6 +893,66 @@ export const UNIT_DEFINITIONS: Record<UnitType, UnitDefinition> = {
     abilityCooldown: 5,
     canDamageStructures: true,
     modifiers: ['ranged'],
+  },
+  luminary: {
+    name: 'Luminary',
+    hp: 65,
+    armor: 2,
+    moveSpeed: 6,
+    attackType: 'ranged',
+    attackRange: 8,
+    attackDamage: 6,
+    attackRate: 1.8,
+    cost: 50,
+    abilityName: 'Gravity Well',
+    abilityCooldown: 5,
+    canDamageStructures: false,
+    modifiers: ['ranged'],
+  },
+  photon: {
+    name: 'Photon',
+    hp: 55,
+    armor: 1,
+    moveSpeed: 11,
+    attackType: 'ranged',
+    attackRange: 7,
+    attackDamage: 5,
+    attackRate: 3,
+    cost: 45,
+    abilityName: 'Chain Lightning',
+    abilityCooldown: 5,
+    canDamageStructures: false,
+    modifiers: ['ranged', 'small'],
+  },
+  starborn: {
+    name: 'Starborn',
+    hp: 90,
+    armor: 3,
+    moveSpeed: 5,
+    attackType: 'ranged',
+    attackRange: 9,
+    attackDamage: 8,
+    attackRate: 1.5,
+    cost: 55,
+    abilityName: 'Orbital Strike',
+    abilityCooldown: 5,
+    canDamageStructures: true,
+    modifiers: ['ranged'],
+  },
+  prism: {
+    name: 'Prism',
+    hp: 50,
+    armor: 1,
+    moveSpeed: 8,
+    attackType: 'ranged',
+    attackRange: 8,
+    attackDamage: 4,
+    attackRate: 2.5,
+    cost: 40,
+    abilityName: 'Light Refraction',
+    abilityCooldown: 5,
+    canDamageStructures: false,
+    modifiers: ['ranged', 'small'],
   },
   miningDrone: {
     name: 'Mining Drone',

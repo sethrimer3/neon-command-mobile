@@ -62,6 +62,13 @@ function getAbilityDescription(unitType: UnitType): string {
     chronomancer: 'Slows all enemies within 7m radius, reducing their move speed to 30% for 4 seconds. Also fires a laser dealing 10 damage.',
     nebula: 'Creates a cosmic barrier shield at location with 3m radius for 6 seconds.',
     quasar: 'Delayed area ability - after 2.5s, deals 60 damage to enemies and 80 to bases within 4m radius.',
+    luminary: 'Creates a gravity well at target location (8m radius) that pulls enemies toward the center for 3 seconds. Enemies within 2.5m are held in place. Also fires a laser dealing 10 damage.',
+    photon: 'Chain lightning attack - hits the first enemy in direction, then chains up to 5 times to nearby enemies within 6m. Each jump deals 30 damage with 20% falloff. Also fires a laser dealing 10 damage.',
+    starborn: 'Calls down an orbital strike beam at target location after 1.5s delay. The beam lasts 2 seconds, continuously dealing damage (50 total) to enemies within 2m radius. Also fires a laser dealing 10 damage.',
+    prism: 'Splits light into 5 beams that fan out in a 45° spread pattern, each dealing 15 damage to enemies in their path (9m length). Also fires a laser dealing 10 damage.',
+    
+    // Special units
+    miningDrone: 'Automatically mines resources from assigned deposit and returns them to the depot.',
   };
   
   return abilityDescriptions[unitType] || 'Generic laser ability dealing 10 damage in target direction.';
