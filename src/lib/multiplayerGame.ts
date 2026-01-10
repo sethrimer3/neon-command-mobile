@@ -7,7 +7,11 @@ import { MultiplayerManager, GameCommand } from './multiplayer';
 import { spawnUnit } from './simulation';
 
 export interface MultiplayerSync {
+  // Timestamp of the last polling attempt so we can throttle network checks.
   lastCommandCheck: number;
+  // Sequence number of the last command processed from the stream.
+  lastCommandSeq: number;
+  // Buffer for any queued commands (reserved for future batching).
   commandBuffer: GameCommand[];
 }
 
@@ -20,6 +24,7 @@ const COMMAND_POLL_INTERVAL_MS = 100; // How often to check for new opponent com
 export function initializeMultiplayerSync(): MultiplayerSync {
   return {
     lastCommandCheck: Date.now(),
+    lastCommandSeq: 0,
     commandBuffer: [],
   };
 }
@@ -272,7 +277,7 @@ export async function updateMultiplayerSync(
   const wasConnected = state.networkStatus.connected;
   
   try {
-    const newCommands = await manager.getCommands(sync.lastCommandCheck);
+    const { commands: newCommands, latestSeq } = await manager.getCommands(sync.lastCommandSeq);
     
     if (newCommands.length > 0) {
       // Filter out our own commands (we already applied them locally)
@@ -284,6 +289,7 @@ export async function updateMultiplayerSync(
       }
     }
     
+    sync.lastCommandSeq = latestSeq;
     sync.lastCommandCheck = now;
     
     // Update network status - successfully connected
