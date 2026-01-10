@@ -124,6 +124,7 @@ class SupabaseKVStore implements RealtimeKVStore {
   private client: SupabaseClient | null;
   private tableName: string;
   private commandsTableName: string;
+  private useCommandsTable: boolean = true;
 
   constructor(
     url: string | undefined,
@@ -223,51 +224,96 @@ class SupabaseKVStore implements RealtimeKVStore {
   }
 
   // Append a command to a dedicated Supabase table to avoid prefix scanning.
+  // Falls back to KV-based storage if the commands table doesn't exist.
   async appendCommand<T>(streamKey: string, payload: T): Promise<number | null> {
     if (!this.client) {
       return null;
     }
 
-    const { data, error } = await this.client
-      .from(this.commandsTableName)
-      .insert({
-        game_id: streamKey,
-        payload,
-        created_at: new Date().toISOString(),
-      })
-      .select('id')
-      .single();
+    // Try using the dedicated commands table if enabled
+    if (this.useCommandsTable) {
+      const { data, error } = await this.client
+        .from(this.commandsTableName)
+        .insert({
+          game_id: streamKey,
+          payload,
+          created_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
 
-    if (error) {
-      console.warn('Supabase command insert failed for stream:', streamKey, error);
-      return null;
+      if (error) {
+        // Check if the error is because the table doesn't exist
+        if (error.code === 'PGRST204' || error.code === 'PGRST205' || error.message?.includes('table')) {
+          console.warn('Commands table not found, falling back to KV storage:', error.message);
+          this.useCommandsTable = false;
+          // Fall through to KV-based storage
+        } else {
+          console.warn('Supabase command insert failed for stream:', streamKey, error);
+          return null;
+        }
+      } else {
+        return typeof data?.id === 'number' ? data.id : null;
+      }
     }
 
-    return typeof data?.id === 'number' ? data.id : null;
+    // Fallback: Store command logs in the KV table like Spark does
+    const commandLogKey = `${COMMAND_LOG_PREFIX}${streamKey}`;
+    const existingLog = (await this.get<CommandLog<T>>(commandLogKey)) ?? { lastSeq: 0, entries: [] };
+    const nextSeq = existingLog.lastSeq + 1;
+    const updatedEntries = [...existingLog.entries, { seq: nextSeq, payload }];
+    const trimmedEntries = updatedEntries.slice(-MAX_COMMAND_LOG_ENTRIES);
+
+    await this.set(commandLogKey, {
+      lastSeq: nextSeq,
+      entries: trimmedEntries,
+    });
+
+    return nextSeq;
   }
 
   // Query commands by sequence id so polling only returns new rows.
+  // Falls back to KV-based storage if the commands table doesn't exist.
   async listCommandsSince<T>(streamKey: string, sinceSeq: number): Promise<Array<{ seq: number; payload: T }>> {
     if (!this.client) {
       return [];
     }
 
-    const { data, error } = await this.client
-      .from(this.commandsTableName)
-      .select('id, payload')
-      .eq('game_id', streamKey)
-      .gt('id', sinceSeq)
-      .order('id', { ascending: true });
+    // Try using the dedicated commands table if enabled
+    if (this.useCommandsTable) {
+      const { data, error } = await this.client
+        .from(this.commandsTableName)
+        .select('id, payload')
+        .eq('game_id', streamKey)
+        .gt('id', sinceSeq)
+        .order('id', { ascending: true });
 
-    if (error) {
-      console.warn('Supabase command list failed for stream:', streamKey, error);
+      if (error) {
+        // Check if the error is because the table doesn't exist
+        if (error.code === 'PGRST204' || error.code === 'PGRST205' || error.message?.includes('table')) {
+          console.warn('Commands table not found, falling back to KV storage:', error.message);
+          this.useCommandsTable = false;
+          // Fall through to KV-based storage
+        } else {
+          console.warn('Supabase command list failed for stream:', streamKey, error);
+          return [];
+        }
+      } else {
+        return (data || []).map((row) => ({
+          seq: row.id as number,
+          payload: (row.payload as T) ?? null,
+        }));
+      }
+    }
+
+    // Fallback: Read command logs from the KV table like Spark does
+    const commandLogKey = `${COMMAND_LOG_PREFIX}${streamKey}`;
+    const existingLog = await this.get<CommandLog<T>>(commandLogKey);
+    if (!existingLog) {
       return [];
     }
 
-    return (data || []).map((row) => ({
-      seq: row.id as number,
-      payload: (row.payload as T) ?? null,
-    }));
+    return existingLog.entries.filter((entry) => entry.seq > sinceSeq);
   }
 }
 

@@ -106,7 +106,8 @@ Follow these steps if you are creating a brand new Supabase project for multipla
    - Check **Table Editor → multiplayer_kv** to confirm data is being written.
 
 #### Supabase Table Schema
-Create a table named `multiplayer_kv` with the following structure:
+
+**Required Table:** Create a table named `multiplayer_kv` with the following structure:
 
 ```sql
 CREATE TABLE multiplayer_kv (
@@ -118,6 +119,35 @@ CREATE TABLE multiplayer_kv (
 -- Add index for prefix searches
 CREATE INDEX idx_multiplayer_kv_key_prefix ON multiplayer_kv (key text_pattern_ops);
 ```
+
+**Optional Performance Table:** For better performance with many concurrent games, you can optionally create a dedicated `multiplayer_commands` table. If this table is not present, the system will automatically fall back to storing commands in the `multiplayer_kv` table (similar to how Spark KV works).
+
+```sql
+-- Optional: Create this table for improved command synchronization performance
+CREATE TABLE multiplayer_commands (
+  id BIGSERIAL PRIMARY KEY,
+  game_id TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Index for efficient command querying
+CREATE INDEX idx_multiplayer_commands_game_id ON multiplayer_commands (game_id, id);
+```
+
+If you create the `multiplayer_commands` table, don't forget to add RLS policies:
+
+```sql
+ALTER TABLE multiplayer_commands ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow anon read" ON multiplayer_commands
+  FOR SELECT USING (true);
+
+CREATE POLICY "Allow anon insert" ON multiplayer_commands
+  FOR INSERT WITH CHECK (true);
+```
+
+**Note:** The game will work fine with just the `multiplayer_kv` table. The commands table is only recommended for high-traffic deployments.
 
 ### LAN Multiplayer (Peer-to-Peer)
 LAN multiplayer uses WebRTC for direct peer-to-peer connections without requiring a backend server. This mode is ideal for:
