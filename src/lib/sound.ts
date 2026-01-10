@@ -8,7 +8,15 @@ export class SoundManager {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      // Guard against browsers/environments that do not support the Web Audio API.
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      // Only create the audio context when an implementation is available.
+      if (AudioContextClass) {
+        this.audioContext = new AudioContextClass();
+      } else {
+        // Log once so missing audio support doesn't silently block startup overlays.
+        console.warn('Web Audio API is not available; sound effects are disabled.');
+      }
     }
   }
 
