@@ -160,14 +160,19 @@ class SupabaseKVStore implements RealtimeKVStore {
  * Create the best available realtime store. Spark is preferred locally, Supabase otherwise.
  */
 export function createRealtimeStore(): RealtimeKVStore {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+  const tableName = (import.meta.env.VITE_SUPABASE_KV_TABLE as string | undefined) ?? 'multiplayer_kv';
+
+  // Prefer Supabase when credentials are provided to avoid Spark KV calls in non-Spark hosting.
+  if (supabaseUrl && supabaseAnonKey) {
+    return new SupabaseKVStore(supabaseUrl, supabaseAnonKey, tableName);
+  }
+
   const sparkStore = new SparkKVStore();
   if (sparkStore.isAvailable()) {
     return sparkStore;
   }
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-  const tableName = (import.meta.env.VITE_SUPABASE_KV_TABLE as string | undefined) ?? 'multiplayer_kv';
 
   return new SupabaseKVStore(supabaseUrl, supabaseAnonKey, tableName);
 }

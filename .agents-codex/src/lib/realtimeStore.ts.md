@@ -27,7 +27,7 @@ Provides a backend-agnostic realtime KV store interface and adapters for Spark K
 - **Notes:** Uses upsert on `key` to keep state current.
 
 ### createRealtimeStore()
-- **Purpose:** Selects Spark when available, otherwise falls back to Supabase.
+- **Purpose:** Selects Supabase when credentials are present, otherwise uses Spark when available.
 - **Notes:** Reads `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and optional `VITE_SUPABASE_KV_TABLE`.
 
 ## Terminology
@@ -55,6 +55,7 @@ Provides a backend-agnostic realtime KV store interface and adapters for Spark K
 
 ## Change History
 - **2026-01-01**: Added Spark/Supabase realtime store abstraction.
+- **2025-03-24**: Preferred Supabase when credentials are configured to avoid Spark KV calls on non-Spark hosts.
 
 ## Watch Out For
 - Ensure env vars are set in production builds.
