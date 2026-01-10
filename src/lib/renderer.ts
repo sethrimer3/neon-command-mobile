@@ -71,6 +71,8 @@ const radiantMiningDroneSpritePath = `${assetBaseUrl}ASSETS/sprites/factions/rad
 const spriteCache = new Map<string, HTMLImageElement>();
 // Cache pre-tinted sprites so we can reuse colored variants across frames.
 const tintedSpriteCache = new Map<string, HTMLCanvasElement>();
+// Cache white outline sprites to avoid recreating them every frame.
+const whiteOutlineSpriteCache = new Map<string, HTMLCanvasElement>();
 
 // Create a canvas element for tinting without touching the main render surface.
 const createTintCanvas = (): HTMLCanvasElement => {
@@ -133,7 +135,53 @@ function getTintedSprite(sprite: HTMLImageElement, tintColor: string): HTMLCanva
 }
 
 /**
+ * Creates a white silhouette version of a sprite for outlining.
+ * Uses caching to avoid recreating the same white outline multiple times.
+ * @param sprite - The sprite image or canvas to outline.
+ * @param spriteSource - The original sprite source for cache key (HTMLImageElement).
+ * @param tintColor - The tint color used (for cache key).
+ * @returns A canvas containing a white silhouette of the sprite.
+ */
+function getWhiteOutlineSprite(
+  sprite: HTMLImageElement | HTMLCanvasElement,
+  spriteSource: HTMLImageElement,
+  tintColor: string
+): HTMLCanvasElement {
+  // Create a cache key that includes both sprite source and tint color
+  const cacheKey = `${spriteSource.src}::${tintColor}::white`;
+  
+  // Check cache first
+  const cached = whiteOutlineSpriteCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  
+  const canvas = createTintCanvas();
+  canvas.width = sprite.width;
+  canvas.height = sprite.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    return canvas;
+  }
+  
+  // Draw the sprite
+  ctx.drawImage(sprite, 0, 0);
+  
+  // Make it white by using composite operations
+  ctx.globalCompositeOperation = 'source-in';
+  ctx.fillStyle = 'white';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = 'source-over';
+  
+  // Cache the result
+  whiteOutlineSpriteCache.set(cacheKey, canvas);
+  
+  return canvas;
+}
+
+/**
  * Draws a sprite centered at the provided screen position with rotation, optional glow, and team tinting.
+ * Includes a white outline around the sprite.
  * @param ctx - Canvas rendering context.
  * @param sprite - The sprite image to render.
  * @param center - Screen-space center point for the sprite.
@@ -154,13 +202,29 @@ function drawCenteredSprite(
   ctx.save();
   ctx.translate(center.x, center.y);
   ctx.rotate(rotation);
+  
+  // Use a cached, tinted sprite so canvas composite operations don't affect the main scene.
+  const tintedSprite = getTintedSprite(sprite, tintColor) ?? sprite;
+  
+  // Create white outline by drawing a white version of the sprite at offset positions
+  const outlineWidth = 3; // Medium stroke width
+  const whiteSprite = getWhiteOutlineSprite(tintedSprite, sprite, tintColor);
+  
+  // Draw white outline in 8 directions for a smooth outline
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2;
+    const offsetX = Math.cos(angle) * outlineWidth;
+    const offsetY = Math.sin(angle) * outlineWidth;
+    ctx.drawImage(whiteSprite, -size / 2 + offsetX, -size / 2 + offsetY, size, size);
+  }
+  
   if (enableGlow) {
-    // Apply glow first so the base sprite gets a soft halo.
+    // Apply glow so the base sprite gets a soft halo.
     ctx.shadowColor = tintColor;
     ctx.shadowBlur = 18;
   }
-  // Use a cached, tinted sprite so canvas composite operations don't affect the main scene.
-  const tintedSprite = getTintedSprite(sprite, tintColor) ?? sprite;
+  
+  // Draw the main sprite on top
   ctx.drawImage(tintedSprite, -size / 2, -size / 2, size, size);
   ctx.restore();
 }
