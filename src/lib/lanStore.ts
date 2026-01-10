@@ -6,6 +6,10 @@ const P2P_REQUEST_TIMEOUT_MS = 5000;
 
 // Prefix for game host peer IDs to enable discovery
 const GAME_HOST_PREFIX = 'solrts-host-';
+// Prefix for LAN command log keys stored in the shared KV map.
+const COMMAND_LOG_PREFIX = 'command-log:';
+// Keep a bounded log so LAN command polling remains lightweight.
+const MAX_COMMAND_LOG_ENTRIES = 500;
 
 export interface LANGameInfo {
   peerId: string;
@@ -329,9 +333,13 @@ export class LANKVStore implements RealtimeKVStore {
     }
   }
 
-  async list(prefix: string): Promise<string[]> {
-    // Get local keys
+  async listEntries<T>(prefix: string): Promise<Array<{ key: string; value: T | null }>> {
+    // Get local keys for immediate results even before asking the host.
     const localKeys = this.getAllKeys().filter(k => k.startsWith(prefix));
+    const localEntries: Array<{ key: string; value: T | null }> = localKeys.map((key) => ({
+      key,
+      value: (this.localData.get(key) as T | undefined) ?? (this.remoteData.get(key) as T | undefined) ?? null,
+    }));
 
     // If we're the guest, also request from host
     if (!this.isHostPlayer && this.connection?.open) {
@@ -345,7 +353,11 @@ export class LANKVStore implements RealtimeKVStore {
             clearTimeout(timeoutId);
             // Combine and deduplicate
             const allKeys = new Set([...localKeys, ...data.keys]);
-            resolve(Array.from(allKeys));
+            const combinedEntries = Array.from(allKeys).map((key) => ({
+              key,
+              value: (this.localData.get(key) as T | undefined) ?? (this.remoteData.get(key) as T | undefined) ?? null,
+            }));
+            resolve(combinedEntries);
           }
         };
 
@@ -360,12 +372,43 @@ export class LANKVStore implements RealtimeKVStore {
         // Timeout after P2P_REQUEST_TIMEOUT_MS
         timeoutId = setTimeout(() => {
           this.messageHandlers.delete(handler);
-          resolve(localKeys);
+          resolve(localEntries);
         }, P2P_REQUEST_TIMEOUT_MS);
       });
     }
 
-    return localKeys;
+    return localEntries;
+  }
+
+  // Append commands to a shared log so LAN polling stays sequential.
+  async appendCommand<T>(streamKey: string, payload: T): Promise<number | null> {
+    const commandLogKey = `${COMMAND_LOG_PREFIX}${streamKey}`;
+    const existingLog = (await this.get<{
+      lastSeq: number;
+      entries: Array<{ seq: number; payload: T }>;
+    }>(commandLogKey)) ?? { lastSeq: 0, entries: [] };
+    const nextSeq = existingLog.lastSeq + 1;
+    const updatedEntries = [...existingLog.entries, { seq: nextSeq, payload }];
+    const trimmedEntries = updatedEntries.slice(-MAX_COMMAND_LOG_ENTRIES);
+
+    await this.set(commandLogKey, { lastSeq: nextSeq, entries: trimmedEntries });
+
+    return nextSeq;
+  }
+
+  // Read command entries after a sequence number from the LAN log.
+  async listCommandsSince<T>(streamKey: string, sinceSeq: number): Promise<Array<{ seq: number; payload: T }>> {
+    const commandLogKey = `${COMMAND_LOG_PREFIX}${streamKey}`;
+    const existingLog = await this.get<{
+      lastSeq: number;
+      entries: Array<{ seq: number; payload: T }>;
+    }>(commandLogKey);
+
+    if (!existingLog) {
+      return [];
+    }
+
+    return existingLog.entries.filter((entry) => entry.seq > sinceSeq);
   }
 
   /**

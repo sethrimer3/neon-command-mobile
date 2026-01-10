@@ -68,11 +68,11 @@ Public lobby information:
 
 #### sendCommand(command: GameCommand): Promise<void>
 - **Purpose:** Queue command for transmission
-- **Notes:** Commands batched and sent periodically
+- **Notes:** Commands are appended to a sequential command stream for efficient polling.
 
-#### getCommands(since: number): Promise<GameCommand[]>
-- **Purpose:** Fetch opponent commands issued after a timestamp.
-- **Notes:** Uses store `listEntries` to batch fetch command payloads and avoid per-key network calls.
+#### getCommands(sinceSeq: number): Promise<{ commands: GameCommand[]; latestSeq: number }>
+- **Purpose:** Fetch opponent commands issued after a stream sequence number.
+- **Notes:** Uses store `listCommandsSince` to avoid prefix scans and returns the latest sequence for the next poll.
 
 #### getGameState(): Promise<MultiplayerState | null>
 - **Purpose:** Fetch current multiplayer state
@@ -112,8 +112,8 @@ Public lobby information:
 
 ### Critical Details
 - Uses a realtime KV store abstraction for distributed state storage (Spark or Supabase)
-- Commands batched to reduce network calls
-- Command retrieval reads key/value entries in one pass to reduce Supabase request volume
+- Commands are appended to a sequential stream for efficient polling
+- Command retrieval uses sequence numbers instead of prefix-scanning timestamped keys
 - Turn-based synchronization prevents desync
 - Lobby list maintained separately for browsing
 - Lobbies expire after 5 minutes of inactivity
@@ -129,7 +129,7 @@ Public lobby information:
 
 ### Network Optimization
 - 100ms update interval balances responsiveness and bandwidth
-- Command batching reduces API calls
+- Sequential command streams reduce API calls and payload sizes
 - Lobby list cached to minimize reads
 
 ### Known Issues
@@ -162,7 +162,7 @@ Public lobby information:
 - Added command synchronization
 - Implemented lobby browser and matchmaking
 - **2026-01-01**: Replaced direct Spark KV usage with realtime store abstraction for Supabase support
-- **2025-03-24**: Switched command fetches to batch list entries instead of per-key reads
+- **2025-03-24**: Switched command fetches to sequential command streams instead of prefix list reads
 
 ## Watch Out For
 - KV store operations are async - always await

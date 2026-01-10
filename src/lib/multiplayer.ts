@@ -178,26 +178,25 @@ export class MultiplayerManager {
       timestamp: Date.now(),
     };
 
-    const commandKey = `game:${this.gameId}:commands:${fullCommand.timestamp}`;
-    await this.store.set(commandKey, fullCommand);
+    // Append to the command stream instead of creating timestamped keys.
+    const commandStreamKey = `game:${this.gameId}:commands`;
+    await this.store.appendCommand(commandStreamKey, fullCommand);
   }
 
-  async getCommands(since: number): Promise<GameCommand[]> {
-    if (!this.store.isAvailable() || !this.gameId) return [];
-
-    const commands: GameCommand[] = [];
-    const prefix = `game:${this.gameId}:commands:`;
-    const entries = await this.store.listEntries<GameCommand>(prefix);
-
-    // Filter entries by timestamp suffix to avoid replaying old commands.
-    for (const entry of entries) {
-      const timestamp = parseInt(entry.key.split(':').pop() || '0');
-      if (timestamp > since && entry.value) {
-        commands.push(entry.value);
-      }
+  async getCommands(sinceSeq: number): Promise<{ commands: GameCommand[]; latestSeq: number }> {
+    if (!this.store.isAvailable() || !this.gameId) {
+      return { commands: [], latestSeq: sinceSeq };
     }
 
-    return commands.sort((a, b) => a.timestamp - b.timestamp);
+    // Pull only the newly appended commands using a sequence counter.
+    const commandStreamKey = `game:${this.gameId}:commands`;
+    const entries = await this.store.listCommandsSince<GameCommand>(commandStreamKey, sinceSeq);
+    const commands = entries
+      .map((entry) => entry.payload)
+      .filter((payload): payload is GameCommand => payload !== null && payload !== undefined);
+    const latestSeq = entries.length > 0 ? entries[entries.length - 1].seq : sinceSeq;
+
+    return { commands, latestSeq };
   }
 
   async syncGameState(gameState: Partial<GameState>): Promise<void> {

@@ -15,7 +15,22 @@ export interface RealtimeKVStore {
   delete(key: string): Promise<void>;
   /** Lists all entries that match a prefix for lightweight querying. */
   listEntries<T>(prefix: string): Promise<Array<{ key: string; value: T | null }>>;
+  /** Append a command payload to a stream and return the assigned sequence number. */
+  appendCommand<T>(streamKey: string, payload: T): Promise<number | null>;
+  /** Fetch commands after a sequence number for stream-based polling. */
+  listCommandsSince<T>(streamKey: string, sinceSeq: number): Promise<Array<{ seq: number; payload: T }>>;
 }
+
+// Local command log format for KV-backed command streams.
+interface CommandLog<T> {
+  lastSeq: number;
+  entries: Array<{ seq: number; payload: T }>;
+}
+
+// Cap command logs so fallback stores don't grow without bound.
+const MAX_COMMAND_LOG_ENTRIES = 500;
+// Prefix for command log keys stored in KV backends.
+const COMMAND_LOG_PREFIX = 'command-log:';
 
 /**
  * Spark adapter so the existing Spark KV integration still works when available.
@@ -65,6 +80,41 @@ class SparkKVStore implements RealtimeKVStore {
     );
     return entries;
   }
+
+  // Store command logs in Spark KV so polling can avoid prefix scans elsewhere.
+  async appendCommand<T>(streamKey: string, payload: T): Promise<number | null> {
+    if (!this.isAvailable()) {
+      return null;
+    }
+
+    const commandLogKey = `${COMMAND_LOG_PREFIX}${streamKey}`;
+    const existingLog = (await this.get<CommandLog<T>>(commandLogKey)) ?? { lastSeq: 0, entries: [] };
+    const nextSeq = existingLog.lastSeq + 1;
+    const updatedEntries = [...existingLog.entries, { seq: nextSeq, payload }];
+    const trimmedEntries = updatedEntries.slice(-MAX_COMMAND_LOG_ENTRIES);
+
+    await this.set(commandLogKey, {
+      lastSeq: nextSeq,
+      entries: trimmedEntries,
+    });
+
+    return nextSeq;
+  }
+
+  // Read a bounded in-memory log from Spark KV for commands since the last sequence.
+  async listCommandsSince<T>(streamKey: string, sinceSeq: number): Promise<Array<{ seq: number; payload: T }>> {
+    if (!this.isAvailable()) {
+      return [];
+    }
+
+    const commandLogKey = `${COMMAND_LOG_PREFIX}${streamKey}`;
+    const existingLog = await this.get<CommandLog<T>>(commandLogKey);
+    if (!existingLog) {
+      return [];
+    }
+
+    return existingLog.entries.filter((entry) => entry.seq > sinceSeq);
+  }
 }
 
 /**
@@ -73,11 +123,18 @@ class SparkKVStore implements RealtimeKVStore {
 class SupabaseKVStore implements RealtimeKVStore {
   private client: SupabaseClient | null;
   private tableName: string;
+  private commandsTableName: string;
 
-  constructor(url: string | undefined, anonKey: string | undefined, tableName: string) {
+  constructor(
+    url: string | undefined,
+    anonKey: string | undefined,
+    tableName: string,
+    commandsTableName: string,
+  ) {
     // The Supabase table should include `key` (text), `value` (jsonb), and `updated_at` columns.
     this.client = url && anonKey ? createClient(url, anonKey) : null;
     this.tableName = tableName;
+    this.commandsTableName = commandsTableName;
   }
 
   // Supabase is available when the client has been configured with env credentials.
@@ -164,6 +221,54 @@ class SupabaseKVStore implements RealtimeKVStore {
       value: (row.value as T) ?? null,
     }));
   }
+
+  // Append a command to a dedicated Supabase table to avoid prefix scanning.
+  async appendCommand<T>(streamKey: string, payload: T): Promise<number | null> {
+    if (!this.client) {
+      return null;
+    }
+
+    const { data, error } = await this.client
+      .from(this.commandsTableName)
+      .insert({
+        game_id: streamKey,
+        payload,
+        created_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.warn('Supabase command insert failed for stream:', streamKey, error);
+      return null;
+    }
+
+    return typeof data?.id === 'number' ? data.id : null;
+  }
+
+  // Query commands by sequence id so polling only returns new rows.
+  async listCommandsSince<T>(streamKey: string, sinceSeq: number): Promise<Array<{ seq: number; payload: T }>> {
+    if (!this.client) {
+      return [];
+    }
+
+    const { data, error } = await this.client
+      .from(this.commandsTableName)
+      .select('id, payload')
+      .eq('game_id', streamKey)
+      .gt('id', sinceSeq)
+      .order('id', { ascending: true });
+
+    if (error) {
+      console.warn('Supabase command list failed for stream:', streamKey, error);
+      return [];
+    }
+
+    return (data || []).map((row) => ({
+      seq: row.id as number,
+      payload: (row.payload as T) ?? null,
+    }));
+  }
 }
 
 /**
@@ -173,10 +278,12 @@ export function createRealtimeStore(): RealtimeKVStore {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
   const tableName = (import.meta.env.VITE_SUPABASE_KV_TABLE as string | undefined) ?? 'multiplayer_kv';
+  const commandsTableName =
+    (import.meta.env.VITE_SUPABASE_COMMANDS_TABLE as string | undefined) ?? 'multiplayer_commands';
 
   // Prefer Supabase when credentials are provided to avoid Spark KV calls in non-Spark hosting.
   if (supabaseUrl && supabaseAnonKey) {
-    return new SupabaseKVStore(supabaseUrl, supabaseAnonKey, tableName);
+    return new SupabaseKVStore(supabaseUrl, supabaseAnonKey, tableName, commandsTableName);
   }
 
   const sparkStore = new SparkKVStore();
@@ -184,5 +291,5 @@ export function createRealtimeStore(): RealtimeKVStore {
     return sparkStore;
   }
 
-  return new SupabaseKVStore(supabaseUrl, supabaseAnonKey, tableName);
+  return new SupabaseKVStore(supabaseUrl, supabaseAnonKey, tableName, commandsTableName);
 }
