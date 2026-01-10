@@ -1500,34 +1500,36 @@ function updateSpriteCornerTrails(state: GameState): void {
     }
     
     // Calculate back corner positions based on unit rotation
-    // Sprites are rotated to face forward, so we need to account for rotation
+    // The sprite rendering adds RADIANT_SPRITE_ROTATION_OFFSET (PI/2), but we work in world space
     const rotation = unit.rotation || 0;
     const playfieldRotation = getPlayfieldRotationRadians();
+    
+    // The total rotation determines which way the unit/sprite is facing
     const totalRotation = rotation + playfieldRotation;
     
     // Get sprite size for this unit type
     const spriteHalfSize = unit.type === 'miningDrone' ? MINING_DRONE_SPRITE_HALF_SIZE : UNIT_SPRITE_HALF_SIZE;
     
-    // Calculate back corners (perpendicular to forward direction, at the back)
-    // Back is opposite to forward direction (rotation + PI)
-    const backAngle = totalRotation + Math.PI + Math.PI / 2; // Add 90 degrees to get sprite orientation
-    const perpAngle = totalRotation + Math.PI / 2; // Perpendicular to forward
+    // The back of the unit is opposite to its forward direction
+    // Since sprites are rendered with an additional PI/2 rotation offset, we need to account for that
+    const backDirection = totalRotation + Math.PI + Math.PI / 2; // Back of the sprite
+    const perpendicular = totalRotation + Math.PI / 2; // Left-right axis relative to sprite orientation
     
-    // Back center point
-    const backX = unit.position.x + Math.cos(backAngle) * spriteHalfSize;
-    const backY = unit.position.y + Math.sin(backAngle) * spriteHalfSize;
+    // Back center point of the sprite
+    const backCenterX = unit.position.x + Math.cos(backDirection) * spriteHalfSize;
+    const backCenterY = unit.position.y + Math.sin(backDirection) * spriteHalfSize;
     
     // Calculate left and right corner offsets from back center
-    const cornerOffset = spriteHalfSize * 0.7; // Corners are 70% of the way to the edge
+    const cornerOffset = spriteHalfSize * 0.7; // Corners are 70% of the way to the side edges
     
     const leftCornerPos = {
-      x: backX + Math.cos(perpAngle) * cornerOffset,
-      y: backY + Math.sin(perpAngle) * cornerOffset,
+      x: backCenterX + Math.cos(perpendicular) * cornerOffset,
+      y: backCenterY + Math.sin(perpendicular) * cornerOffset,
     };
     
     const rightCornerPos = {
-      x: backX - Math.cos(perpAngle) * cornerOffset,
-      y: backY - Math.sin(perpAngle) * cornerOffset,
+      x: backCenterX - Math.cos(perpendicular) * cornerOffset,
+      y: backCenterY - Math.sin(perpendicular) * cornerOffset,
     };
     
     // Add current positions to trails
