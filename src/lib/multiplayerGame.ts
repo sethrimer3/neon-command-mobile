@@ -9,23 +9,32 @@ import { spawnUnit } from './simulation';
 export interface MultiplayerSync {
   // Timestamp of the last polling attempt so we can throttle network checks.
   lastCommandCheck: number;
+  // Timestamp of the next allowed poll so we can back off on failures.
+  nextCommandCheckAt: number;
   // Sequence number of the last command processed from the stream.
   lastCommandSeq: number;
   // Buffer for any queued commands (reserved for future batching).
   commandBuffer: GameCommand[];
+  // Counts consecutive polling failures so we can increase backoff time.
+  failedCommandPolls: number;
 }
 
 // Configuration constants
 const COMMAND_POLL_INTERVAL_MS = 100; // How often to check for new opponent commands
+const COMMAND_POLL_MAX_BACKOFF_MS = 2000; // Cap the backoff to keep gameplay responsive
 
 /**
  * Initialize multiplayer synchronization state for a game
  */
 export function initializeMultiplayerSync(): MultiplayerSync {
+  const now = Date.now();
+
   return {
-    lastCommandCheck: Date.now(),
+    lastCommandCheck: now,
+    nextCommandCheckAt: now,
     lastCommandSeq: 0,
     commandBuffer: [],
+    failedCommandPolls: 0,
   };
 }
 
@@ -260,8 +269,8 @@ export async function updateMultiplayerSync(
 ): Promise<void> {
   const now = Date.now();
   
-  // Check for new commands at configured interval
-  if (now - sync.lastCommandCheck < COMMAND_POLL_INTERVAL_MS) {
+  // Skip polling if we are still within the configured interval or backoff window.
+  if (now - sync.lastCommandCheck < COMMAND_POLL_INTERVAL_MS || now < sync.nextCommandCheckAt) {
     return;
   }
   
@@ -289,8 +298,11 @@ export async function updateMultiplayerSync(
       }
     }
     
+    // Record success so polling returns to the normal interval cadence.
+    sync.failedCommandPolls = 0;
     sync.lastCommandSeq = latestSeq;
     sync.lastCommandCheck = now;
+    sync.nextCommandCheckAt = now + COMMAND_POLL_INTERVAL_MS;
     
     // Update network status - successfully connected
     if (!wasConnected) {
@@ -305,6 +317,14 @@ export async function updateMultiplayerSync(
     
     // Mark as disconnected
     state.networkStatus.connected = false;
+    // Increase backoff time so failed fetches don't hammer the backend or browser.
+    sync.failedCommandPolls += 1;
+    const backoff = Math.min(
+      COMMAND_POLL_INTERVAL_MS * 2 ** sync.failedCommandPolls,
+      COMMAND_POLL_MAX_BACKOFF_MS,
+    );
+    sync.lastCommandCheck = now;
+    sync.nextCommandCheckAt = now + backoff;
     
     // Log disconnection on first occurrence
     if (wasConnected) {

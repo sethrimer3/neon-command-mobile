@@ -17,8 +17,10 @@ Coordinates multiplayer command synchronization in the game loop, including send
 
 ### MultiplayerSync
 - **lastCommandCheck**: Timestamp of the last polling attempt
+- **nextCommandCheckAt**: Earliest time the next poll may occur after backoff
 - **lastCommandSeq**: Sequence number of the last command processed
 - **commandBuffer**: Reserved buffer for potential batching
+- **failedCommandPolls**: Number of consecutive polling failures used for backoff
 
 ### initializeMultiplayerSync()
 - **Purpose:** Initialize multiplayer sync state at match start.
@@ -44,11 +46,11 @@ Coordinates multiplayer command synchronization in the game loop, including send
 
 ### Critical Details
 - Polling interval is throttled to 100ms.
+- Failed polls now apply exponential backoff (capped) to prevent fetch storms.
 - Network status flags are updated on success/failure to drive UI feedback.
 - Command application is wrapped in try/catch to avoid breaking the game loop.
 
 ### Known Issues
-- No retry backoff if polling fails repeatedly.
 - `commandBuffer` is reserved but not yet used for batching.
 
 ## Future Changes
@@ -62,6 +64,7 @@ Coordinates multiplayer command synchronization in the game loop, including send
 
 ## Change History
 - **2025-03-24**: Added sequence-based polling for multiplayer commands.
+- **2025-03-24**: Added capped exponential backoff for failed command polling.
 
 ## Watch Out For
 - Keep command schemas in sync with input serialization.
