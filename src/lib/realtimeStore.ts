@@ -13,8 +13,8 @@ export interface RealtimeKVStore {
   set<T>(key: string, value: T): Promise<void>;
   /** Removes a key from storage. */
   delete(key: string): Promise<void>;
-  /** Lists all keys that match a prefix for lightweight querying. */
-  list(prefix: string): Promise<string[]>;
+  /** Lists all entries that match a prefix for lightweight querying. */
+  listEntries<T>(prefix: string): Promise<Array<{ key: string; value: T | null }>>;
 }
 
 /**
@@ -51,12 +51,19 @@ class SparkKVStore implements RealtimeKVStore {
   }
 
   // Spark KV exposes a key listing API, so filter by the requested prefix.
-  async list(prefix: string): Promise<string[]> {
+  async listEntries<T>(prefix: string): Promise<Array<{ key: string; value: T | null }>> {
     if (!this.isAvailable()) {
       return [];
     }
-    const keys = await window.spark.kv.keys();
-    return keys.filter((key) => key.startsWith(prefix));
+    // Fetch all Spark KV keys first, then hydrate their values for the caller.
+    const keys = (await window.spark.kv.keys()).filter((key) => key.startsWith(prefix));
+    const entries = await Promise.all(
+      keys.map(async (key) => ({
+        key,
+        value: (await window.spark.kv.get<T>(key)) ?? null,
+      })),
+    );
+    return entries;
   }
 }
 
@@ -137,14 +144,14 @@ class SupabaseKVStore implements RealtimeKVStore {
   }
 
   // Use a prefix search to approximate Spark's key listing behavior.
-  async list(prefix: string): Promise<string[]> {
+  async listEntries<T>(prefix: string): Promise<Array<{ key: string; value: T | null }>> {
     if (!this.client) {
       return [];
     }
 
     const { data, error } = await this.client
       .from(this.tableName)
-      .select('key')
+      .select('key, value')
       .like('key', `${prefix}%`);
 
     if (error) {
@@ -152,7 +159,10 @@ class SupabaseKVStore implements RealtimeKVStore {
       return [];
     }
 
-    return (data || []).map((row) => row.key);
+    return (data || []).map((row) => ({
+      key: row.key as string,
+      value: (row.value as T) ?? null,
+    }));
   }
 }
 

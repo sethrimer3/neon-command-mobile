@@ -14,8 +14,8 @@ Provides a backend-agnostic realtime KV store interface and adapters for Spark K
 ## Key Components
 
 ### RealtimeKVStore Interface
-- **Purpose:** Defines basic KV operations (get/set/delete/list) for multiplayer data.
-- **Notes:** Keeps backend selection isolated from gameplay logic.
+- **Purpose:** Defines basic KV operations (get/set/delete/listEntries) for multiplayer data.
+- **Notes:** Keeps backend selection isolated from gameplay logic and supports batching for command lookups.
 
 ### SparkKVStore
 - **Purpose:** Adapter that wraps `window.spark.kv` APIs.
@@ -39,7 +39,7 @@ Provides a backend-agnostic realtime KV store interface and adapters for Spark K
 ### Critical Details
 - Spark store only runs in browser environments.
 - Supabase requires a `multiplayer_kv` table with `key`, `value`, and `updated_at` fields.
-- `list(prefix)` supports lobby/command lookup without full table scans in Spark.
+- `listEntries(prefix)` returns key/value pairs so callers can avoid per-key fetches.
 
 ### Known Issues
 - Supabase errors are logged but not thrown to avoid breaking game flow.
@@ -56,6 +56,7 @@ Provides a backend-agnostic realtime KV store interface and adapters for Spark K
 ## Change History
 - **2026-01-01**: Added Spark/Supabase realtime store abstraction.
 - **2025-03-24**: Preferred Supabase when credentials are configured to avoid Spark KV calls on non-Spark hosts.
+- **2025-03-24**: Switched to `listEntries` to batch command retrieval and reduce Supabase request volume.
 
 ## Watch Out For
 - Ensure env vars are set in production builds.

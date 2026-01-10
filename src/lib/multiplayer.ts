@@ -185,13 +185,16 @@ export class MultiplayerManager {
   async getCommands(since: number): Promise<GameCommand[]> {
     if (!this.store.isAvailable() || !this.gameId) return [];
 
-    const allKeys = await this.store.list(`game:${this.gameId}:commands:`);
-    const commandKeys = allKeys.filter((key) => parseInt(key.split(':').pop() || '0') > since);
-
     const commands: GameCommand[] = [];
-    for (const key of commandKeys) {
-      const cmd = await this.store.get<GameCommand>(key);
-      if (cmd) commands.push(cmd);
+    const prefix = `game:${this.gameId}:commands:`;
+    const entries = await this.store.listEntries<GameCommand>(prefix);
+
+    // Filter entries by timestamp suffix to avoid replaying old commands.
+    for (const entry of entries) {
+      const timestamp = parseInt(entry.key.split(':').pop() || '0');
+      if (timestamp > since && entry.value) {
+        commands.push(entry.value);
+      }
     }
 
     return commands.sort((a, b) => a.timestamp - b.timestamp);

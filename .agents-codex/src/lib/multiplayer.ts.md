@@ -70,6 +70,10 @@ Public lobby information:
 - **Purpose:** Queue command for transmission
 - **Notes:** Commands batched and sent periodically
 
+#### getCommands(since: number): Promise<GameCommand[]>
+- **Purpose:** Fetch opponent commands issued after a timestamp.
+- **Notes:** Uses store `listEntries` to batch fetch command payloads and avoid per-key network calls.
+
 #### getGameState(): Promise<MultiplayerState | null>
 - **Purpose:** Fetch current multiplayer state
 - **Notes:** Returns null if game doesn't exist
@@ -109,6 +113,7 @@ Public lobby information:
 ### Critical Details
 - Uses a realtime KV store abstraction for distributed state storage (Spark or Supabase)
 - Commands batched to reduce network calls
+- Command retrieval reads key/value entries in one pass to reduce Supabase request volume
 - Turn-based synchronization prevents desync
 - Lobby list maintained separately for browsing
 - Lobbies expire after 5 minutes of inactivity
@@ -157,6 +162,7 @@ Public lobby information:
 - Added command synchronization
 - Implemented lobby browser and matchmaking
 - **2026-01-01**: Replaced direct Spark KV usage with realtime store abstraction for Supabase support
+- **2025-03-24**: Switched command fetches to batch list entries instead of per-key reads
 
 ## Watch Out For
 - KV store operations are async - always await
