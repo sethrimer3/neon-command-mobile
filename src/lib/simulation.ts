@@ -202,6 +202,9 @@ const DECELERATION_RATE = 20.0; // units per second per second - how fast units 
 const MIN_SPEED_THRESHOLD = 0.05; // Minimum speed before stopping completely
 const COLLISION_DECELERATION_FACTOR = 0.5; // Factor to slow down when collision detected
 
+// Rally point spread constants for spawned units
+const RALLY_POINT_SPREAD_RADIUS = 1.5; // meters - radius around rally point where units will be distributed
+
 // Visual effect constants
 const IMPACT_EFFECT_DURATION = 0.5; // seconds for impact ring animation
 const IMPACT_EFFECT_CLEANUP_TIME = 1.0; // seconds before old effects are removed
@@ -4545,6 +4548,18 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
   // Clamp the rally point so new units don't get stuck on boundaries or obstacles.
   const safeRallyPos = getSafeRallyPosition(state, spawnPos, rallyPos);
 
+  // Add a random offset to the rally point to spread out spawned units
+  // This prevents units from all targeting the exact same point and piling up
+  const angle = Math.random() * Math.PI * 2; // Random angle in radians
+  const distance = Math.random() * RALLY_POINT_SPREAD_RADIUS; // Random distance within spread radius
+  const offsetRallyPos = {
+    x: safeRallyPos.x + Math.cos(angle) * distance,
+    y: safeRallyPos.y + Math.sin(angle) * distance
+  };
+
+  // Ensure the offset rally position is still safe (not in obstacle or out of bounds)
+  const finalRallyPos = getSafeRallyPosition(state, spawnPos, offsetRallyPos);
+
   const unit: Unit = {
     id: generateId(),
     type,
@@ -4553,7 +4568,7 @@ export function spawnUnit(state: GameState, owner: number, type: UnitType, spawn
     hp: def.hp,
     maxHp: def.hp,
     armor: def.armor,
-    commandQueue: [{ type: 'move', position: safeRallyPos }],
+    commandQueue: [{ type: 'move', position: finalRallyPos }],
     damageMultiplier: 1.0,
     distanceTraveled: 0,
     distanceCredit: 0,
