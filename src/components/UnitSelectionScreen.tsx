@@ -15,32 +15,33 @@ interface UnitSelectionScreenProps {
   onBaseTypeChange: (baseType: BaseType) => void;
 }
 
+// Map unit types to their Radiant faction-specific SVG sprite filenames
+// This matches the sprite paths used in the game renderer
+const RADIANT_UNIT_SPRITES: Partial<Record<UnitType, string>> = {
+  marine: 'Marine.svg',
+  warrior: 'Blade.svg',
+  tank: 'Tank.svg',
+  scout: 'Dagger.svg',
+  artillery: 'Artillery.svg',
+  medic: 'Medic.svg',
+  interceptor: 'Interceptor.svg',
+  guardian: 'Guardian.svg',
+  marksman: 'Marksman.svg',
+  engineer: 'Engineer.svg',
+  skirmisher: 'skirmisher.svg',
+  paladin: 'palladin.svg', // Note: typo in filename is intentional to match actual file
+};
+
 export function UnitSelectionScreen({ unitSlots, onSlotChange, onBack, playerColor, playerFaction, onFactionChange, playerBaseType, onBaseTypeChange }: UnitSelectionScreenProps) {
   // Build faction logo URLs with the configured base path for GitHub Pages compatibility.
   const assetBaseUrl = import.meta.env.BASE_URL;
   const [selectedSlot, setSelectedSlot] = useState<'left' | 'up' | 'down' | 'right' | null>(null);
 
-  // Map unit types to their faction-specific SVG sprite paths
-  // This matches the sprite paths used in the game renderer
+  // Get the appropriate sprite path for a unit type based on faction
   const getUnitSpritePath = (unitType: UnitType, faction: FactionType): string => {
     // Radiant faction has specific SVG sprites for its units
-    const radiantUnitSprites: Partial<Record<UnitType, string>> = {
-      marine: 'Marine.svg',
-      warrior: 'Blade.svg',
-      tank: 'Tank.svg',
-      scout: 'Dagger.svg',
-      artillery: 'Artillery.svg',
-      medic: 'Medic.svg',
-      interceptor: 'Interceptor.svg',
-      guardian: 'Guardian.svg',
-      marksman: 'Marksman.svg',
-      engineer: 'Engineer.svg',
-      skirmisher: 'skirmisher.svg',
-      paladin: 'palladin.svg', // Note: typo in filename is intentional to match actual file
-    };
-
-    if (faction === 'radiant' && radiantUnitSprites[unitType]) {
-      return `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/${radiantUnitSprites[unitType]}`;
+    if (faction === 'radiant' && RADIANT_UNIT_SPRITES[unitType]) {
+      return `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/${RADIANT_UNIT_SPRITES[unitType]}`;
     }
 
     // Fallback to generic sprite path for other factions
