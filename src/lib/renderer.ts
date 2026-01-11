@@ -53,6 +53,8 @@ const laserSpritePaths = {
 const UNIT_SPRITE_SCALE = 1.55;
 const BASE_SPRITE_SCALE = 1.15;
 const MINING_DRONE_SPRITE_SCALE = 1.35;
+const MINING_DEPOT_SPRITE_SCALE = 1.2;
+const RESOURCE_DEPOSIT_SPRITE_SCALE = 1.0;
 const PROJECTILE_SPRITE_SIZE_MULTIPLIER = 0.8; // Projectiles are slightly smaller than units
 
 // Laser sprite dimensions from SVG viewBox (120x59)
@@ -83,6 +85,18 @@ const radiantBaseSpritePaths: Partial<Record<BaseType, string>> = {
   defense: `${assetBaseUrl}ASSETS/sprites/factions/radiant/bases/radiantBaseAdvanced.svg`,
 };
 const radiantMiningDroneSpritePath = `${assetBaseUrl}ASSETS/sprites/factions/radiant/mining/radiantMiningDrone.svg`;
+const radiantMiningDepotSpritePath = `${assetBaseUrl}ASSETS/sprites/factions/radiant/mining/miningDepot.png`;
+const radiantResourceDepositSpritePath = `${assetBaseUrl}ASSETS/sprites/factions/radiant/mining/resourceDeposit.png`;
+
+// Aurum faction mining sprites
+const aurumMiningDroneSpritePath = `${assetBaseUrl}ASSETS/sprites/factions/aurum/mining/aurumMiningDrone.png`;
+const aurumMiningDepotSpritePath = `${assetBaseUrl}ASSETS/sprites/factions/aurum/mining/aurumMiningDepot.png`;
+
+// Solari faction mining sprites
+const solariMiningDroneSpritePath = `${assetBaseUrl}ASSETS/sprites/factions/solari/mining/solariMiningDrone.png`;
+const solariMiningDepotSpritePath = `${assetBaseUrl}ASSETS/sprites/factions/solari/mining/solariMiningDepot.png`;
+const solariResourceDepositSpritePath = `${assetBaseUrl}ASSETS/sprites/factions/solari/mining/solariResource.png`;
+
 // Cache sprite images so we only construct them once.
 const spriteCache = new Map<string, HTMLImageElement>();
 // Cache pre-tinted sprites so we can reuse colored variants across frames.
@@ -196,6 +210,50 @@ function getWhiteOutlineSprite(
 }
 
 /**
+ * Creates a colored silhouette version of a sprite for colored outlining.
+ * @param sprite - The sprite image or canvas to outline.
+ * @param spriteSource - The original sprite source for cache key (HTMLImageElement).
+ * @param outlineColor - The color to use for the outline.
+ * @returns A canvas containing a colored silhouette of the sprite.
+ */
+function getColoredOutlineSprite(
+  sprite: HTMLImageElement | HTMLCanvasElement,
+  spriteSource: HTMLImageElement,
+  outlineColor: string
+): HTMLCanvasElement {
+  // Create a cache key that includes sprite source and outline color
+  const cacheKey = `${spriteSource.src}::${outlineColor}::outline`;
+  
+  // Check cache first
+  const cached = whiteOutlineSpriteCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  
+  const canvas = createTintCanvas();
+  canvas.width = sprite.width;
+  canvas.height = sprite.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    return canvas;
+  }
+  
+  // Draw the sprite
+  ctx.drawImage(sprite, 0, 0);
+  
+  // Make it the outline color by using composite operations
+  ctx.globalCompositeOperation = 'source-in';
+  ctx.fillStyle = outlineColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = 'source-over';
+  
+  // Cache the result
+  whiteOutlineSpriteCache.set(cacheKey, canvas);
+  
+  return canvas;
+}
+
+/**
  * Draws a sprite centered at the provided screen position with rotation, optional glow, and team tinting.
  * Includes a white outline around the sprite.
  * @param ctx - Canvas rendering context.
@@ -242,6 +300,51 @@ function drawCenteredSprite(
   
   // Draw the main sprite on top
   ctx.drawImage(tintedSprite, -size / 2, -size / 2, size, size);
+  ctx.restore();
+}
+
+/**
+ * Draws a sprite centered at the provided screen position with optional colored outline.
+ * @param ctx - Canvas rendering context.
+ * @param sprite - The sprite image to render.
+ * @param center - Screen-space center point for the sprite.
+ * @param size - Rendered sprite size in pixels.
+ * @param rotation - Rotation in radians applied around the center.
+ * @param outlineColor - Optional color for the outline (null for no outline).
+ * @param outlineWidth - Width of the outline in pixels.
+ */
+function drawCenteredSpriteWithColoredOutline(
+  ctx: CanvasRenderingContext2D,
+  sprite: HTMLImageElement,
+  center: Vector2,
+  size: number,
+  rotation: number,
+  outlineColor: string | null,
+  outlineWidth: number,
+): void {
+  if (!isSpriteReady(sprite)) {
+    return;
+  }
+
+  ctx.save();
+  ctx.translate(center.x, center.y);
+  ctx.rotate(rotation);
+  
+  // Draw colored outline if specified
+  if (outlineColor) {
+    const coloredSprite = getColoredOutlineSprite(sprite, sprite, outlineColor);
+    
+    // Draw colored outline in 8 directions for a smooth outline
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const offsetX = Math.cos(angle) * outlineWidth;
+      const offsetY = Math.sin(angle) * outlineWidth;
+      ctx.drawImage(coloredSprite, -size / 2 + offsetX, -size / 2 + offsetY, size, size);
+    }
+  }
+  
+  // Draw the main sprite on top
+  ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
   ctx.restore();
 }
 
@@ -307,6 +410,64 @@ function drawRadiantUnitSprite(
     !!state.settings.enableGlowEffects,
   );
   return true;
+}
+
+function drawAurumUnitSprite(
+  ctx: CanvasRenderingContext2D,
+  unit: Unit,
+  screenPos: Vector2,
+  color: string,
+  state: GameState,
+  renderRotation: number,
+): boolean {
+  if (unit.type === 'miningDrone') {
+    const miningSprite = getSpriteFromCache(aurumMiningDroneSpritePath);
+    if (!isSpriteReady(miningSprite)) {
+      return false;
+    }
+    const spriteSize = metersToPixels(getUnitSizeMeters(unit)) * MINING_DRONE_SPRITE_SCALE;
+    drawCenteredSprite(
+      ctx,
+      miningSprite,
+      screenPos,
+      spriteSize,
+      renderRotation + RADIANT_SPRITE_ROTATION_OFFSET,
+      color,
+      !!state.settings.enableGlowEffects,
+    );
+    return true;
+  }
+  
+  return false; // No other Aurum sprites yet
+}
+
+function drawSolariUnitSprite(
+  ctx: CanvasRenderingContext2D,
+  unit: Unit,
+  screenPos: Vector2,
+  color: string,
+  state: GameState,
+  renderRotation: number,
+): boolean {
+  if (unit.type === 'miningDrone') {
+    const miningSprite = getSpriteFromCache(solariMiningDroneSpritePath);
+    if (!isSpriteReady(miningSprite)) {
+      return false;
+    }
+    const spriteSize = metersToPixels(getUnitSizeMeters(unit)) * MINING_DRONE_SPRITE_SCALE;
+    drawCenteredSprite(
+      ctx,
+      miningSprite,
+      screenPos,
+      spriteSize,
+      renderRotation + RADIANT_SPRITE_ROTATION_OFFSET,
+      color,
+      !!state.settings.enableGlowEffects,
+    );
+    return true;
+  }
+  
+  return false; // No other Solari sprites yet
 }
 
 function drawRadiantBaseSprite(
@@ -1084,6 +1245,7 @@ function drawObstacles(ctx: CanvasRenderingContext2D, state: GameState): void {
 function drawMiningDepots(ctx: CanvasRenderingContext2D, state: GameState): void {
   const DEPOT_SIZE = MINING_DEPOT_SIZE_METERS; // meters
   const DEPOSIT_SIZE = RESOURCE_DEPOSIT_SIZE_METERS; // meters
+  const spritesEnabled = state.settings.enableSprites ?? true;
   
   state.miningDepots.forEach((depot) => {
     const depotScreenPos = positionToPixels(depot.position);
@@ -1107,76 +1269,161 @@ function drawMiningDepots(ctx: CanvasRenderingContext2D, state: GameState): void
       }
     }
     
-    // Draw the depot building
-    ctx.save();
+    // Determine faction for this depot based on owner's base
+    const ownerBase = state.bases.find(b => b.owner === depot.owner);
+    const faction = ownerBase?.faction || 'radiant';
     
-    // Depot base
-    const depotColor = state.players[depot.owner].color;
-    ctx.fillStyle = 'oklch(0.25 0.05 0)';
-    ctx.strokeStyle = depotColor;
-    ctx.lineWidth = 2;
+    // Draw the depot building with sprites if enabled
+    let depotSpriteDrawn = false;
+    if (spritesEnabled) {
+      let depotSpritePath: string | null = null;
+      if (faction === 'radiant') {
+        depotSpritePath = radiantMiningDepotSpritePath;
+      } else if (faction === 'aurum') {
+        depotSpritePath = aurumMiningDepotSpritePath;
+      } else if (faction === 'solari') {
+        depotSpritePath = solariMiningDepotSpritePath;
+      }
+      
+      if (depotSpritePath) {
+        const depotSprite = getSpriteFromCache(depotSpritePath);
+        if (isSpriteReady(depotSprite)) {
+          const spriteSize = metersToPixels(DEPOT_SIZE) * MINING_DEPOT_SPRITE_SCALE;
+          drawCenteredSpriteWithColoredOutline(
+            ctx,
+            depotSprite,
+            depotScreenPos,
+            spriteSize,
+            0, // No rotation for depots
+            null, // No outline for depot
+            0,
+          );
+          depotSpriteDrawn = true;
+        }
+      }
+    }
     
-    ctx.fillRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
-    ctx.strokeRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
-    
-    // Add glow effect
-    applyGlowEffect(ctx, state, depotColor, 10);
-    ctx.strokeRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
-    clearGlowEffect(ctx, state);
-    
-    // Draw a center marker scaled to the depot footprint
-    ctx.fillStyle = depotColor;
-    ctx.beginPath();
-    ctx.arc(depotScreenPos.x, depotScreenPos.y, metersToPixels(DEPOT_SIZE * 0.2), 0, Math.PI * 2);
-    ctx.fill();
-    
-    ctx.restore();
+    // Fallback to basic rendering if sprite not available
+    if (!depotSpriteDrawn) {
+      ctx.save();
+      
+      // Depot base
+      const depotColor = state.players[depot.owner].color;
+      ctx.fillStyle = 'oklch(0.25 0.05 0)';
+      ctx.strokeStyle = depotColor;
+      ctx.lineWidth = 2;
+      
+      ctx.fillRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
+      ctx.strokeRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
+      
+      // Add glow effect
+      applyGlowEffect(ctx, state, depotColor, 10);
+      ctx.strokeRect(depotScreenPos.x - depotWidth / 2, depotScreenPos.y - depotHeight / 2, depotWidth, depotHeight);
+      clearGlowEffect(ctx, state);
+      
+      // Draw a center marker scaled to the depot footprint
+      ctx.fillStyle = depotColor;
+      ctx.beginPath();
+      ctx.arc(depotScreenPos.x, depotScreenPos.y, metersToPixels(DEPOT_SIZE * 0.2), 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.restore();
+    }
     
     // Draw resource deposits around the depot
     depot.deposits.forEach((deposit) => {
       const depositScreenPos = positionToPixels(deposit.position);
       const depositWidth = metersToPixels(DEPOSIT_SIZE);
-      
-      ctx.save();
-      
-      // Deposit is a hexagon shape
       const workerCount = deposit.workerIds?.length ?? 0;
-      const isOccupied = workerCount > 0;
-      // 0 workers: darker, 1 worker: normal brightness, 2 workers: brightest
-      const depositColor = workerCount >= 2
-        ? 'oklch(0.90 0.22 95)' // Bright when 2 workers
-        : workerCount === 1
-          ? 'oklch(0.85 0.20 95)' // Normal brightness with 1 worker
-          : 'oklch(0.40 0.15 95)'; // Darker when no workers
       
-      ctx.fillStyle = depositColor;
-      ctx.strokeStyle = depotColor;
-      ctx.lineWidth = 1.5;
+      // Determine outline color based on worker count
+      // 0 workers: no outline, 1 worker: faint orange, 2 workers: bright gold
+      let outlineColor: string | null = null;
+      let outlineWidth = 2;
+      if (workerCount === 1) {
+        outlineColor = 'rgba(255, 165, 0, 0.5)'; // Faint orange
+      } else if (workerCount >= 2) {
+        outlineColor = 'rgba(255, 215, 0, 1.0)'; // Bright gold
+      }
       
-      // Draw hexagon
-      ctx.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
-        const x = depositScreenPos.x + Math.cos(angle) * depositWidth / 2;
-        const y = depositScreenPos.y + Math.sin(angle) * depositWidth / 2;
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
+      // Draw deposit with sprites if enabled
+      let depositSpriteDrawn = false;
+      if (spritesEnabled) {
+        let depositSpritePath: string | null = null;
+        if (faction === 'radiant') {
+          depositSpritePath = radiantResourceDepositSpritePath;
+        } else if (faction === 'solari') {
+          depositSpritePath = solariResourceDepositSpritePath;
+        }
+        
+        if (depositSpritePath) {
+          const depositSprite = getSpriteFromCache(depositSpritePath);
+          if (isSpriteReady(depositSprite)) {
+            const spriteSize = metersToPixels(DEPOSIT_SIZE) * RESOURCE_DEPOSIT_SPRITE_SCALE;
+            drawCenteredSpriteWithColoredOutline(
+              ctx,
+              depositSprite,
+              depositScreenPos,
+              spriteSize,
+              0, // No rotation for deposits
+              outlineColor,
+              outlineWidth,
+            );
+            depositSpriteDrawn = true;
+          }
         }
       }
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
       
-      // Add glow for occupied deposits
-      if (isOccupied) {
-        applyGlowEffect(ctx, state, depositColor, 8);
+      // Fallback to basic rendering if sprite not available
+      if (!depositSpriteDrawn) {
+        ctx.save();
+        
+        // Deposit is a hexagon shape
+        const isOccupied = workerCount > 0;
+        // 0 workers: darker, 1 worker: normal brightness, 2 workers: brightest
+        const depositColor = workerCount >= 2
+          ? 'oklch(0.90 0.22 95)' // Bright when 2 workers
+          : workerCount === 1
+            ? 'oklch(0.85 0.20 95)' // Normal brightness with 1 worker
+            : 'oklch(0.40 0.15 95)'; // Darker when no workers
+        
+        const depotColor = state.players[depot.owner].color;
+        ctx.fillStyle = depositColor;
+        ctx.strokeStyle = depotColor;
+        ctx.lineWidth = 1.5;
+        
+        // Draw hexagon
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+          const x = depositScreenPos.x + Math.cos(angle) * depositWidth / 2;
+          const y = depositScreenPos.y + Math.sin(angle) * depositWidth / 2;
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        ctx.closePath();
+        ctx.fill();
         ctx.stroke();
-        clearGlowEffect(ctx, state);
+        
+        // Add glow for occupied deposits
+        if (isOccupied) {
+          applyGlowEffect(ctx, state, depositColor, 8);
+          ctx.stroke();
+          clearGlowEffect(ctx, state);
+        }
+        
+        // Add colored outline for worker indicators
+        if (outlineColor) {
+          ctx.strokeStyle = outlineColor;
+          ctx.lineWidth = outlineWidth;
+          ctx.stroke();
+        }
+        
+        ctx.restore();
       }
-      
-      ctx.restore();
     });
   });
 }
@@ -2499,8 +2746,21 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
     // Apply the playfield rotation offset to the unit's facing direction for rendering.
     const unitRenderRotation = (unit.rotation || 0) + playfieldRotation;
 
-    // Try sprite rendering first; fall back to vector shapes when sprites are disabled or unavailable.
-    const spriteDrawn = spritesEnabled && drawRadiantUnitSprite(ctx, unit, screenPos, color, state, unitRenderRotation);
+    // Try sprite rendering first based on unit owner's faction; fall back to vector shapes when sprites are disabled or unavailable.
+    let spriteDrawn = false;
+    if (spritesEnabled) {
+      // Determine faction from owner's base
+      const ownerBase = state.bases.find(b => b.owner === unit.owner);
+      const faction = ownerBase?.faction || 'radiant';
+      
+      if (faction === 'radiant') {
+        spriteDrawn = drawRadiantUnitSprite(ctx, unit, screenPos, color, state, unitRenderRotation);
+      } else if (faction === 'aurum') {
+        spriteDrawn = drawAurumUnitSprite(ctx, unit, screenPos, color, state, unitRenderRotation);
+      } else if (faction === 'solari') {
+        spriteDrawn = drawSolariUnitSprite(ctx, unit, screenPos, color, state, unitRenderRotation);
+      }
+    }
 
     if (!spriteDrawn && unit.type === 'snaker') {
       drawSnaker(ctx, unit, screenPos, color);

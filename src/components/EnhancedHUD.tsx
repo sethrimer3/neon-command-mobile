@@ -12,6 +12,7 @@ export function EnhancedHUD({ gameState, position = 'top-left' }: EnhancedHUDPro
   const playerBase = gameState.bases.find(b => b.owner === 0);
   const enemyBase = gameState.bases.find(b => b.owner === 1);
   const playerPhotons = gameState.players[0]?.photons || 0;
+  const playerAntimatter = gameState.players[0]?.secondaryResource || 0;
   const selectedCount = gameState.selectedUnits.size;
   
   const matchDuration = Math.floor(gameState.elapsedTime);
@@ -38,12 +39,20 @@ export function EnhancedHUD({ gameState, position = 'top-left' }: EnhancedHUDPro
         
         {/* Photons */}
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Energy:</span>
+          <span className="text-muted-foreground">Photons:</span>
           <span className="text-yellow-400 font-bold">
             {Math.round(playerPhotons)}⚡
           </span>
           <span className="text-muted-foreground text-xs">
             +{gameState.players[0]?.incomeRate || 1}/s
+          </span>
+        </div>
+        
+        {/* Antimatter */}
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">Antimatter:</span>
+          <span className="text-purple-400 font-bold">
+            {Math.round(playerAntimatter)}⚛
           </span>
         </div>
         
