@@ -87,7 +87,7 @@ The component does NOT automatically reflect changes from types.ts or simulation
 ## Known Issues
 - No validation that ability descriptions match simulation.ts implementation
 - Hardcoded descriptions require manual updates (documented in agents.md)
-- Some unit abilities (berserker, nova, etc.) have placeholder descriptions from Solari faction units
+- Some ability descriptions may drift from simulation.ts as balance values change
 
 ## Future Changes
 
@@ -104,6 +104,7 @@ The component does NOT automatically reflect changes from types.ts or simulation
 - **2025-03-22:** Updated the Blade (warrior) ability description to the new knife volley behavior and damage.
 - **2026-01-08:** Updated tank shield and Dagger ambush descriptions plus the Dagger icon to match new gameplay behavior
 - **2026-01-11:** Added Blade combo swing attack wording to describe the semicircle and 360° damage arcs
+- **2025-03-24:** Updated Aurum and Solari ability descriptions to reflect live simulation values
 
 ## Watch Out For
 - When adding new units, remember to add entries in:
