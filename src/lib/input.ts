@@ -1016,14 +1016,16 @@ function addMovementCommand(state: GameState, worldPos: { x: number; y: number }
   
   if (selectedUnitsArray.length === 0) return;
   
+  // Space units farther apart than their collision radius to prevent stacking at a shared move target.
+  const formationSpacing = UNIT_SIZE_METERS * 0.9;
+
   // Always apply formation logic to ensure proper spacing
   // Even with 'none' formation, units will be spaced apart to prevent stacking
-  const spacing = 1.0; // 1 meter spacing as per requirements
   const formationPositions = applyFormation(
     selectedUnitsArray,
     worldPos,
     state.currentFormation || 'none',
-    spacing
+    formationSpacing
   );
   
   // Assign formation positions to units

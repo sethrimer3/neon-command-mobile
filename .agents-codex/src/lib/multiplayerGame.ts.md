@@ -8,6 +8,7 @@ Coordinates multiplayer command synchronization in the game loop, including send
 - `./types` - Game state types and gameplay constants
 - `./multiplayer` - Multiplayer manager and command types
 - `./simulation` - Unit spawning helper
+- `./formations` - Formation helper for spacing group move targets
 
 ### Used By
 - `src/App.tsx` - Initializes and updates multiplayer sync during the main loop
@@ -49,6 +50,7 @@ Coordinates multiplayer command synchronization in the game loop, including send
 - Failed polls now apply exponential backoff (capped) to prevent fetch storms.
 - Network status flags are updated on success/failure to drive UI feedback.
 - Command application is wrapped in try/catch to avoid breaking the game loop.
+- Opponent move commands apply default formation spacing so units do not stack on shared targets.
 
 ### Known Issues
 - `commandBuffer` is reserved but not yet used for batching.
@@ -65,6 +67,7 @@ Coordinates multiplayer command synchronization in the game loop, including send
 ## Change History
 - **2025-03-24**: Added sequence-based polling for multiplayer commands.
 - **2025-03-24**: Added capped exponential backoff for failed command polling.
+- **2025-03-24**: Applied default formation spacing when handling opponent move commands.
 
 ## Watch Out For
 - Keep command schemas in sync with input serialization.
