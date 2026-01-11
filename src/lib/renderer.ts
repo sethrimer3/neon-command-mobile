@@ -53,6 +53,13 @@ const laserSpritePaths = {
 const UNIT_SPRITE_SCALE = 1.55;
 const BASE_SPRITE_SCALE = 1.15;
 const MINING_DRONE_SPRITE_SCALE = 1.35;
+const PROJECTILE_SPRITE_SIZE_MULTIPLIER = 0.8; // Projectiles are slightly smaller than units
+
+// Laser sprite dimensions from SVG viewBox (120x59)
+const LASER_SPRITE_WIDTH = 120;
+const LASER_SPRITE_HEIGHT = 59;
+const BASE_LASER_BEAM_THICKNESS_METERS = 0.8; // Thickness of base laser beams
+const UNIT_LASER_BEAM_THICKNESS_METERS = 0.6; // Thickness of unit laser beams (slightly smaller)
 // Radiant sprites are authored facing "up" in texture space, so rotate to match the engine's forward direction.
 const RADIANT_SPRITE_ROTATION_OFFSET = Math.PI / 2;
 
@@ -2001,10 +2008,9 @@ function drawLaserBeam(ctx: CanvasRenderingContext2D, base: Base, screenPos: { x
     // Calculate angle for rotation
     const angle = Math.atan2(direction.y, direction.x);
     
-    // Laser sprites have aspect ratio of ~2:1 (120x59)
-    // We want the height (beam thickness) to be about 0.8 meters
-    const beamThickness = metersToPixels(0.8);
-    const spriteAspectRatio = 120 / 59; // width / height from viewBox
+    // Laser sprites have aspect ratio defined by their SVG viewBox
+    const beamThickness = metersToPixels(BASE_LASER_BEAM_THICKNESS_METERS);
+    const spriteAspectRatio = LASER_SPRITE_WIDTH / LASER_SPRITE_HEIGHT;
     
     // Each segment should be proportional to sprite aspect ratio
     const segmentHeight = beamThickness;
@@ -2125,7 +2131,7 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, state: GameState): void 
       
       if (isSpriteReady(sprite)) {
         // Render sprite with proper sizing
-        const spriteSize = metersToPixels(UNIT_SIZE_METERS * 0.8); // Slightly smaller than units
+        const spriteSize = metersToPixels(UNIT_SIZE_METERS * PROJECTILE_SPRITE_SIZE_MULTIPLIER);
         ctx.drawImage(
           sprite,
           -spriteSize / 2,
@@ -3327,10 +3333,10 @@ function drawUnitLaserBeam(ctx: CanvasRenderingContext2D, unit: Unit, color: str
     // Calculate angle for rotation
     const angle = Math.atan2(direction.y, direction.x);
     
-    // Laser sprites have aspect ratio of ~2:1 (120x59)
+    // Laser sprites have aspect ratio defined by their SVG viewBox
     // Unit lasers are slightly smaller than base lasers
-    const beamThickness = metersToPixels(0.6);
-    const spriteAspectRatio = 120 / 59; // width / height from viewBox
+    const beamThickness = metersToPixels(UNIT_LASER_BEAM_THICKNESS_METERS);
+    const spriteAspectRatio = LASER_SPRITE_WIDTH / LASER_SPRITE_HEIGHT;
     
     // Each segment should be proportional to sprite aspect ratio
     const segmentHeight = beamThickness;
