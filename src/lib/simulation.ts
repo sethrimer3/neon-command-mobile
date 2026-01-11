@@ -2958,8 +2958,8 @@ function updateStructures(state: GameState, deltaTime: number): void {
   // Remove destroyed structures with explosion effects
   state.structures = state.structures.filter(s => {
     if (s.hp <= 0) {
-      // Create destruction explosion
-      createEnhancedDeathExplosion(state, s.position, state.players[s.owner].color, true);
+      // Create destruction explosion (2.5x scale for building explosions)
+      createEnhancedDeathExplosion(state, s.position, state.players[s.owner].color, 2.5);
       return false;
     }
     return true;

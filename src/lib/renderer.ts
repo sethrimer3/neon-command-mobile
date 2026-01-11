@@ -659,7 +659,7 @@ function applyGlowEffect(ctx: CanvasRenderingContext2D, state: GameState, color:
 function clearGlowEffect(ctx: CanvasRenderingContext2D, state: GameState): void {
   if (state.settings.enableGlowEffects) {
     ctx.shadowBlur = 0;
-    ctx.shadowColor = 'transparent';
+    ctx.shadowColor = 'rgba(0,0,0,0)';
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
   }
@@ -2240,7 +2240,8 @@ function drawStructures(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.arc(screenPos.x, screenPos.y, size * 0.15 * pulseScale, 0, Math.PI * 2);
       ctx.fill();
       
-      // Draw cannon barrel indicator with rotation animation
+      // Draw cannon barrel indicator with rotation animation during cooldown (recharging state)
+      // The barrel oscillates slightly while recharging, then stays steady when ready to fire
       const rotationAngle = (structure.attackCooldown && structure.attackCooldown > 0) ? Math.PI * 0.1 * Math.sin(time * 5) : 0;
       ctx.globalAlpha = 0.7;
       ctx.lineWidth = 5;
@@ -2261,7 +2262,7 @@ function drawStructures(ctx: CanvasRenderingContext2D, state: GameState): void {
       // Reset glow effect
       if (state.settings.enableGlowEffects) {
         ctx.shadowBlur = 0;
-        ctx.shadowColor = 'transparent';
+        ctx.shadowColor = 'rgba(0,0,0,0)';
       }
       
     } else if (structure.type === 'defensive') {
@@ -2348,7 +2349,7 @@ function drawStructures(ctx: CanvasRenderingContext2D, state: GameState): void {
       // Reset glow effect
       if (state.settings.enableGlowEffects) {
         ctx.shadowBlur = 0;
-        ctx.shadowColor = 'transparent';
+        ctx.shadowColor = 'rgba(0,0,0,0)';
       }
     } else {
       // Faction-specific towers - star shape with energy swirl
@@ -2394,7 +2395,7 @@ function drawStructures(ctx: CanvasRenderingContext2D, state: GameState): void {
       // Reset glow effect
       if (state.settings.enableGlowEffects) {
         ctx.shadowBlur = 0;
-        ctx.shadowColor = 'transparent';
+        ctx.shadowColor = 'rgba(0,0,0,0)';
       }
     }
     
@@ -4923,7 +4924,7 @@ function drawBuildingMenu(ctx: CanvasRenderingContext2D, state: GameState): void
   
   // Reset shadow effects before restoring context
   ctx.shadowBlur = 0;
-  ctx.shadowColor = 'transparent';
+  ctx.shadowColor = 'rgba(0,0,0,0)';
   
   ctx.restore();
 }
