@@ -294,7 +294,7 @@ export const FACTION_DEFINITIONS: Record<FactionType, FactionDefinition> = {
   },
   solari: {
     name: 'Solari',
-    description: 'Based on fast gameplay and a focus on melee combat',
+    description: 'Focused on fast gameplay and melee combat',
     baseMoveSpeed: 4.0, // Doubled from 2.0
     baseShape: 'circle',
     ability: 'pulse',
