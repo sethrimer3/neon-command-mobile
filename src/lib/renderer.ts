@@ -10,6 +10,7 @@ import {
   RESOURCE_DEPOSIT_SIZE_METERS,
   MINING_DRONE_SIZE_MULTIPLIER,
   UNIT_DEFINITIONS,
+  STRUCTURE_DEFINITIONS,
   BLADE_SWORD_PARTICLE_COUNT,
   BLADE_SWORD_PARTICLE_SPACING_METERS,
   BLADE_SWORD_RANGE_METERS,
@@ -835,6 +836,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
     drawMiningDepots(ctx, state);
     drawResourceOrbs(ctx, state);
     drawBases(ctx, state);
+    drawStructures(ctx, state);
     
     if (state.mode === 'game') {
       drawCommandQueues(ctx, state);
@@ -855,6 +857,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
       drawAbilityRangeIndicators(ctx, state);
       drawAbilityCastPreview(ctx, state);
       drawBaseAbilityPreview(ctx, state);
+      drawBuildingMenu(ctx, state);
       drawVisualFeedback(ctx, state);
       
       // Draw fog of war overlay (before camera transform is removed)
@@ -2165,6 +2168,139 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.restore();
     }
   });
+}
+
+function drawStructures(ctx: CanvasRenderingContext2D, state: GameState): void {
+  state.structures.forEach((structure) => {
+    // Fog of war: hide enemy structures that are not visible to the player
+    if (structure.owner !== 0 && !isVisibleToPlayer(structure.position, state)) {
+      return;
+    }
+    
+    const screenPos = positionToPixels(structure.position);
+    const structureDef = STRUCTURE_DEFINITIONS[structure.type];
+    const size = metersToPixels(structureDef.size);
+    const color = state.players[structure.owner].color;
+    
+    // Draw structure based on type
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    
+    // Different shapes for different structure types
+    if (structure.type === 'offensive') {
+      // Offensive tower - hexagon shape
+      const sides = 6;
+      const radius = size / 2;
+      ctx.beginPath();
+      for (let i = 0; i < sides; i++) {
+        const angle = (i / sides) * Math.PI * 2 - Math.PI / 2;
+        const x = screenPos.x + Math.cos(angle) * radius;
+        const y = screenPos.y + Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.globalAlpha = 0.3;
+      ctx.fill();
+      ctx.globalAlpha = 0.8;
+      ctx.stroke();
+      
+      // Draw cannon barrel indicator
+      ctx.globalAlpha = 0.6;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(screenPos.x, screenPos.y);
+      ctx.lineTo(screenPos.x, screenPos.y - size * 0.4);
+      ctx.stroke();
+    } else if (structure.type === 'defensive') {
+      // Defensive tower - octagon with shield symbol
+      const sides = 8;
+      const radius = size / 2;
+      ctx.beginPath();
+      for (let i = 0; i < sides; i++) {
+        const angle = (i / sides) * Math.PI * 2;
+        const x = screenPos.x + Math.cos(angle) * radius;
+        const y = screenPos.y + Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.globalAlpha = 0.3;
+      ctx.fill();
+      ctx.globalAlpha = 0.8;
+      ctx.stroke();
+      
+      // Draw shield symbol
+      if (structure.shieldActive && Date.now() < structure.shieldActive.endTime) {
+        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = 3;
+        const shieldRadius = structure.shieldActive.radius ? metersToPixels(structure.shieldActive.radius) : size * 1.5;
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y, shieldRadius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    } else {
+      // Faction-specific towers - star shape
+      const outerRadius = size / 2;
+      const innerRadius = size / 4;
+      drawStar(ctx, screenPos.x, screenPos.y, outerRadius, innerRadius, 5);
+      ctx.globalAlpha = 0.3;
+      ctx.fill();
+      ctx.globalAlpha = 0.8;
+      ctx.stroke();
+    }
+    
+    ctx.restore();
+    
+    // Draw health bar
+    drawStructureHealthBar(ctx, structure, screenPos, size, color, state);
+  });
+}
+
+function drawStructureHealthBar(
+  ctx: CanvasRenderingContext2D,
+  structure: import('./types').Structure,
+  screenPos: { x: number; y: number },
+  structureSize: number,
+  color: string,
+  state: GameState
+): void {
+  const structureDef = STRUCTURE_DEFINITIONS[structure.type];
+  const barWidth = structureSize * 1.2;
+  const barHeight = 6;
+  const barX = screenPos.x - barWidth / 2;
+  const barY = screenPos.y - structureSize / 2 - 15;
+  const hpPercent = structure.hp / structure.maxHp;
+  
+  // Skip health bar if structure is at full health and setting is enabled
+  if (state.settings.showHealthBarsOnlyWhenDamaged && structure.hp >= structure.maxHp) {
+    return;
+  }
+  
+  // Background
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.fillRect(barX, barY, barWidth, barHeight);
+  
+  // Health
+  const hpColor = hpPercent > 0.6 ? '#4ade80' : hpPercent > 0.3 ? '#facc15' : '#ef4444';
+  ctx.fillStyle = hpColor;
+  ctx.fillRect(barX, barY, barWidth * hpPercent, barHeight);
+  
+  // Border
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(barX, barY, barWidth, barHeight);
+  
+  // Show numeric HP if enabled
+  if (state.settings.showNumericHP) {
+    ctx.fillStyle = 'white';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`${Math.ceil(structure.hp)}/${structure.maxHp}`, screenPos.x, barY + barHeight + 2);
+  }
 }
 
 function drawBaseHealthBar(ctx: CanvasRenderingContext2D, base: Base, screenPos: { x: number; y: number }, baseSize: number, color: string, state: GameState): void {
@@ -4378,6 +4514,165 @@ function drawBaseAbilityPreview(ctx: CanvasRenderingContext2D, state: GameState)
   };
   
   ctx.fillText(`LASER ${LASER_RANGE.toFixed(0)}m`, midScreen.x, midScreen.y - 20);
+  
+  ctx.restore();
+}
+
+function drawBuildingMenu(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.buildingMenu) return;
+  
+  const { startPosition, currentPosition, selectedType } = state.buildingMenu;
+  
+  const startScreen = positionToPixels(startPosition);
+  const currentScreen = positionToPixels(currentPosition);
+  const playerIndex = state.buildingMenu.workerIds.length > 0 
+    ? state.units.find(u => u.id === state.buildingMenu!.workerIds[0])?.owner ?? 0
+    : 0;
+  const color = state.players[playerIndex].color;
+  const time = Date.now() / 1000;
+  
+  ctx.save();
+  
+  // Draw radial menu
+  const menuRadius = 60;
+  
+  // Draw center circle
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+  ctx.beginPath();
+  ctx.arc(startScreen.x, startScreen.y, 25, 0, Math.PI * 2);
+  ctx.fill();
+  
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  
+  // Draw four directional options
+  const offensiveDef = STRUCTURE_DEFINITIONS['offensive'];
+  const defensiveDef = STRUCTURE_DEFINITIONS['defensive'];
+  const factionDef = STRUCTURE_DEFINITIONS[`faction-${state.settings.playerFaction}` as import('./types').StructureType];
+  
+  const options = [
+    { angle: 180, type: 'offensive' as const, label: `Offensive\n${offensiveDef.cost}L`, icon: '⚔️' },
+    { angle: -90, type: 'defensive' as const, label: `Defensive\n${defensiveDef.cost}L`, icon: '🛡️' },
+    { angle: 0, type: `faction-${state.settings.playerFaction}` as const, label: `Special\n${factionDef.cost}L`, icon: '⭐' },
+    { angle: 90, type: undefined, label: 'Cancel', icon: '✖️' },
+  ];
+  
+  options.forEach(option => {
+    const angleRad = (option.angle * Math.PI) / 180;
+    const optionX = startScreen.x + Math.cos(angleRad) * menuRadius;
+    const optionY = startScreen.y + Math.sin(angleRad) * menuRadius;
+    
+    const isSelected = selectedType === option.type;
+    
+    // Draw option circle
+    ctx.fillStyle = isSelected ? color : 'rgba(0, 0, 0, 0.8)';
+    ctx.strokeStyle = isSelected ? color : 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = isSelected ? 3 : 2;
+    ctx.globalAlpha = isSelected ? 1.0 : 0.6;
+    
+    ctx.beginPath();
+    ctx.arc(optionX, optionY, 35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    
+    // Draw icon
+    ctx.fillStyle = 'white';
+    ctx.font = isSelected ? 'bold 24px sans-serif' : '20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(option.icon, optionX, optionY - 8);
+    
+    // Draw label
+    ctx.font = isSelected ? 'bold 11px sans-serif' : '10px sans-serif';
+    const lines = option.label.split('\n');
+    lines.forEach((line, i) => {
+      ctx.fillText(line, optionX, optionY + 12 + i * 12);
+    });
+  });
+  
+  // Draw drag line if dragging
+  const dragDistance = distance(
+    { x: 0, y: 0 },
+    { x: currentScreen.x - startScreen.x, y: currentScreen.y - startScreen.y }
+  );
+  
+  if (dragDistance > 10) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.7;
+    ctx.setLineDash([5, 5]);
+    
+    ctx.beginPath();
+    ctx.moveTo(startScreen.x, startScreen.y);
+    ctx.lineTo(currentScreen.x, currentScreen.y);
+    ctx.stroke();
+    
+    ctx.setLineDash([]);
+  }
+  
+  // Draw preview of selected structure at current position
+  if (selectedType) {
+    const structureDef = STRUCTURE_DEFINITIONS[selectedType];
+    const size = metersToPixels(structureDef.size);
+    
+    // Check if position is valid
+    const isValidPosition = !state.structures.some(s => 
+      distance(s.position, currentPosition) < structureDef.size + 1
+    ) && !state.bases.some(b => 
+      distance(b.position, currentPosition) < (BASE_SIZE_METERS + structureDef.size) / 2
+    ) && !state.obstacles.some(obs => {
+      const dx = currentPosition.x - obs.x;
+      const dy = currentPosition.y - obs.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      return dist < (obs.radius + structureDef.size / 2);
+    });
+    
+    ctx.globalAlpha = isValidPosition ? 0.5 : 0.3;
+    ctx.fillStyle = isValidPosition ? color : '#ef4444';
+    ctx.strokeStyle = isValidPosition ? color : '#ef4444';
+    ctx.lineWidth = 2;
+    
+    // Draw preview shape
+    if (selectedType === 'offensive') {
+      // Hexagon
+      const sides = 6;
+      const radius = size / 2;
+      ctx.beginPath();
+      for (let i = 0; i < sides; i++) {
+        const angle = (i / sides) * Math.PI * 2 - Math.PI / 2;
+        const x = currentScreen.x + Math.cos(angle) * radius;
+        const y = currentScreen.y + Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else if (selectedType === 'defensive') {
+      // Octagon
+      const sides = 8;
+      const radius = size / 2;
+      ctx.beginPath();
+      for (let i = 0; i < sides; i++) {
+        const angle = (i / sides) * Math.PI * 2;
+        const x = currentScreen.x + Math.cos(angle) * radius;
+        const y = currentScreen.y + Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      // Star
+      const outerRadius = size / 2;
+      const innerRadius = size / 4;
+      drawStar(ctx, currentScreen.x, currentScreen.y, outerRadius, innerRadius, 5);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
   
   ctx.restore();
 }

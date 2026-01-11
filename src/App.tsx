@@ -1934,6 +1934,7 @@ function createInitialState(): GameState {
     projectiles: [],
     shells: [],
     bases: [],
+    structures: [],
     miningDepots: [],
     obstacles: [],
     players: [
@@ -2000,6 +2001,7 @@ function createCountdownState(mode: 'ai' | 'player', settings: GameState['settin
     units: initialDrones,
     projectiles: [],
     shells: [],
+    structures: [],
     obstacles: obstacles,
     miningDepots: miningDepots,
     bases: [

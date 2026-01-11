@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <defs>
+    <radialGradient id="photonGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#ffd700;stop-opacity:1" />
+      <stop offset="70%" style="stop-color:#ffa500;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#ff8c00;stop-opacity:0.3" />
+    </radialGradient>
+  </defs>
+  <!-- Outer glow ring -->
+  <circle cx="12" cy="12" r="10" fill="none" stroke="url(#photonGlow)" stroke-width="0.5" opacity="0.4"/>
+  <!-- Energy burst rays -->
+  <path d="M 12 2 L 13 7 L 12 12 L 11 7 Z" fill="#ffed4e" opacity="0.9"/>
+  <path d="M 22 12 L 17 13 L 12 12 L 17 11 Z" fill="#ffed4e" opacity="0.9"/>
+  <path d="M 12 22 L 13 17 L 12 12 L 11 17 Z" fill="#ffed4e" opacity="0.9"/>
+  <path d="M 2 12 L 7 13 L 12 12 L 7 11 Z" fill="#ffed4e" opacity="0.9"/>
+  <!-- Diagonal rays -->
+  <path d="M 4.9 4.9 L 8.5 8.5 L 12 12 L 8.5 8.5 Z" fill="#ffd700" opacity="0.7" transform="rotate(0 12 12)"/>
+  <path d="M 19.1 4.9 L 15.5 8.5 L 12 12 L 15.5 8.5 Z" fill="#ffd700" opacity="0.7" transform="rotate(0 12 12)"/>
+  <path d="M 19.1 19.1 L 15.5 15.5 L 12 12 L 15.5 15.5 Z" fill="#ffd700" opacity="0.7" transform="rotate(0 12 12)"/>
+  <path d="M 4.9 19.1 L 8.5 15.5 L 12 12 L 8.5 15.5 Z" fill="#ffd700" opacity="0.7" transform="rotate(0 12 12)"/>
+  <!-- Central core -->
+  <circle cx="12" cy="12" r="3.5" fill="url(#photonGlow)"/>
+  <circle cx="12" cy="12" r="2" fill="#fff" opacity="0.9"/>
+</svg>

@@ -16,6 +16,7 @@ import {
   MINING_DEPOT_SIZE_METERS,
   MINING_DRONE_SIZE_MULTIPLIER,
   UNIT_DEFINITIONS,
+  STRUCTURE_DEFINITIONS,
   Vector2,
 } from './types';
 import { distance, normalize, scale, add, subtract, pixelsToPosition, positionToPixels, getViewportOffset, getViewportDimensions, generateId, isVisibleToPlayer } from './gameUtils';
@@ -224,6 +225,25 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
       // When units are selected, dragging will be for ability casting instead
       const playerIndex = resolvePlayerIndex(state, touchState.startPos.x);
       const selectedBase = getSelectedBase(state, playerIndex);
+      
+      // Check if selected units are all mining drones for building menu
+      const selectedUnitsList = Array.from(state.selectedUnits)
+        .map(id => state.units.find(u => u.id === id))
+        .filter((u): u is import('./types').Unit => u !== undefined);
+      const allMiningDrones = selectedUnitsList.length > 0 && 
+        selectedUnitsList.every(u => u.type === 'miningDrone' && u.owner === playerIndex);
+
+      // Initialize building menu if holding with mining drones selected
+      if (allMiningDrones && elapsed >= HOLD_TIME_MS && !state.buildingMenu && !touchState.touchedBase && !touchState.touchedDepot) {
+        const worldStart = screenToWorldPosition(state, canvas, touchState.startPos);
+        state.buildingMenu = {
+          workerIds: Array.from(state.selectedUnits),
+          startPosition: worldStart,
+          currentPosition: worldStart,
+          startTime: Date.now(),
+        };
+        soundManager.play('menu-selection');
+      }
 
       // Skip selection rects when the base is selected so swipes spawn units anywhere
       if (!touchState.touchedBase && !touchState.touchedDepot && state.selectedUnits.size === 0 && !selectedBase) {
@@ -239,6 +259,44 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
     if (touchState.selectionRect) {
       touchState.selectionRect.x2 = x;
       touchState.selectionRect.y2 = y;
+    }
+    
+    // Update building menu if active
+    if (state.buildingMenu) {
+      const worldCurrent = screenToWorldPosition(state, canvas, { x, y });
+      state.buildingMenu.currentPosition = worldCurrent;
+      
+      // Determine which building type based on drag direction
+      const dragVector = subtract(worldCurrent, state.buildingMenu.startPosition);
+      const dragDistance = distance({ x: 0, y: 0 }, dragVector);
+      
+      if (dragDistance > 1.5) { // Minimum drag distance to select a direction
+        const angle = Math.atan2(dragVector.y, dragVector.x);
+        const angleDeg = angle * (180 / Math.PI);
+        
+        // Determine direction: left (180°), up (-90°), right (0°), down (90°)
+        // Convert angle to 0-360 range
+        const normalizedAngle = ((angleDeg + 360) % 360);
+        
+        const playerIndex = resolvePlayerIndex(state, touchState.startPos.x);
+        const playerFaction = state.settings.playerFaction;
+        
+        if (normalizedAngle >= 135 && normalizedAngle < 225) {
+          // Left - Offensive tower
+          state.buildingMenu.selectedType = 'offensive';
+        } else if (normalizedAngle >= 45 && normalizedAngle < 135) {
+          // Down - Cancel
+          state.buildingMenu.selectedType = undefined;
+        } else if (normalizedAngle >= 315 || normalizedAngle < 45) {
+          // Right - Faction-specific tower
+          state.buildingMenu.selectedType = `faction-${playerFaction}` as import('./types').StructureType;
+        } else {
+          // Up - Defensive tower
+          state.buildingMenu.selectedType = 'defensive';
+        }
+      } else {
+        state.buildingMenu.selectedType = undefined;
+      }
     }
     
     // Update rally point preview when dragging from a selected base
@@ -310,6 +368,13 @@ export function handleTouchEnd(e: TouchEvent, state: GameState, canvas: HTMLCanv
 
     if (touchState.selectionRect) {
       handleRectSelection(state, touchState.selectionRect, canvas, playerIndex);
+    } else if (state.buildingMenu && state.buildingMenu.selectedType) {
+      // Handle building placement
+      handleBuildingPlacement(state, state.buildingMenu, playerIndex);
+      delete state.buildingMenu;
+    } else if (state.buildingMenu) {
+      // Cancel building menu if no type selected (dragged down or too short drag)
+      delete state.buildingMenu;
     } else if (touchState.touchedMovementDot) {
       handleLaserSwipe(state, touchState.touchedMovementDot, { x: dx, y: dy });
     } else if (touchState.touchedDepot && touchState.isDragging && dist > SWIPE_THRESHOLD_PX && touchState.touchedDepotPos) {
@@ -1333,6 +1398,64 @@ function updateBaseAbilityPreview(
 // Helper function to clear base ability preview
 function clearBaseAbilityPreview(state: GameState): void {
   delete state.baseAbilityPreview;
+}
+
+// Handle building placement from radial menu
+function handleBuildingPlacement(
+  state: GameState,
+  buildingMenu: NonNullable<GameState['buildingMenu']>,
+  playerIndex: number
+): void {
+  const { selectedType, currentPosition } = buildingMenu;
+  
+  if (!selectedType) return;
+  
+  const structureDef = STRUCTURE_DEFINITIONS[selectedType];
+  const player = state.players[playerIndex];
+  
+  // Check if player has enough Latticite
+  if (!player.secondaryResource || player.secondaryResource < structureDef.cost) {
+    soundManager.play('error');
+    return;
+  }
+  
+  // Check if position is valid (not overlapping with other structures, bases, or obstacles)
+  const isValidPosition = !state.structures.some(s => 
+    distance(s.position, currentPosition) < (structureDef.size + 1)
+  ) && !state.bases.some(b => 
+    distance(b.position, currentPosition) < (BASE_SIZE_METERS + structureDef.size) / 2
+  ) && !state.obstacles.some(obs => {
+    const dx = currentPosition.x - obs.x;
+    const dy = currentPosition.y - obs.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    return dist < (obs.radius + structureDef.size / 2);
+  });
+  
+  if (!isValidPosition) {
+    soundManager.play('error');
+    return;
+  }
+  
+  // Deduct Latticite cost
+  player.secondaryResource -= structureDef.cost;
+  
+  // Create the structure
+  const newStructure: import('./types').Structure = {
+    id: generateId(),
+    type: selectedType,
+    owner: playerIndex,
+    position: currentPosition,
+    hp: structureDef.hp,
+    maxHp: structureDef.hp,
+    armor: structureDef.armor,
+    attackCooldown: 0,
+  };
+  
+  state.structures.push(newStructure);
+  
+  // Create spawn effect
+  createSpawnEffect(state, currentPosition, player.color);
+  soundManager.play('setting-change');
 }
 
 export function getActiveSelectionRect(): { x1: number; y1: number; x2: number; y2: number } | null {

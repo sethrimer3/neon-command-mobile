@@ -39,20 +39,28 @@ export function EnhancedHUD({ gameState, position = 'top-left' }: EnhancedHUDPro
         
         {/* Photons */}
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Photons:</span>
+          <img 
+            src={`${import.meta.env.BASE_URL}ASSETS/icons/photon-icon.svg`} 
+            alt="Photons" 
+            className="w-4 h-4"
+          />
           <span className="text-yellow-400 font-bold">
-            {Math.round(playerPhotons)}⚡
+            {Math.round(playerPhotons)}
           </span>
           <span className="text-muted-foreground text-xs">
             +{gameState.players[0]?.incomeRate || 1}/s
           </span>
         </div>
         
-        {/* Antimatter */}
+        {/* Latticite */}
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Antimatter:</span>
+          <img 
+            src={`${import.meta.env.BASE_URL}ASSETS/icons/latticite-icon.svg`} 
+            alt="Latticite" 
+            className="w-4 h-4"
+          />
           <span className="text-purple-400 font-bold">
-            {Math.round(playerAntimatter)}⚛
+            {Math.round(playerAntimatter)}
           </span>
         </div>
         

@@ -338,6 +338,110 @@ export interface MiningDepot {
   deposits: ResourceDeposit[]; // 8 resource deposits around the depot
 }
 
+// Structure types for buildable towers
+export type StructureType = 'offensive' | 'defensive' | 'faction-radiant' | 'faction-aurum' | 'faction-solari';
+
+export interface Structure {
+  id: string;
+  type: StructureType;
+  owner: number;
+  position: Vector2;
+  hp: number;
+  maxHp: number;
+  armor: number;
+  attackCooldown?: number; // Time until next attack
+  abilityActive?: { endTime: number }; // Active ability effect
+  shieldActive?: { endTime: number; radius: number }; // For defensive towers
+}
+
+export interface StructureDefinition {
+  name: string;
+  description: string;
+  hp: number;
+  armor: number;
+  cost: number; // Latticite cost to build
+  attackType: 'ranged' | 'none';
+  attackRange: number;
+  attackDamage: number;
+  attackRate: number; // attacks per second
+  abilityName: string;
+  abilityCooldown: number;
+  size: number; // Size in meters for collision detection
+}
+
+export const STRUCTURE_DEFINITIONS: Record<StructureType, StructureDefinition> = {
+  offensive: {
+    name: 'Assault Cannon',
+    description: 'Basic offensive tower that attacks enemies',
+    hp: 300,
+    armor: 5,
+    cost: 50,
+    attackType: 'ranged',
+    attackRange: 12,
+    attackDamage: 8,
+    attackRate: 1.5,
+    abilityName: 'Rapid Fire',
+    abilityCooldown: 10,
+    size: 2.5,
+  },
+  defensive: {
+    name: 'Shield Nexus',
+    description: 'Defensive tower that shields nearby units',
+    hp: 400,
+    armor: 10,
+    cost: 60,
+    attackType: 'none',
+    attackRange: 0,
+    attackDamage: 0,
+    attackRate: 0,
+    abilityName: 'Shield Barrier',
+    abilityCooldown: 15,
+    size: 2.5,
+  },
+  'faction-radiant': {
+    name: 'Photon Spire',
+    description: 'Radiant tower that fires long-range laser beams',
+    hp: 350,
+    armor: 6,
+    cost: 75,
+    attackType: 'ranged',
+    attackRange: 18,
+    attackDamage: 12,
+    attackRate: 0.8,
+    abilityName: 'Concentrated Beam',
+    abilityCooldown: 12,
+    size: 2.5,
+  },
+  'faction-aurum': {
+    name: 'Arcane Obelisk',
+    description: 'Aurum tower that casts devastating spells',
+    hp: 320,
+    armor: 7,
+    cost: 75,
+    attackType: 'ranged',
+    attackRange: 14,
+    attackDamage: 15,
+    attackRate: 0.6,
+    abilityName: 'Chaos Bolt',
+    abilityCooldown: 12,
+    size: 2.5,
+  },
+  'faction-solari': {
+    name: 'Solar Pylon',
+    description: 'Solari tower that pulses energy damage',
+    hp: 280,
+    armor: 5,
+    cost: 75,
+    attackType: 'ranged',
+    attackRange: 10,
+    attackDamage: 10,
+    attackRate: 2.0,
+    abilityName: 'Solar Flare',
+    abilityCooldown: 12,
+    size: 2.5,
+  },
+};
+
 export type UnitType = 'marine' | 'warrior' | 'snaker' | 'tank' | 'scout' | 'artillery' | 'medic' | 'interceptor' | 'berserker' | 'assassin' | 'juggernaut' | 'striker' | 'flare' | 'nova' | 'eclipse' | 'corona' | 'supernova' | 'guardian' | 'reaper' | 'oracle' | 'harbinger' | 'zenith' | 'pulsar' | 'celestial' | 'marksman' | 'engineer' | 'skirmisher' | 'paladin' | 'gladiator' | 'ravager' | 'warlord' | 'duelist' | 'voidwalker' | 'chronomancer' | 'nebula' | 'quasar' | 'luminary' | 'photon' | 'starborn' | 'prism' | 'miningDrone';
 
 export interface UnitDefinition {
@@ -1018,6 +1122,7 @@ export interface GameState {
   units: Unit[];
   dyingUnits?: Unit[]; // Units that have died but are still showing queue un-draw animation
   bases: Base[];
+  structures: Structure[]; // Player-built structures (towers)
   miningDepots: MiningDepot[]; // Mining depots for resource gathering
   obstacles: import('./maps').Obstacle[];
   projectiles: Projectile[]; // Active projectiles in the game
@@ -1327,6 +1432,15 @@ export interface GameState {
     baseId: string; // ID of the base casting the ability
     basePosition: Vector2; // Position of the base
     direction: Vector2; // Direction vector of the laser
+  };
+  
+  // Building placement menu for workers (radial menu with 4 directions)
+  buildingMenu?: {
+    workerIds: string[]; // IDs of selected workers
+    startPosition: Vector2; // World position where hold started
+    currentPosition: Vector2; // Current drag position
+    selectedType?: StructureType; // Type of structure being previewed (based on drag direction)
+    startTime: number; // Timestamp when hold started
   };
   
   // Multiplayer manager for online games (typed as any to avoid circular dependency with multiplayer.ts)
