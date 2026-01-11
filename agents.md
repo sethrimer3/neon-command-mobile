@@ -1,7 +1,7 @@
 # Agents Documentation Guidelines
 
 ## Build Information
-**Current Build Number:** 44
+**Current Build Number:** 45
 
 **IMPORTANT:** With each pull request, you must increment the build number by one in TWO places:
 1. Update the build number in this file (agents.md)
@@ -206,6 +206,10 @@ Brief description of what this file does and its role in the project.
 - Explain each configuration option
 - Document environment-specific settings
 - Note dependencies between config values
+
+## Shin Spire Sprite Orientation
+
+All SVG and PNG unit sprites are authored facing "up" (the top of the sprite is the ship's front). Maintain the +PI/2 rotation offset whenever adding or updating sprite rendering so in-engine forward direction stays aligned with the sprite's nose.
 
 ## Security Considerations
 When working with code:

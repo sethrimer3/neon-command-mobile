@@ -63,8 +63,8 @@ const LASER_SPRITE_WIDTH = 120;
 const LASER_SPRITE_HEIGHT = 59;
 const BASE_LASER_BEAM_THICKNESS_METERS = 0.8; // Thickness of base laser beams
 const UNIT_LASER_BEAM_THICKNESS_METERS = 0.6; // Thickness of unit laser beams (slightly smaller)
-// Radiant sprites are authored facing "up" in texture space, so rotate to match the engine's forward direction.
-const RADIANT_SPRITE_ROTATION_OFFSET = Math.PI / 2;
+// All unit sprites are authored facing "up" in texture space, so rotate to match the engine's forward direction.
+const SPRITE_ROTATION_OFFSET = Math.PI / 2;
 
 // Sprite asset paths for the Radiant faction (exclude "knots" files on purpose).
 const radiantUnitSpritePaths: Partial<Record<UnitType, string>> = {
@@ -80,6 +80,15 @@ const radiantUnitSpritePaths: Partial<Record<UnitType, string>> = {
   engineer: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Engineer.svg`,
   skirmisher: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/skirmisher.svg`,
   paladin: `${assetBaseUrl}ASSETS/sprites/factions/radiant/units/Paladin.svg`,
+};
+// Enemy ship sprites use the generic unit SVGs.
+const enemyUnitSpritePaths: Partial<Record<UnitType, string>> = {
+  snaker: `${assetBaseUrl}ASSETS/sprites/units/snaker.svg`,
+  berserker: `${assetBaseUrl}ASSETS/sprites/units/berserker.svg`,
+  assassin: `${assetBaseUrl}ASSETS/sprites/units/assassin.svg`,
+  juggernaut: `${assetBaseUrl}ASSETS/sprites/units/juggernaut.svg`,
+  striker: `${assetBaseUrl}ASSETS/sprites/units/striker.svg`,
+  reaper: `${assetBaseUrl}ASSETS/sprites/units/reaper.svg`,
 };
 const radiantBaseSpritePaths: Partial<Record<BaseType, string>> = {
   standard: `${assetBaseUrl}ASSETS/sprites/factions/radiant/bases/radiantBaseSimple.svg`,
@@ -382,7 +391,7 @@ function drawRadiantUnitSprite(
       miningSprite,
       screenPos,
       spriteSize,
-      renderRotation + RADIANT_SPRITE_ROTATION_OFFSET,
+      renderRotation + SPRITE_ROTATION_OFFSET,
       color,
       !!state.settings.enableGlowEffects,
     );
@@ -406,11 +415,15 @@ function drawRadiantUnitSprite(
     sprite,
     screenPos,
     spriteSize,
-    renderRotation + RADIANT_SPRITE_ROTATION_OFFSET,
+    renderRotation + SPRITE_ROTATION_OFFSET,
     color,
     !!state.settings.enableGlowEffects,
   );
   return true;
+}
+
+function getEnemyUnitSpritePath(type: UnitType): string | null {
+  return enemyUnitSpritePaths[type] ?? null;
 }
 
 function drawAurumUnitSprite(
@@ -432,14 +445,35 @@ function drawAurumUnitSprite(
       miningSprite,
       screenPos,
       spriteSize,
-      renderRotation + RADIANT_SPRITE_ROTATION_OFFSET,
+      renderRotation + SPRITE_ROTATION_OFFSET,
       color,
       !!state.settings.enableGlowEffects,
     );
     return true;
   }
-  
-  return false; // No other Aurum sprites yet
+
+  const spritePath = getEnemyUnitSpritePath(unit.type);
+  if (!spritePath) {
+    return false;
+  }
+
+  const sprite = getSpriteFromCache(spritePath);
+  if (!isSpriteReady(sprite)) {
+    return false;
+  }
+
+  const spriteSize = metersToPixels(getUnitSizeMeters(unit)) * UNIT_SPRITE_SCALE;
+  // Rotate enemy ship sprites so sprite-forward (up) matches the unit's forward direction.
+  drawCenteredSprite(
+    ctx,
+    sprite,
+    screenPos,
+    spriteSize,
+    renderRotation + SPRITE_ROTATION_OFFSET,
+    color,
+    !!state.settings.enableGlowEffects,
+  );
+  return true;
 }
 
 function drawSolariUnitSprite(
@@ -461,7 +495,7 @@ function drawSolariUnitSprite(
       miningSprite,
       screenPos,
       spriteSize,
-      renderRotation + RADIANT_SPRITE_ROTATION_OFFSET,
+      renderRotation + SPRITE_ROTATION_OFFSET,
       color,
       !!state.settings.enableGlowEffects,
     );

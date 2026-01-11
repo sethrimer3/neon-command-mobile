@@ -1523,7 +1523,7 @@ function updateSpriteCornerTrails(state: GameState): void {
     }
     
     // Calculate back corner positions based on unit rotation
-    // The sprite rendering adds RADIANT_SPRITE_ROTATION_OFFSET (PI/2), but we work in world space
+    // Sprite rendering adds a PI/2 offset to align sprite-forward (up) with unit-forward direction.
     const rotation = unit.rotation || 0;
     const playfieldRotation = getPlayfieldRotationRadians();
     

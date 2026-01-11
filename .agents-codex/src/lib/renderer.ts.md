@@ -129,7 +129,8 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - Sprite glow uses the same glow toggle as other shader-like effects
 - Radiant sprites are tinted to the owning team color using an offscreen canvas with multiplicative blending to preserve shading
 - Tinted sprite canvases are cached per sprite path + team color to avoid re-tinting every frame
-- Radiant sprite rotation adds a fixed offset so sprite-forward (up) aligns with unit-forward directions
+- All unit sprites add a fixed PI/2 offset so sprite-forward (up) aligns with unit-forward directions
+- Aurum enemy ship sprites reuse generic unit SVGs for snaker, berserker, assassin, juggernaut, striker, and reaper
 - Unit rendering applies the playfield rotation offset on desktop so sprites and vector shapes face forward
 - Motion blur trails use the playfield rotation offset to align with rotated unit visuals
 - Ability range indicators now toggle between attack range (idle) and ability max range (while dragging an ability arrow) based on `state.abilityCastPreview`
@@ -187,6 +188,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - **2025-03-24**: Applied the playfield rotation offset to unit rendering and motion trails for desktop landscape alignment.
 - **2025-03-24**: Reduced Blade sword particle size, added pale connector lines, and retracted the blade when no enemies are in range.
 - **2025-03-24**: Swapped selection range visuals to show attack range when idle and ability range only during active ability drags.
+- **2025-03-24**: Added enemy ship sprites for Aurum units and clarified the shared sprite-forward rotation offset.
 
 ## Watch Out For
 - Always convert game positions to pixels before drawing

@@ -20,6 +20,10 @@ Defines project-wide guidelines for AI agents, including documentation expectati
 - **Purpose:** Defines documentation, unused code reporting, and codex update rules
 - **Notes:** Emphasizes detailed code comments and codex maintenance
 
+### Shin Spire Sprite Orientation
+- **Purpose:** Documents the shared orientation for all unit sprites
+- **Notes:** Sprites face up in texture space and need a +PI/2 rotation offset in rendering
+
 ### Agents Codex System
 - **Purpose:** Describes the codex directory layout and file format
 - **Notes:** Mirrored structure under `.agents-codex/`
@@ -79,6 +83,7 @@ Defines project-wide guidelines for AI agents, including documentation expectati
 - **2025-03-24**: Incremented the recorded build number to 42 for the latest agent changes.
 - **2025-03-24**: Incremented the recorded build number to 43 for the latest agent changes.
 - **2025-03-24**: Incremented the recorded build number to 44 for the latest agent changes.
+- **2025-03-24**: Incremented the recorded build number to 45 for the latest agent changes.
 
 ## Watch Out For
 - Keep the build number in sync with pull requests
