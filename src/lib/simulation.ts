@@ -5,6 +5,7 @@ import {
   UnitType,
   Vector2,
   UNIT_DEFINITIONS,
+  STRUCTURE_DEFINITIONS,
   CommandNode,
   PROMOTION_DISTANCE_THRESHOLD,
   PROMOTION_MULTIPLIER,
@@ -1932,6 +1933,7 @@ export function updateGame(state: GameState, deltaTime: number): void {
   updateFloaters(state, deltaTime); // Update background floaters
   updateUnits(state, deltaTime);
   updateBases(state, deltaTime);
+  updateStructures(state, deltaTime);
   updateProjectiles(state, deltaTime);
   updateShells(state, deltaTime);
   updateCombat(state, deltaTime);
@@ -2844,6 +2846,111 @@ function updateBases(state: GameState, deltaTime: number): void {
       base.shieldActive.endTime = Date.now() + 100; // Keep extending while moving
     }
   });
+}
+
+function updateStructures(state: GameState, deltaTime: number): void {
+  state.structures.forEach((structure) => {
+    const structureDef = STRUCTURE_DEFINITIONS[structure.type];
+    
+    // Update attack cooldown
+    if (structure.attackCooldown === undefined) {
+      structure.attackCooldown = 0;
+    }
+    
+    if (structure.attackCooldown > 0) {
+      structure.attackCooldown = Math.max(0, structure.attackCooldown - deltaTime);
+    }
+    
+    // Offensive tower - attack nearby enemies
+    if (structure.type === 'offensive' || structure.type.startsWith('faction-')) {
+      if (structure.attackCooldown === 0 && structureDef.attackType === 'ranged') {
+        // Find closest enemy unit or base within range
+        let closestTarget: { position: Vector2; isUnit: boolean; id: string } | null = null;
+        let closestDist = Infinity;
+        
+        // Check enemy units
+        state.units.forEach((unit) => {
+          if (unit.owner !== structure.owner && isVisibleToPlayer(unit.position, state)) {
+            const dist = distance(structure.position, unit.position);
+            if (dist <= structureDef.attackRange && dist < closestDist) {
+              closestDist = dist;
+              closestTarget = { position: unit.position, isUnit: true, id: unit.id };
+            }
+          }
+        });
+        
+        // Check enemy bases
+        state.bases.forEach((targetBase) => {
+          if (targetBase.owner !== structure.owner) {
+            const dist = distance(structure.position, targetBase.position);
+            if (dist <= structureDef.attackRange && dist < closestDist) {
+              closestDist = dist;
+              closestTarget = { position: targetBase.position, isUnit: false, id: targetBase.id };
+            }
+          }
+        });
+        
+        // Fire at closest target
+        if (closestTarget !== null) {
+          const direction = normalize(subtract(closestTarget.position, structure.position));
+          const projectile = projectilePool.acquire();
+          projectile.position = { ...structure.position };
+          projectile.velocity = scale(direction, PROJECTILE_SPEED);
+          projectile.target = { ...closestTarget.position };
+          projectile.damage = structureDef.attackDamage;
+          projectile.owner = structure.owner;
+          projectile.color = state.players[structure.owner].color;
+          projectile.lifetime = PROJECTILE_LIFETIME;
+          projectile.createdAt = Date.now();
+          projectile.sourceUnit = structure.id;
+          if (closestTarget.isUnit) {
+            projectile.targetUnit = closestTarget.id;
+          }
+          state.projectiles.push(projectile);
+          
+          // Set cooldown
+          structure.attackCooldown = 1 / structureDef.attackRate;
+        }
+      }
+    }
+    
+    // Defensive tower - provide shield to nearby allies
+    if (structure.type === 'defensive') {
+      const SHIELD_RADIUS = 8; // meters
+      const SHIELD_DURATION = 1.0; // seconds
+      
+      // Activate shield periodically
+      if (structure.attackCooldown === 0) {
+        structure.shieldActive = {
+          endTime: Date.now() + SHIELD_DURATION * 1000,
+          radius: SHIELD_RADIUS,
+        };
+        
+        // Apply shield damage reduction to nearby allies
+        state.units.forEach((unit) => {
+          if (unit.owner === structure.owner) {
+            const dist = distance(structure.position, unit.position);
+            if (dist <= SHIELD_RADIUS) {
+              // Give temporary shield buff
+              if (!unit.shieldActive || Date.now() > unit.shieldActive.endTime) {
+                unit.shieldActive = {
+                  endTime: Date.now() + SHIELD_DURATION * 1000,
+                  radius: 0,
+                  rangedDamageMultiplier: 0.5, // Reduce ranged damage by 50%
+                  meleeDamageMultiplier: 0.8, // Reduce melee damage by 20%
+                };
+              }
+            }
+          }
+        });
+        
+        structure.attackCooldown = 5; // Shield pulse every 5 seconds
+      }
+    }
+  });
+  
+  // Remove destroyed structures
+  state.structures = state.structures.filter(s => s.hp > 0);
 }
 
 function executeAbility(state: GameState, unit: Unit, node: CommandNode): void {
@@ -4323,8 +4430,9 @@ function updateCombat(state: GameState, deltaTime: number): void {
       return true;
     });
     const enemyBases = state.bases.filter((b) => b.owner !== unit.owner);
+    const enemyStructures = state.structures.filter((s) => s.owner !== unit.owner);
 
-    let target: Unit | Base | null = null;
+    let target: Unit | Base | import('./types').Structure | null = null;
     let minDist = Infinity;
 
     enemies.forEach((enemy) => {
@@ -4342,6 +4450,16 @@ function updateCombat(state: GameState, deltaTime: number): void {
         if (dist <= def.attackRange + baseRadius && dist < minDist) {
           minDist = dist;
           target = base;
+        }
+      });
+      
+      enemyStructures.forEach((structure) => {
+        const dist = distance(unit.position, structure.position);
+        const structureDef = STRUCTURE_DEFINITIONS[structure.type];
+        const structureRadius = structureDef.size / 2;
+        if (dist <= def.attackRange + structureRadius && dist < minDist) {
+          minDist = dist;
+          target = structure;
         }
       });
     }
@@ -4497,7 +4615,7 @@ function applyBladeSwingDamage(state: GameState, unit: Unit, swing: { direction:
 }
 
 // Helper function to perform an attack
-function performAttack(state: GameState, unit: Unit, target: Unit | Base): void {
+function performAttack(state: GameState, unit: Unit, target: Unit | Base | import('./types').Structure): void {
   const def = UNIT_DEFINITIONS[unit.type];
   
   // Reset attack cooldown
@@ -4515,7 +4633,7 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
     } else {
       // Spawn projectile for standard ranged attacks.
       const targetPos = target.position;
-      const targetUnit = 'type' in target ? (target as Unit) : undefined;
+      const targetUnit = 'type' in target && !('baseType' in target) ? (target as Unit) : undefined;
       const projectile = createProjectile(state, unit, targetPos, targetUnit);
       state.projectiles.push(projectile);
     }
@@ -4545,7 +4663,7 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
     // Apply instant damage for melee and create visual effect
     let damage = def.attackDamage * unit.damageMultiplier;
 
-    if ('type' in target) {
+    if ('type' in target && !('baseType' in target) && !('armor' in target && 'attackCooldown' in target)) {
       const targetUnit = target as Unit;
       
       // Apply any active shield dome modifiers for melee hits.
@@ -4566,7 +4684,7 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
       if (unit.type === 'warrior') {
         createBladeSwing(unit, direction);
       }
-    } else {
+    } else if ('baseType' in target) {
       const targetBase = target as Base;
       // Check if base has active shield (mobile faction)
       if (!targetBase.shieldActive || Date.now() >= targetBase.shieldActive.endTime) {
@@ -4606,6 +4724,27 @@ function performAttack(state: GameState, unit: Unit, target: Unit | Base): void 
       if (unit.type === 'warrior') {
         createBladeSwing(unit, direction);
       }
+    } else {
+      // Target is a structure
+      const targetStructure = target as import('./types').Structure;
+      const prevHp = targetStructure.hp;
+      targetStructure.hp -= damage;
+      
+      // Create impact effect
+      if (prevHp > 0 && targetStructure.hp < prevHp) {
+        const color = state.players[unit.owner].color;
+        createImpactEffect(state, targetStructure.position, color, 1.5);
+      }
+      
+      if (state.matchStats && unit.owner === 0) {
+        state.matchStats.damageDealtByPlayer += damage;
+      }
+      
+      // Create melee attack visual effect
+      unit.meleeAttackEffect = {
+        endTime: Date.now() + MELEE_EFFECT_DURATION * 1000,
+        targetPos: { ...targetStructure.position },
+      };
     }
     
     if (unit.owner === 0 && Math.random() < 0.3) {
