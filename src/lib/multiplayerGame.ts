@@ -2,9 +2,10 @@
  * Multiplayer game integration - handles command synchronization between players
  */
 
-import { GameState, CommandNode, Unit, LASER_RANGE, LASER_WIDTH, LASER_DAMAGE_UNIT, LASER_DAMAGE_BASE, LASER_COOLDOWN, BASE_SIZE_METERS, UnitType, UNIT_DEFINITIONS } from './types';
+import { GameState, CommandNode, Unit, LASER_RANGE, LASER_WIDTH, LASER_DAMAGE_UNIT, LASER_DAMAGE_BASE, LASER_COOLDOWN, BASE_SIZE_METERS, UnitType, UNIT_DEFINITIONS, UNIT_SIZE_METERS } from './types';
 import { MultiplayerManager, GameCommand } from './multiplayer';
 import { spawnUnit } from './simulation';
+import { applyFormation } from './formations';
 
 export interface MultiplayerSync {
   // Timestamp of the last polling attempt so we can throttle network checks.
@@ -152,6 +153,9 @@ export function applyOpponentCommands(
   commands: GameCommand[],
   opponentIndex: number
 ): void {
+  // Keep remote group moves spaced out to avoid units stacking on a shared target.
+  const formationSpacing = UNIT_SIZE_METERS * 0.9;
+
   for (const cmd of commands) {
     for (const command of cmd.commands) {
       try {
@@ -171,11 +175,21 @@ export function applyOpponentCommands(
 
           case 'move':
             if (command.unitIds && command.position) {
-              command.unitIds.forEach(unitId => {
-                const unit = state.units.find(u => u.id === unitId && u.owner === opponentIndex);
-                if (unit) {
-                  unit.commandQueue = [{ type: 'move', position: command.position! }];
-                }
+              // Resolve the units in command order to keep formation assignment stable across clients.
+              const movingUnits = command.unitIds
+                .map(unitId => state.units.find(u => u.id === unitId && u.owner === opponentIndex))
+                .filter((unit): unit is Unit => Boolean(unit));
+
+              // Apply default formation spacing when only a single target point is broadcast.
+              const formationTargets = applyFormation(
+                movingUnits,
+                command.position,
+                'none',
+                formationSpacing
+              );
+
+              movingUnits.forEach((unit, index) => {
+                unit.commandQueue = [{ type: 'move', position: formationTargets[index] }];
               });
             }
             break;

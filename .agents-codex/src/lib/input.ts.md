@@ -108,6 +108,7 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - Mining depot drags snap toward the closest available deposit by drag angle, with a preview line stored in `state.miningDragPreview`
 - Mining drone creation can be canceled by releasing near the depot, and deposits cap at two drones with cadence delays for staggering
 - Double-tap selection clears current selection unless tapping a friendly unit, which selects all same-type friendly units
+- Group move formation spacing scales with unit size to keep destinations from overlapping
 
 ### Input Modes
 1. **Tap**: Select units/bases
@@ -161,6 +162,7 @@ Handles all user input for the game including touch, mouse, and keyboard events.
 - **2026-01-04**: Added camera-aware screen/world conversions and pinch-to-zoom handling for touch input
 - **2026-01-08**: Updated double-tap selection to select all same-type friendly units and deselect on enemy/empty taps
 - **2025-03-21**: Removed ability cooldown checks when queueing ability commands so input always enqueues them
+- **2025-03-24**: Increased group move spacing relative to unit size to reduce stacking at shared destinations
 
 ## Watch Out For
 - Always prevent default on touch events to avoid scrolling
