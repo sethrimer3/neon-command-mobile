@@ -2043,6 +2043,7 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
         autoAttackCooldown: 0,
       },
     ],
+    structures: [], // Empty structures array for background battle
     players: [
       { photons: 200, incomeRate: 0, color: COLORS.playerDefault },
       { photons: 200, incomeRate: 0, color: COLORS.enemyDefault },
