@@ -849,14 +849,22 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
     }
   }
 
+  // Render the playfield background before drawing world objects.
   drawBackground(ctx, canvas, state);
   
   // Draw background floaters (after background, before border)
   if (state.mode === 'game' || state.mode === 'countdown') {
-    // Apply camera transform so the battlefield zooms/pans while the UI stays fixed
+    // Apply camera transform so the battlefield zooms/pans while the UI stays fixed.
     if (state.camera) {
       applyCameraTransform(ctx, state, canvas);
+    } else {
+      ctx.save();
     }
+    // Clip all world-space rendering to the playfield bounds to hide effects outside.
+    const playfieldRect = getPlayfieldRect();
+    ctx.beginPath();
+    ctx.rect(playfieldRect.x, playfieldRect.y, playfieldRect.width, playfieldRect.height);
+    ctx.clip();
     drawBackgroundFloaters(ctx, state);
   }
   
@@ -900,9 +908,11 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
       }
     }
     
-    // Remove camera transform so screen-space UI does not zoom/pan
+    // Remove camera transform so screen-space UI does not zoom/pan.
     if (state.camera) {
       removeCameraTransform(ctx);
+    } else {
+      ctx.restore();
     }
     
     if (state.mode === 'game') {
@@ -1026,54 +1036,63 @@ function drawOffscreenZoomIndicators(ctx: CanvasRenderingContext2D, state: GameS
 }
 
 function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, state?: GameState): void {
-  ctx.fillStyle = COLORS.background;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const shouldClipToPlayfield = state?.mode === 'game' || state?.mode === 'countdown';
 
-  // Fill area outside playing field with solid gray for button/radial modes
-  if (state && (state.settings.controlMode === 'buttons' || state.settings.controlMode === 'radial')) {
-    const viewportOffset = getViewportOffset();
-    const viewportDimensions = getViewportDimensions();
-    const playfieldWidthPixels = viewportDimensions.width || metersToPixels(ARENA_WIDTH_METERS);
-    const playfieldHeightPixels = viewportDimensions.height || metersToPixels(getArenaHeight());
-    
-    // Use same gray as border color for consistency
+  if (shouldClipToPlayfield) {
+    // Fill the entire canvas with the neutral gray used outside the arena.
     ctx.fillStyle = COLORS.borderMain;
-    
-    // Fill top area
-    if (viewportOffset.y > 0) {
-      ctx.fillRect(0, 0, canvas.width, viewportOffset.y);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Apply camera transforms so the playfield background zooms/pans with the arena.
+    if (state?.camera) {
+      applyCameraTransform(ctx, state, canvas);
+    } else {
+      ctx.save();
     }
-    
-    // Fill bottom area
-    const bottomY = viewportOffset.y + playfieldHeightPixels;
-    if (bottomY < canvas.height) {
-      ctx.fillRect(0, bottomY, canvas.width, canvas.height - bottomY);
+
+    // Clip rendering to the playfield rectangle so no effects spill outside.
+    const playfieldRect = getPlayfieldRect();
+    ctx.beginPath();
+    ctx.rect(playfieldRect.x, playfieldRect.y, playfieldRect.width, playfieldRect.height);
+    ctx.clip();
+
+    // Paint the playfield interior before drawing atmospheric effects.
+    ctx.fillStyle = COLORS.background;
+    ctx.fillRect(playfieldRect.x, playfieldRect.y, playfieldRect.width, playfieldRect.height);
+
+    // Draw background effects only inside the playfield.
+    drawBackgroundEffects(ctx, state);
+
+    if (state?.camera) {
+      removeCameraTransform(ctx);
+    } else {
+      ctx.restore();
     }
-    
-    // Fill left area
-    if (viewportOffset.x > 0) {
-      ctx.fillRect(0, viewportOffset.y, viewportOffset.x, playfieldHeightPixels);
-    }
-    
-    // Fill right area
-    const rightX = viewportOffset.x + playfieldWidthPixels;
-    if (rightX < canvas.width) {
-      ctx.fillRect(rightX, viewportOffset.y, canvas.width - rightX, playfieldHeightPixels);
-    }
+    return;
   }
 
-  // Draw nebula clouds for atmospheric effect
+  // Default background for menus/overlays that do not need playfield clipping.
+  ctx.fillStyle = COLORS.background;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  drawBackgroundEffects(ctx, state);
+}
+
+/**
+ * Draws atmospheric background elements within the current clipping region.
+ */
+function drawBackgroundEffects(ctx: CanvasRenderingContext2D, state?: GameState): void {
+  // Draw nebula clouds for atmospheric effect.
   if (state?.nebulaClouds && state.nebulaClouds.length > 0) {
     const time = Date.now() / 1000;
     state.nebulaClouds.forEach(cloud => {
-      // Create slow drifting effect
+      // Create slow drifting effect.
       const driftX = Math.sin(time * cloud.driftSpeed * 0.1) * 20;
       const driftY = Math.cos(time * cloud.driftSpeed * 0.15) * 15;
       
       ctx.save();
       ctx.globalAlpha = cloud.opacity;
       
-      // Create radial gradient for cloud
+      // Create radial gradient for cloud.
       const gradient = ctx.createRadialGradient(
         cloud.x + driftX, cloud.y + driftY, 0,
         cloud.x + driftX, cloud.y + driftY, cloud.size
@@ -1094,7 +1113,7 @@ function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement
     });
   }
 
-  // Draw animated starfield
+  // Draw animated starfield.
   if (state?.stars && state.stars.length > 0) {
     const time = Date.now() / 1000;
     state.stars.forEach(star => {
@@ -1106,7 +1125,7 @@ function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement
       ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
       ctx.fill();
       
-      // Add subtle glow for larger stars
+      // Add subtle glow for larger stars.
       if (star.size > 1.5 && state?.settings?.enableGlowEffects) {
         ctx.shadowColor = `rgba(200, 220, 255, ${alpha * 0.6})`;
         ctx.shadowBlur = star.size * 3;
@@ -1116,9 +1135,9 @@ function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement
     });
   }
 
-  // Draw topography lines if available
+  // Draw topography lines if available.
   if (state?.topographyLines && state.topographyLines.length > 0) {
-    ctx.strokeStyle = 'rgba(128, 128, 128, 0.15)'; // Gray with low opacity
+    ctx.strokeStyle = 'rgba(128, 128, 128, 0.15)'; // Gray with low opacity.
     ctx.lineWidth = 1;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -1130,6 +1149,24 @@ function drawBackground(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement
       ctx.stroke();
     });
   }
+}
+
+/**
+ * Computes the playfield rectangle in pixels for clipping and background fills.
+ */
+function getPlayfieldRect(): { x: number; y: number; width: number; height: number } {
+  const viewportOffset = getViewportOffset();
+  const viewportDimensions = getViewportDimensions();
+  // Fallback to meter-based sizing if viewport dimensions are unavailable.
+  const playfieldWidthPixels = viewportDimensions.width || metersToPixels(ARENA_WIDTH_METERS);
+  const playfieldHeightPixels = viewportDimensions.height || metersToPixels(getArenaHeight());
+
+  return {
+    x: viewportOffset.x,
+    y: viewportOffset.y,
+    width: playfieldWidthPixels,
+    height: playfieldHeightPixels,
+  };
 }
 
 /**

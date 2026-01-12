@@ -34,12 +34,22 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 ### Drawing Functions
 
 #### drawBackground(ctx, canvas, state?): void
-- **Purpose:** Renders background with topography lines and grid pattern
+- **Purpose:** Renders background with playfield clipping and atmospheric effects
 - **Notes:**
-  - Dark background color
-  - Topography lines at 15% opacity for subtle effect
-  - Dot grid pattern (40px spacing)
-  - Vertical and horizontal lines (80px spacing)
+  - Fills outside the playfield with neutral gray during gameplay
+  - Clips nebula, starfield, and topography to the playfield rectangle
+  - Moves background effects with camera transforms in gameplay modes
+
+#### drawBackgroundEffects(ctx, state?): void
+- **Purpose:** Draws nebula clouds, starfield twinkles, and topography lines
+- **Notes:**
+  - Assumes caller has applied any desired clipping region
+
+#### getPlayfieldRect(): { x, y, width, height }
+- **Purpose:** Returns the current playfield rectangle in pixels
+- **Notes:**
+  - Uses viewport dimensions when available
+  - Falls back to meter-based sizing if viewport dimensions are unset
 
 #### drawObstacles(ctx, state): void
 - **Purpose:** Draws map obstacles
@@ -118,6 +128,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - Mining depots render a dashed preview line when `state.miningDragPreview` targets that depot
 - Resource deposits adjust glow/brightness based on 0/1/2 assigned worker drones
 - Camera transforms are applied to world layers and removed before drawing screen-space UI
+- Gameplay rendering is clipped to the playfield rectangle to avoid drawing effects outside the arena
 - Off-screen indicators render at arena viewport edges when zoomed in to keep units/bases visible
 - Cloaked enemy units are culled from rendering (including the minimap), while cloaked friendly units render at reduced opacity
 - Blade sword particle spacing pulls from shared constants so the visuals match the melee range tuning
@@ -191,6 +202,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - **2025-03-24**: Swapped selection range visuals to show attack range when idle and ability range only during active ability drags.
 - **2025-03-24**: Added enemy ship sprites for Aurum units and clarified the shared sprite-forward rotation offset.
 - **2025-03-24**: Corrected laser sprite tiling so the middle segment repeats only between single begin/end caps.
+- **2025-03-24**: Clipped background and world rendering to the playfield while filling the exterior with neutral gray.
 
 ## Watch Out For
 - Always convert game positions to pixels before drawing
