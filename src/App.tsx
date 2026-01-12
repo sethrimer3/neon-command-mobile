@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useKV } from './hooks/useKV';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
-import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS, FactionType, FACTION_DEFINITIONS, BASE_TYPE_DEFINITIONS, BaseType, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS } from './lib/types';
+import { GameState, COLORS, UnitType, BASE_SIZE_METERS, UNIT_DEFINITIONS, FactionType, FACTION_DEFINITIONS, BASE_TYPE_DEFINITIONS, BaseType, ARENA_WIDTH_METERS, ARENA_HEIGHT_METERS, STRUCTURE_DEFINITIONS, StructureType, Structure } from './lib/types';
 import { generateId, generateTopographyLines, generateStarfield, generateNebulaClouds, shouldUsePortraitCoordinates, updateViewportScale, calculateDefaultRallyPoint, createMiningDepots, createInitialMiningDrones, getArenaHeight } from './lib/gameUtils';
 import { updateGame, spawnUnit } from './lib/simulation';
 import { updateAI } from './lib/ai';
@@ -1046,6 +1046,92 @@ function App() {
     state.radialMenu = undefined;
   };
 
+  // Helper function to check if any selected units are workers (mining drones)
+  const hasWorkersSelected = (state: GameState): boolean => {
+    const selectedUnitIds = Array.from(state.selectedUnits);
+    return selectedUnitIds.some(unitId => {
+      const unit = state.units.find(u => u.id === unitId);
+      return unit && unit.type === 'miningDrone';
+    });
+  };
+
+  // Handle placing towers from button controls
+  const handleButtonTowerPlace = (structureType: StructureType) => {
+    const state = gameStateRef.current;
+    if (state.mode !== 'game') return;
+
+    const selectedWorkers = Array.from(state.selectedUnits)
+      .map(id => state.units.find(u => u.id === id))
+      .filter(u => u && u.type === 'miningDrone' && u.owner === 0);
+    
+    if (selectedWorkers.length === 0) return;
+
+    // Use the position of the first selected worker as placement location
+    const worker = selectedWorkers[0];
+    if (!worker) return;
+
+    const structureDef = STRUCTURE_DEFINITIONS[structureType];
+    const player = state.players[0];
+
+    // Check if player has enough Latticite
+    if (!player.secondaryResource || player.secondaryResource < structureDef.cost) {
+      soundManager.playError();
+      toast.error(`Not enough Latticite! Need ${structureDef.cost}, have ${Math.floor(player.secondaryResource || 0)}`);
+      return;
+    }
+
+    // Check if position is valid (not overlapping with other structures, bases, or obstacles)
+    const isValidPosition = !state.structures.some(s => {
+      const dx = s.position.x - worker.position.x;
+      const dy = s.position.y - worker.position.y;
+      return Math.sqrt(dx * dx + dy * dy) < (structureDef.size + 1);
+    }) && !state.bases.some(b => {
+      const dx = b.position.x - worker.position.x;
+      const dy = b.position.y - worker.position.y;
+      return Math.sqrt(dx * dx + dy * dy) < (BASE_SIZE_METERS + structureDef.size) / 2;
+    }) && !state.obstacles.some(obs => {
+      const dx = worker.position.x - obs.x;
+      const dy = worker.position.y - obs.y;
+      return Math.sqrt(dx * dx + dy * dy) < (obs.radius + structureDef.size / 2);
+    });
+
+    if (!isValidPosition) {
+      soundManager.playError();
+      toast.error('Cannot place tower here - position blocked');
+      return;
+    }
+
+    // Deduct Latticite cost
+    player.secondaryResource -= structureDef.cost;
+
+    // Create the structure
+    const newStructure: Structure = {
+      id: generateId(),
+      type: structureType,
+      owner: 0,
+      position: { x: worker.position.x, y: worker.position.y },
+      hp: structureDef.hp,
+      maxHp: structureDef.hp,
+      armor: structureDef.armor,
+      attackCooldown: 0,
+    };
+
+    state.structures.push(newStructure);
+    soundManager.playBuildingPlace();
+    toast.success(`${structureDef.name} built!`);
+  };
+
+  // Handle placing towers from radial menu
+  const handleRadialTowerPlace = (structureType: StructureType) => {
+    const state = gameStateRef.current;
+    if (state.mode !== 'game') return;
+
+    handleButtonTowerPlace(structureType);
+    
+    // Hide radial menu after placing
+    state.radialMenu = undefined;
+  };
+
   const refreshLobbies = useCallback(async () => {
     if (!multiplayerManagerRef.current) return;
     const lobbies = await multiplayerManagerRef.current.getAvailableLobbies();
@@ -1264,111 +1350,236 @@ function App() {
             </Label>
           </div>
 
-          {/* Button Mode: Spawn Unit Buttons */}
-          {gameState.settings.controlMode === 'buttons' && (
-            <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-2 p-2 bg-gray-800/90 backdrop-blur-sm border-t border-gray-600">
-              {(['left', 'up', 'down', 'right'] as const).map((slot, index) => {
-                const unitType = gameState.settings.unitSlots[slot];
-                const unitDef = UNIT_DEFINITIONS[unitType];
-                const playerPhotons = gameState.players[0]?.photons ?? 0;
-                const canAfford = playerPhotons >= unitDef.cost;
-                
-                return (
-                  <button
-                    key={slot}
-                    onClick={() => handleButtonSpawn(slot)}
-                    disabled={!canAfford}
-                    className={`flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all orbitron ${
-                      canAfford ? 'hover:scale-105 cursor-pointer' : 'opacity-50 cursor-not-allowed'
-                    }`}
-                    style={{
-                      borderColor: playerColor || COLORS.playerDefault,
-                      backgroundColor: canAfford ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
-                      minWidth: '70px',
-                      minHeight: '70px',
-                    }}
-                  >
-                    <span className="text-xs font-bold capitalize">{unitType}</span>
-                    <span className="text-xs mt-1">{unitDef.cost}◈</span>
-                    <span className="text-xs text-muted-foreground">Slot {index + 1}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Radial Menu Mode: Contextual Unit Spawn Menu */}
-          {gameState.settings.controlMode === 'radial' && gameState.radialMenu?.visible && canvasRef.current && (
-            (() => {
-              const screenPos = worldToScreen(gameState.radialMenu.worldPosition, gameState, canvasRef.current);
-              const buttonDistance = 60; // Distance from center to buttons
-              const playerPhotons = gameState.players[0]?.photons ?? 0;
-              
-              const directions = [
-                { slot: 'left' as const, angle: Math.PI, label: '◀' },
-                { slot: 'up' as const, angle: -Math.PI / 2, label: '▲' },
-                { slot: 'down' as const, angle: Math.PI / 2, label: '▼' },
-                { slot: 'right' as const, angle: 0, label: '▶' },
+          {/* Button Mode: Spawn Unit Buttons or Tower Placement Buttons */}
+          {gameState.settings.controlMode === 'buttons' && (() => {
+            const workersSelected = hasWorkersSelected(gameState);
+            
+            if (workersSelected) {
+              // Show tower options when workers are selected
+              const playerLatticite = gameState.players[0]?.secondaryResource ?? 0;
+              const playerFaction = gameState.settings.playerFaction;
+              const towerOptions: { type: StructureType; label: string }[] = [
+                { type: 'offensive', label: 'Assault' },
+                { type: 'defensive', label: 'Shield' },
+                { type: `faction-${playerFaction}` as StructureType, label: 'Special' },
+                { type: 'offensive', label: 'Cancel' }, // Placeholder for consistency
               ];
               
+              // Replace the 4th slot with actual faction tower instead of duplicate
+              towerOptions[2] = { type: `faction-${playerFaction}` as StructureType, label: 'Special' };
+              towerOptions[3] = { type: 'offensive', label: 'Basic' }; // Make 4th slot a basic tower
+              
               return (
-                <>
-                  {/* Semi-transparent overlay */}
-                  <div 
-                    className="absolute inset-0 bg-black/20"
-                    onClick={() => { gameState.radialMenu = undefined; }}
-                  />
-                  
-                  {/* Radial menu buttons */}
-                  {directions.map(({ slot, angle, label }) => {
+                <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-2 p-2 bg-gray-800/90 backdrop-blur-sm border-t border-gray-600">
+                  {towerOptions.map((option, index) => {
+                    const structureDef = STRUCTURE_DEFINITIONS[option.type];
+                    const canAfford = playerLatticite >= structureDef.cost;
+                    
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => handleButtonTowerPlace(option.type)}
+                        disabled={!canAfford}
+                        className={`flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all orbitron ${
+                          canAfford ? 'hover:scale-105 cursor-pointer' : 'opacity-50 cursor-not-allowed'
+                        }`}
+                        style={{
+                          borderColor: playerColor || COLORS.playerDefault,
+                          backgroundColor: canAfford ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
+                          minWidth: '70px',
+                          minHeight: '70px',
+                        }}
+                      >
+                        <span className="text-xs font-bold">{option.label}</span>
+                        <span className="text-xs mt-1">{structureDef.cost}L</span>
+                        <span className="text-xs text-muted-foreground">Tower {index + 1}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            } else {
+              // Show unit spawn buttons when no workers selected
+              return (
+                <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-2 p-2 bg-gray-800/90 backdrop-blur-sm border-t border-gray-600">
+                  {(['left', 'up', 'down', 'right'] as const).map((slot, index) => {
                     const unitType = gameState.settings.unitSlots[slot];
                     const unitDef = UNIT_DEFINITIONS[unitType];
+                    const playerPhotons = gameState.players[0]?.photons ?? 0;
                     const canAfford = playerPhotons >= unitDef.cost;
-                    const x = screenPos.x + Math.cos(angle) * buttonDistance;
-                    const y = screenPos.y + Math.sin(angle) * buttonDistance;
                     
                     return (
                       <button
                         key={slot}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRadialSpawn(slot);
-                        }}
+                        onClick={() => handleButtonSpawn(slot)}
                         disabled={!canAfford}
-                        className={`absolute flex flex-col items-center justify-center rounded-full border-2 transition-all orbitron ${
-                          canAfford ? 'hover:scale-110 cursor-pointer' : 'opacity-50 cursor-not-allowed'
+                        className={`flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all orbitron ${
+                          canAfford ? 'hover:scale-105 cursor-pointer' : 'opacity-50 cursor-not-allowed'
                         }`}
                         style={{
-                          left: `${x - 35}px`,
-                          top: `${y - 35}px`,
-                          width: '70px',
-                          height: '70px',
                           borderColor: playerColor || COLORS.playerDefault,
-                          backgroundColor: canAfford ? `${playerColor || COLORS.playerDefault}90` : `${playerColor || COLORS.playerDefault}40`,
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                          backgroundColor: canAfford ? `${playerColor || COLORS.playerDefault}40` : `${playerColor || COLORS.playerDefault}20`,
+                          minWidth: '70px',
+                          minHeight: '70px',
                         }}
                       >
-                        <span className="text-lg">{label}</span>
-                        <span className="text-xs font-bold capitalize mt-1">{unitType}</span>
-                        <span className="text-xs">{unitDef.cost}◈</span>
+                        <span className="text-xs font-bold capitalize">{unitType}</span>
+                        <span className="text-xs mt-1">{unitDef.cost}◈</span>
+                        <span className="text-xs text-muted-foreground">Slot {index + 1}</span>
                       </button>
                     );
                   })}
-                  
-                  {/* Center indicator */}
-                  <div
-                    className="absolute rounded-full bg-white/20 border-2"
-                    style={{
-                      left: `${screenPos.x - 10}px`,
-                      top: `${screenPos.y - 10}px`,
-                      width: '20px',
-                      height: '20px',
-                      borderColor: playerColor || COLORS.playerDefault,
-                      pointerEvents: 'none',
-                    }}
-                  />
-                </>
+                </div>
               );
+            }
+          })()}
+
+          {/* Radial Menu Mode: Contextual Unit Spawn Menu or Tower Placement Menu */}
+          {gameState.settings.controlMode === 'radial' && gameState.radialMenu?.visible && canvasRef.current && (
+            (() => {
+              const screenPos = worldToScreen(gameState.radialMenu.worldPosition, gameState, canvasRef.current);
+              const buttonDistance = 60; // Distance from center to buttons
+              const workersSelected = hasWorkersSelected(gameState);
+              
+              if (workersSelected) {
+                // Show tower options when workers are selected
+                const playerLatticite = gameState.players[0]?.secondaryResource ?? 0;
+                const playerFaction = gameState.settings.playerFaction;
+                
+                const towerOptions: { type: StructureType; label: string; angle: number; icon: string }[] = [
+                  { type: 'offensive', label: 'Assault', angle: Math.PI, icon: '⚔️' },
+                  { type: 'defensive', label: 'Shield', angle: -Math.PI / 2, icon: '🛡️' },
+                  { type: `faction-${playerFaction}` as StructureType, label: 'Special', angle: 0, icon: '⭐' },
+                  { type: 'offensive', label: 'Basic', angle: Math.PI / 2, icon: '🔰' },
+                ];
+                
+                return (
+                  <>
+                    {/* Semi-transparent overlay */}
+                    <div 
+                      className="absolute inset-0 bg-black/20"
+                      onClick={() => { gameState.radialMenu = undefined; }}
+                    />
+                    
+                    {/* Radial menu buttons for towers */}
+                    {towerOptions.map((option, index) => {
+                      const structureDef = STRUCTURE_DEFINITIONS[option.type];
+                      const canAfford = playerLatticite >= structureDef.cost;
+                      const x = screenPos.x + Math.cos(option.angle) * buttonDistance;
+                      const y = screenPos.y + Math.sin(option.angle) * buttonDistance;
+                      
+                      return (
+                        <button
+                          key={index}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRadialTowerPlace(option.type);
+                          }}
+                          disabled={!canAfford}
+                          className={`absolute flex flex-col items-center justify-center rounded-full border-2 transition-all orbitron ${
+                            canAfford ? 'hover:scale-110 cursor-pointer' : 'opacity-50 cursor-not-allowed'
+                          }`}
+                          style={{
+                            left: `${x - 35}px`,
+                            top: `${y - 35}px`,
+                            width: '70px',
+                            height: '70px',
+                            borderColor: playerColor || COLORS.playerDefault,
+                            backgroundColor: canAfford ? `${playerColor || COLORS.playerDefault}90` : `${playerColor || COLORS.playerDefault}40`,
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                          }}
+                        >
+                          <span className="text-lg">{option.icon}</span>
+                          <span className="text-xs font-bold mt-1">{option.label}</span>
+                          <span className="text-xs">{structureDef.cost}L</span>
+                        </button>
+                      );
+                    })}
+                    
+                    {/* Center indicator */}
+                    <div
+                      className="absolute rounded-full bg-white/20 border-2"
+                      style={{
+                        left: `${screenPos.x - 10}px`,
+                        top: `${screenPos.y - 10}px`,
+                        width: '20px',
+                        height: '20px',
+                        borderColor: playerColor || COLORS.playerDefault,
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  </>
+                );
+              } else {
+                // Show unit spawn buttons when no workers selected
+                const playerPhotons = gameState.players[0]?.photons ?? 0;
+                
+                const directions = [
+                  { slot: 'left' as const, angle: Math.PI, label: '◀' },
+                  { slot: 'up' as const, angle: -Math.PI / 2, label: '▲' },
+                  { slot: 'down' as const, angle: Math.PI / 2, label: '▼' },
+                  { slot: 'right' as const, angle: 0, label: '▶' },
+                ];
+                
+                return (
+                  <>
+                    {/* Semi-transparent overlay */}
+                    <div 
+                      className="absolute inset-0 bg-black/20"
+                      onClick={() => { gameState.radialMenu = undefined; }}
+                    />
+                    
+                    {/* Radial menu buttons for units */}
+                    {directions.map(({ slot, angle, label }) => {
+                      const unitType = gameState.settings.unitSlots[slot];
+                      const unitDef = UNIT_DEFINITIONS[unitType];
+                      const canAfford = playerPhotons >= unitDef.cost;
+                      const x = screenPos.x + Math.cos(angle) * buttonDistance;
+                      const y = screenPos.y + Math.sin(angle) * buttonDistance;
+                      
+                      return (
+                        <button
+                          key={slot}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRadialSpawn(slot);
+                          }}
+                          disabled={!canAfford}
+                          className={`absolute flex flex-col items-center justify-center rounded-full border-2 transition-all orbitron ${
+                            canAfford ? 'hover:scale-110 cursor-pointer' : 'opacity-50 cursor-not-allowed'
+                          }`}
+                          style={{
+                            left: `${x - 35}px`,
+                            top: `${y - 35}px`,
+                            width: '70px',
+                            height: '70px',
+                            borderColor: playerColor || COLORS.playerDefault,
+                            backgroundColor: canAfford ? `${playerColor || COLORS.playerDefault}90` : `${playerColor || COLORS.playerDefault}40`,
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                          }}
+                        >
+                          <span className="text-lg">{label}</span>
+                          <span className="text-xs font-bold capitalize mt-1">{unitType}</span>
+                          <span className="text-xs">{unitDef.cost}◈</span>
+                        </button>
+                      );
+                    })}
+                    
+                    {/* Center indicator */}
+                    <div
+                      className="absolute rounded-full bg-white/20 border-2"
+                      style={{
+                        left: `${screenPos.x - 10}px`,
+                        top: `${screenPos.y - 10}px`,
+                        width: '20px',
+                        height: '20px',
+                        borderColor: playerColor || COLORS.playerDefault,
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  </>
+                );
+              }
             })()
           )}
         </>
