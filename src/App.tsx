@@ -1055,6 +1055,42 @@ function App() {
     });
   };
 
+  // Helper function to get faction-specific structure type
+  const getFactionStructureType = (faction: FactionType): StructureType => {
+    return `faction-${faction}` as StructureType;
+  };
+
+  // Helper function to calculate distance between two positions
+  const calculateDistance = (pos1: { x: number; y: number }, pos2: { x: number; y: number }): number => {
+    const dx = pos1.x - pos2.x;
+    const dy = pos1.y - pos2.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // Helper function to validate tower placement position
+  const isValidTowerPosition = (
+    state: GameState,
+    position: { x: number; y: number },
+    towerSize: number
+  ): boolean => {
+    // Check structures
+    const overlapsStructure = state.structures.some(s => 
+      calculateDistance(s.position, position) < (towerSize + 1)
+    );
+    
+    // Check bases
+    const overlapsBase = state.bases.some(b => 
+      calculateDistance(b.position, position) < (BASE_SIZE_METERS + towerSize) / 2
+    );
+    
+    // Check obstacles
+    const overlapsObstacle = state.obstacles.some(obs => 
+      calculateDistance(position, { x: obs.x, y: obs.y }) < (obs.radius + towerSize / 2)
+    );
+    
+    return !overlapsStructure && !overlapsBase && !overlapsObstacle;
+  };
+
   // Handle placing towers from button controls
   const handleButtonTowerPlace = (structureType: StructureType) => {
     const state = gameStateRef.current;
@@ -1080,22 +1116,8 @@ function App() {
       return;
     }
 
-    // Check if position is valid (not overlapping with other structures, bases, or obstacles)
-    const isValidPosition = !state.structures.some(s => {
-      const dx = s.position.x - worker.position.x;
-      const dy = s.position.y - worker.position.y;
-      return Math.sqrt(dx * dx + dy * dy) < (structureDef.size + 1);
-    }) && !state.bases.some(b => {
-      const dx = b.position.x - worker.position.x;
-      const dy = b.position.y - worker.position.y;
-      return Math.sqrt(dx * dx + dy * dy) < (BASE_SIZE_METERS + structureDef.size) / 2;
-    }) && !state.obstacles.some(obs => {
-      const dx = worker.position.x - obs.x;
-      const dy = worker.position.y - obs.y;
-      return Math.sqrt(dx * dx + dy * dy) < (obs.radius + structureDef.size / 2);
-    });
-
-    if (!isValidPosition) {
+    // Check if position is valid
+    if (!isValidTowerPosition(state, worker.position, structureDef.size)) {
       soundManager.playError();
       toast.error('Cannot place tower here - position blocked');
       return;
@@ -1361,13 +1383,9 @@ function App() {
               const towerOptions: { type: StructureType; label: string }[] = [
                 { type: 'offensive', label: 'Assault' },
                 { type: 'defensive', label: 'Shield' },
-                { type: `faction-${playerFaction}` as StructureType, label: 'Special' },
-                { type: 'offensive', label: 'Cancel' }, // Placeholder for consistency
+                { type: getFactionStructureType(playerFaction), label: 'Special' },
+                { type: 'offensive', label: 'Basic' },
               ];
-              
-              // Replace the 4th slot with actual faction tower instead of duplicate
-              towerOptions[2] = { type: `faction-${playerFaction}` as StructureType, label: 'Special' };
-              towerOptions[3] = { type: 'offensive', label: 'Basic' }; // Make 4th slot a basic tower
               
               return (
                 <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-2 p-2 bg-gray-800/90 backdrop-blur-sm border-t border-gray-600">
@@ -1449,7 +1467,7 @@ function App() {
                 const towerOptions: { type: StructureType; label: string; angle: number; icon: string }[] = [
                   { type: 'offensive', label: 'Assault', angle: Math.PI, icon: '⚔️' },
                   { type: 'defensive', label: 'Shield', angle: -Math.PI / 2, icon: '🛡️' },
-                  { type: `faction-${playerFaction}` as StructureType, label: 'Special', angle: 0, icon: '⭐' },
+                  { type: getFactionStructureType(playerFaction), label: 'Special', angle: 0, icon: '⭐' },
                   { type: 'offensive', label: 'Basic', angle: Math.PI / 2, icon: '🔰' },
                 ];
                 
