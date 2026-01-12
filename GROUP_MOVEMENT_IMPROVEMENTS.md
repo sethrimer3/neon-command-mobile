@@ -232,3 +232,52 @@ The base direction (toward goal) is weighted 10x stronger than flocking forces, 
 - Force smoothing: Common technique in physics simulations
 - Dead zones: Standard practice in control systems to prevent oscillations
 - Quadratic falloff: Provides better stability than linear or inverse square
+
+## Update: Fixed Unit Sticking Issue (Dead Zone Trap)
+
+### New Problem Discovered
+After implementing the dead zone (0.3m) to prevent oscillations, a new issue emerged:
+- **2 units consistently getting stuck** when moving together
+- Units would jitter without making progress toward their destination
+- Most problematic with exactly 2 units (no third party to break symmetry)
+
+### Root Cause: Dead Zone Trap
+The `SEPARATION_DEAD_ZONE` created a "trap zone" where:
+1. Units within 0.3m have **NO separation force** pushing them apart
+2. Cohesion and alignment forces continue to pull them together
+3. Local collision push is insufficient to separate them
+4. Results in balanced forces that cancel out → jittering in place
+5. With only 2 units, forces become perfectly balanced with no way to break free
+
+### Solution: Removed Dead Zone, Improved Falloff
+```typescript
+// Before:
+const SEPARATION_DEAD_ZONE = 0.3;
+const normalizedDist = (dist - SEPARATION_DEAD_ZONE) / (SEPARATION_RADIUS - SEPARATION_DEAD_ZONE);
+const weight = (1 - normalizedDist) * (1 - normalizedDist); // Quadratic falloff
+
+// After:
+const SEPARATION_MIN_DISTANCE = 0.05; // Only to prevent division by zero
+const normalizedDist = dist / SEPARATION_RADIUS;
+const base = 1 - normalizedDist;
+const weight = base * base * base; // Cubic falloff (optimized)
+```
+
+**Benefits:**
+- ✅ Separation force now active at all distances (down to 0.05m)
+- ✅ Cubic falloff provides stronger separation at very close range
+- ✅ Smooth, continuous force prevents oscillations
+- ✅ No more "trap zones" where units can get stuck
+- ✅ Force smoothing (0.7) still active to prevent jitter
+- ✅ Fixes the 2-unit sticking issue without introducing new problems
+
+**Force Profile Comparison:**
+- At 0.05m: weight = 0.905 (very strong)
+- At 0.3m (old dead zone): weight = 0.512 (moderate) 
+- At 0.75m: weight = 0.125 (weak)
+- At 1.5m: weight = 0.0 (none)
+
+The cubic falloff `(1 - normalizedDistance)³` provides:
+- Strong separation when units are too close (prevents sticking)
+- Gentle separation at medium distances (prevents oscillations)
+- Natural tapering as units reach desired spacing

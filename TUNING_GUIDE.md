@@ -9,15 +9,15 @@ All constants are in `src/lib/simulation.ts` at the top of the file.
 
 ### Separation (Keep Units Apart)
 ```typescript
-const SEPARATION_RADIUS = 1.5;         // How far to check for nearby units (meters)
-const SEPARATION_FORCE = 3.0;          // How strongly to push away from nearby units (reduced from 8.0)
-const SEPARATION_DEAD_ZONE = 0.3;      // Minimum distance before force applies (prevents jitter)
-const FLOCKING_FORCE_SMOOTHING = 0.7;  // Force smoothing factor (0.7 = 70% previous, 30% current)
+const SEPARATION_RADIUS = 1.5;           // How far to check for nearby units (meters)
+const SEPARATION_FORCE = 3.0;            // How strongly to push away from nearby units (reduced from 8.0)
+const SEPARATION_MIN_DISTANCE = 0.05;    // Minimum distance for calculation (prevents division by zero)
+const FLOCKING_FORCE_SMOOTHING = 0.7;    // Force smoothing factor (0.7 = 70% previous, 30% current)
 ```
 - **Increase radius** → Units start avoiding each other from farther away
 - **Increase force** → Units push away from each other more aggressively (be careful - values > 5.0 can cause violent oscillations)
 - **Decrease force** → Units can get closer together (tighter formations)
-- **Increase dead zone** → Reduces jitter at close range but units may overlap more
+- **Note**: Uses cubic falloff (`weight = (1 - dist/radius)³`) for smooth, continuous separation force without dead zones
 - **Increase smoothing** → More stable but slower to respond to changes (max 0.9)
 
 ### Cohesion (Keep Groups Together)
@@ -107,9 +107,9 @@ const COLLISION_DECELERATION_FACTOR = 0.5; // Speed reduction when blocked
 ### Problem: Units Shaking/Vibrating/Oscillating
 **Solution:**
 - Increase `FLOCKING_FORCE_SMOOTHING` to 0.75-0.8 (more smoothing)
-- Increase `SEPARATION_DEAD_ZONE` to 0.4-0.5 (larger dead zone)
 - Decrease `SEPARATION_FORCE` to 2.5 or 2.0 (gentler separation)
 - Decrease `FLOCKING_MAX_FORCE` to 2.5 or 2.0 (cap extreme forces)
+- Note: The cubic falloff already prevents most oscillations by providing smooth force transitions
 
 ### Problem: Units Sliding Violently Past Each Other
 **Solution:**

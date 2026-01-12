@@ -167,7 +167,7 @@ function getCollisionRadius(): number {
 // Flocking/Boids constants for smooth group movement (StarCraft-like)
 const SEPARATION_RADIUS = 1.5; // Distance to maintain from nearby units
 const SEPARATION_FORCE = 3.0; // Strength of separation force (reduced from 8.0 to prevent violent oscillations)
-const SEPARATION_DEAD_ZONE = 0.3; // Minimum distance before separation force applies (prevents jitter at very close range)
+const SEPARATION_MIN_DISTANCE = 0.05; // Minimum distance for separation calculation (prevents division by zero)
 const COHESION_RADIUS = 4.0; // Distance to check for group cohesion
 const COHESION_FORCE = 1.0; // Strength of cohesion force (reduced from 2.0 for gentler grouping)
 const ALIGNMENT_RADIUS = 3.0; // Distance to check for velocity alignment
@@ -634,14 +634,19 @@ function calculateSeparation(unit: Unit, allUnits: Unit[]): Vector2 {
     if (other.id === unit.id || other.owner !== unit.owner) continue;
     
     const dist = distance(unit.position, other.position);
-    // Apply dead zone to prevent jitter when units are very close
-    if (dist > SEPARATION_DEAD_ZONE && dist < SEPARATION_RADIUS) {
+    // Only apply separation within the separation radius and above minimum distance
+    if (dist < SEPARATION_RADIUS && dist >= SEPARATION_MIN_DISTANCE) {
       // Calculate vector away from other unit
       const away = subtract(unit.position, other.position);
-      // Weight by inverse distance (closer = stronger force), but smoothed
-      // Use quadratic falloff for smoother force curve
-      const normalizedDist = (dist - SEPARATION_DEAD_ZONE) / (SEPARATION_RADIUS - SEPARATION_DEAD_ZONE);
-      const weight = (1 - normalizedDist) * (1 - normalizedDist); // Quadratic falloff
+      
+      // Use smooth cubic falloff that provides continuous separation force
+      // This prevents the "dead zone trap" while still being gentle at close range
+      // Formula: weight = (1 - dist/radius)³ gives strong force at close range
+      // but tapers off smoothly, preventing oscillations
+      const normalizedDist = dist / SEPARATION_RADIUS;
+      const base = 1 - normalizedDist;
+      const weight = base * base * base; // Cubic falloff - more efficient than Math.pow
+      
       const weightedAway = scale(normalize(away), weight);
       separationForce = add(separationForce, weightedAway);
       count++;
