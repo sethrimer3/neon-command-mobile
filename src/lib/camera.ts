@@ -34,7 +34,7 @@ function calculateMinZoom(): number {
   return Math.max(0.3, Math.min(zoomX, zoomY));
 }
 
-const MIN_ZOOM = calculateMinZoom(); // Dynamically calculated to show full field
+const MIN_ZOOM = 0.3; // Absolute minimum fallback
 const MAX_ZOOM = 3.0; // Allow zooming in really far as requested
 
 /**
@@ -110,17 +110,14 @@ export function zoomCameraAtPoint(state: GameState, delta: number, screenPoint: 
   
   if (newZoom === oldZoom) return; // No zoom change
   
-  // Convert screen point to world position at current zoom
-  const worldPos = screenToWorld(screenPoint, state, canvas);
-  
-  // Calculate the world position in meters
+  // Get viewport information for coordinate transformation
   const viewportScale = getViewportScale();
   const viewportOffset = getViewportOffset();
   const viewportDimensions = getViewportDimensions();
   const centerX = viewportDimensions.width > 0 ? viewportOffset.x + viewportDimensions.width / 2 : canvas.width / 2;
   const centerY = viewportDimensions.height > 0 ? viewportOffset.y + viewportDimensions.height / 2 : canvas.height / 2;
   
-  // Get world coordinates at the pinch point before zoom
+  // Get world coordinates at the pinch point before zoom (using same transform as screenToWorld)
   const worldPointX = (screenPoint.x - centerX) / oldZoom - camera.offset.x * PIXELS_PER_METER * viewportScale + centerX;
   const worldPointY = (screenPoint.y - centerY) / oldZoom - camera.offset.y * PIXELS_PER_METER * viewportScale + centerY;
   
