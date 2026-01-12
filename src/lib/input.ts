@@ -18,8 +18,9 @@ import {
   UNIT_DEFINITIONS,
   STRUCTURE_DEFINITIONS,
   Vector2,
+  PIXELS_PER_METER,
 } from './types';
-import { distance, normalize, scale, add, subtract, pixelsToPosition, positionToPixels, getViewportOffset, getViewportDimensions, generateId, isVisibleToPlayer } from './gameUtils';
+import { distance, normalize, scale, add, subtract, pixelsToPosition, positionToPixels, getViewportOffset, getViewportDimensions, generateId, isVisibleToPlayer, getViewportScale } from './gameUtils';
 import { screenToWorld, worldToScreen, zoomCamera, initializeCamera } from './camera';
 import { spawnUnit } from './simulation';
 import { soundManager } from './sound';
@@ -231,23 +232,22 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
         y: center.y - pinchState.lastCenter.y
       };
       
-      // Convert screen pixels to world units for panning
-      // Negative delta because panning should move the camera opposite to finger movement
+      // Pan the camera based on finger movement
+      // The camera offset moves in the opposite direction of finger movement (inverse)
       if (Math.abs(centerDelta.x) > 1 || Math.abs(centerDelta.y) > 1) {
         if (!state.camera) {
           initializeCamera(state);
         }
         
-        const worldDelta = screenToWorldPosition(state, canvas, center);
-        const worldLastCenter = screenToWorldPosition(state, canvas, pinchState.lastCenter);
-        const panDelta = {
-          x: worldDelta.x - worldLastCenter.x,
-          y: worldDelta.y - worldLastCenter.y
-        };
-        
         if (state.camera) {
-          state.camera.targetOffset.x += panDelta.x;
-          state.camera.targetOffset.y += panDelta.y;
+          // Convert screen pixel delta to world meters, accounting for zoom
+          // Divide by PIXELS_PER_METER and viewport scale, then by zoom to get world space delta
+          // Negative because camera moves opposite to finger direction
+          const viewportScale = getViewportScale();
+          const zoom = state.camera.zoom || 1.0;
+          
+          state.camera.targetOffset.x -= (centerDelta.x / (PIXELS_PER_METER * viewportScale * zoom));
+          state.camera.targetOffset.y -= (centerDelta.y / (PIXELS_PER_METER * viewportScale * zoom));
         }
       }
       
