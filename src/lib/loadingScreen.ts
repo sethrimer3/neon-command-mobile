@@ -11,9 +11,11 @@
 let overlayVisibleTime: number = Date.now();
 let isInitialized = false;
 let safetyTimeoutId: number | undefined = undefined;
+let hasLoadEventListener = false;
 const MINIMUM_DISPLAY_DURATION = 800; // 800ms - enough to see the animation without feeling stuck
 const MAXIMUM_LOADING_TIME = 10000; // 10 seconds - force dismissal if React fails to mount
 const EXIT_ANIMATION_DURATION = 800; // Match the CSS transition duration for exit animation
+const LOAD_EVENT_NAME = 'load';
 const OVERLAY_CLASS_VISIBLE = 'visible';
 const OVERLAY_CLASS_EXITING = 'exiting';
 
@@ -109,4 +111,28 @@ export function setupSafetyTimeout(): void {
             dismissStartupOverlay();
         }
     }, MAXIMUM_LOADING_TIME);
+}
+
+/**
+ * Dismiss the loading overlay once the window load event fires.
+ * This covers cases where React fails to mount but the page finishes loading.
+ */
+export function setupLoadEventDismissal(): void {
+    if (hasLoadEventListener) {
+        return;
+    }
+
+    // Mark as configured so HMR or duplicate calls do not register multiple listeners.
+    hasLoadEventListener = true;
+
+    // If the load event already fired, dismiss immediately.
+    if (document.readyState === 'complete') {
+        dismissStartupOverlay();
+        return;
+    }
+
+    // Dismiss once the browser signals that the page finished loading.
+    window.addEventListener(LOAD_EVENT_NAME, () => {
+        dismissStartupOverlay();
+    }, { once: true });
 }

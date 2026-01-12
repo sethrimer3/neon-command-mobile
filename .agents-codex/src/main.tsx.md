@@ -11,6 +11,7 @@ Application entry point. Sets up React root, error boundary, and global styles. 
 - `./App.tsx` - Main application component
 - `./ErrorFallback.tsx` - Error UI component
 - `./components/ui/sonner` - Toast notification system
+- `./lib/loadingScreen.ts` - Startup loading overlay controls
 - Style sheets: `main.css`, `theme.css`, `index.css`
 
 ### Used By
@@ -50,12 +51,18 @@ Application entry point. Sets up React root, error boundary, and global styles. 
 - Toaster rendered globally (outside App for positioning)
 - Spark framework imported for side effects
 - CSS files imported in specific order for proper cascade
+- Startup overlay initialized before React mounts, with safety and load-event fallback dismissal
 - Root element must exist in HTML (#root)
 
 ### Style Loading Order
 1. `main.css` - Global styles
 2. `theme.css` - Theme variables
 3. `index.css` - Tailwind directives
+
+### Loading Screen Behavior
+- Initializes the startup overlay immediately on module load
+- Sets a safety timeout to avoid indefinite loading screens if React fails to mount
+- Registers a window load-event dismissal as a secondary fallback
 
 ### Error Handling
 - ErrorBoundary catches React component errors
@@ -83,6 +90,7 @@ Application entry point. Sets up React root, error boundary, and global styles. 
 - Added Spark framework integration
 - Added toast notifications
 - Re-created file during persistence hook refactor (no behavior change)
+- Added load-event dismissal fallback for the startup overlay
 
 ## Watch Out For
 - Root element must exist before script runs

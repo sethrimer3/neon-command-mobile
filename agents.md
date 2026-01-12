@@ -1,7 +1,7 @@
 # Agents Documentation Guidelines
 
 ## Build Information
-**Current Build Number:** 47
+**Current Build Number:** 48
 
 **IMPORTANT:** With each pull request, you must increment the build number by one in TWO places:
 1. Update the build number in this file (agents.md)
