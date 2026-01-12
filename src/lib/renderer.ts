@@ -2616,13 +2616,15 @@ function drawLaserBeam(ctx: CanvasRenderingContext2D, base: Base, screenPos: { x
     const segmentHeight = beamThickness;
     const segmentWidth = beamThickness * spriteAspectRatio; // Maintain aspect ratio
     
-    // Calculate total laser length in pixels
+    // Calculate total laser length in pixels so we can place the end cap once.
     const totalLength = metersToPixels(LASER_RANGE);
     
-    // Calculate how many middle segments we need to fill the space
-    const usedLength = segmentWidth * 2; // beginning + end
-    const remainingLength = Math.max(0, totalLength - usedLength);
-    const middleSegmentCount = Math.ceil(remainingLength / segmentWidth);
+    // Place the end cap exactly at the beam's end, leaving the middle to tile in between.
+    const endOffset = Math.max(0, totalLength - segmentWidth);
+    
+    // Calculate how many middle segments fit between the begin and end caps.
+    const availableMiddleLength = Math.max(0, endOffset - segmentWidth);
+    const middleSegmentCount = Math.floor(availableMiddleLength / segmentWidth);
     
     ctx.save();
     ctx.translate(screenPos.x, screenPos.y);
@@ -2637,7 +2639,7 @@ function drawLaserBeam(ctx: CanvasRenderingContext2D, base: Base, screenPos: { x
       segmentHeight
     );
     
-    // Draw middle segments (repeated to fill the length)
+    // Draw middle segments (repeated to fill the space between begin and end caps).
     let currentX = segmentWidth;
     for (let i = 0; i < middleSegmentCount; i++) {
       ctx.drawImage(
@@ -2650,10 +2652,10 @@ function drawLaserBeam(ctx: CanvasRenderingContext2D, base: Base, screenPos: { x
       currentX += segmentWidth;
     }
     
-    // Draw end segment
+    // Draw end segment once at the laser tip.
     ctx.drawImage(
       endSprite,
-      currentX,
+      endOffset,
       -segmentHeight / 2,
       segmentWidth,
       segmentHeight
@@ -3961,13 +3963,15 @@ function drawUnitLaserBeam(ctx: CanvasRenderingContext2D, unit: Unit, color: str
     const segmentHeight = beamThickness;
     const segmentWidth = beamThickness * spriteAspectRatio; // Maintain aspect ratio
     
-    // Calculate total laser length in pixels
+    // Calculate total laser length in pixels so we can place the end cap once.
     const totalLength = metersToPixels(range);
     
-    // Calculate how many middle segments we need to fill the space
-    const usedLength = segmentWidth * 2; // beginning + end
-    const remainingLength = Math.max(0, totalLength - usedLength);
-    const middleSegmentCount = Math.ceil(remainingLength / segmentWidth);
+    // Place the end cap exactly at the beam's end, leaving the middle to tile in between.
+    const endOffset = Math.max(0, totalLength - segmentWidth);
+    
+    // Calculate how many middle segments fit between the begin and end caps.
+    const availableMiddleLength = Math.max(0, endOffset - segmentWidth);
+    const middleSegmentCount = Math.floor(availableMiddleLength / segmentWidth);
     
     ctx.save();
     ctx.translate(unitScreen.x, unitScreen.y);
@@ -3983,7 +3987,7 @@ function drawUnitLaserBeam(ctx: CanvasRenderingContext2D, unit: Unit, color: str
       segmentHeight
     );
     
-    // Draw middle segments (repeated to fill the length)
+    // Draw middle segments (repeated to fill the space between begin and end caps).
     let currentX = segmentWidth;
     for (let i = 0; i < middleSegmentCount; i++) {
       ctx.drawImage(
@@ -3996,10 +4000,10 @@ function drawUnitLaserBeam(ctx: CanvasRenderingContext2D, unit: Unit, color: str
       currentX += segmentWidth;
     }
     
-    // Draw end segment
+    // Draw end segment once at the laser tip.
     ctx.drawImage(
       endSprite,
-      currentX,
+      endOffset,
       -segmentHeight / 2,
       segmentWidth,
       segmentHeight

@@ -134,6 +134,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - Unit rendering applies the playfield rotation offset on desktop so sprites and vector shapes face forward
 - Motion blur trails use the playfield rotation offset to align with rotated unit visuals
 - Ability range indicators now toggle between attack range (idle) and ability max range (while dragging an ability arrow) based on `state.abilityCastPreview`
+- Laser beam sprites place begin/end caps once and tile the middle sprite only between those caps to avoid overextending the beam.
 
 ### Rendering Optimizations
 - Clears only once per frame
@@ -189,6 +190,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - **2025-03-24**: Reduced Blade sword particle size, added pale connector lines, and retracted the blade when no enemies are in range.
 - **2025-03-24**: Swapped selection range visuals to show attack range when idle and ability range only during active ability drags.
 - **2025-03-24**: Added enemy ship sprites for Aurum units and clarified the shared sprite-forward rotation offset.
+- **2025-03-24**: Corrected laser sprite tiling so the middle segment repeats only between single begin/end caps.
 
 ## Watch Out For
 - Always convert game positions to pixels before drawing
