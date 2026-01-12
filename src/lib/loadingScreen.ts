@@ -94,13 +94,14 @@ export function resetLoadingScreen(): void {
 /**
  * Set up a safety timeout to ensure the overlay is dismissed even if React fails to mount.
  * This prevents the loading screen from being stuck indefinitely.
- * Returns the timeout ID for potential cleanup.
+ * Returns the timeout ID for potential cleanup (e.g., in tests).
  */
 export function setupSafetyTimeout(): number {
     const MAX_LOADING_TIME = 10000; // 10 seconds maximum
     safetyTimeoutId = window.setTimeout(() => {
         const overlay = document.getElementById('startup-overlay');
-        if (overlay && overlay.parentNode) {
+        // Only dismiss if the overlay still exists and hasn't been removed yet
+        if (overlay && overlay.parentNode && !overlay.classList.contains('exiting')) {
             console.warn('Loading screen safety timeout triggered - forcing dismissal');
             dismissStartupOverlay();
         }
