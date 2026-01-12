@@ -10,7 +10,7 @@
 // This ensures we don't reset the timer if initialization is delayed
 let overlayVisibleTime: number = Date.now();
 let isInitialized = false;
-const MINIMUM_DISPLAY_DURATION = 3000; // 3 seconds
+const MINIMUM_DISPLAY_DURATION = 800; // 800ms - enough to see the animation without feeling stuck
 
 /**
  * Initialize the startup overlay by making it visible.
@@ -82,4 +82,19 @@ export function dismissStartupOverlay(): void {
 export function resetLoadingScreen(): void {
     overlayVisibleTime = Date.now();
     isInitialized = false;
+}
+
+/**
+ * Set up a safety timeout to ensure the overlay is dismissed even if React fails to mount.
+ * This prevents the loading screen from being stuck indefinitely.
+ */
+export function setupSafetyTimeout(): void {
+    const MAX_LOADING_TIME = 10000; // 10 seconds maximum
+    setTimeout(() => {
+        const overlay = document.getElementById('startup-overlay');
+        if (overlay && overlay.parentNode) {
+            console.warn('Loading screen safety timeout triggered - forcing dismissal');
+            dismissStartupOverlay();
+        }
+    }, MAX_LOADING_TIME);
 }

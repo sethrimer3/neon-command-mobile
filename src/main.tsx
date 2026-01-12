@@ -6,7 +6,7 @@ import { Toaster } from './components/ui/sonner'
 
 import App from './App.tsx'
 import { ErrorFallback } from './ErrorFallback.tsx'
-import { initializeStartupOverlay, dismissStartupOverlay } from './lib/loadingScreen.ts'
+import { initializeStartupOverlay, dismissStartupOverlay, setupSafetyTimeout } from './lib/loadingScreen.ts'
 
 import "./main.css"
 import "./styles/theme.css"
@@ -15,6 +15,9 @@ import "./index.css"
 
 // Initialize loading screen immediately
 initializeStartupOverlay();
+
+// Set up a safety timeout to ensure the overlay is dismissed even if React fails to mount
+setupSafetyTimeout();
 
 function AppWrapper() {
   useEffect(() => {
