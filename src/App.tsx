@@ -1067,15 +1067,18 @@ function App() {
     return Math.sqrt(dx * dx + dy * dy);
   };
 
+  // Minimum buffer space between structures to prevent overlap
+  const STRUCTURE_OVERLAP_BUFFER = 1;
+
   // Helper function to validate tower placement position
   const isValidTowerPosition = (
     state: GameState,
     position: { x: number; y: number },
     towerSize: number
   ): boolean => {
-    // Check structures
+    // Check structures - ensure minimum spacing between towers
     const overlapsStructure = state.structures.some(s => 
-      calculateDistance(s.position, position) < (towerSize + 1)
+      calculateDistance(s.position, position) < (towerSize + STRUCTURE_OVERLAP_BUFFER)
     );
     
     // Check bases
@@ -1380,6 +1383,8 @@ function App() {
               // Show tower options when workers are selected
               const playerLatticite = gameState.players[0]?.secondaryResource ?? 0;
               const playerFaction = gameState.settings.playerFaction;
+              // Note: Offensive tower appears twice (slots 1 and 4) to provide 4 options
+              // while giving players quick access to multiple basic assault cannons
               const towerOptions: { type: StructureType; label: string }[] = [
                 { type: 'offensive', label: 'Assault' },
                 { type: 'defensive', label: 'Shield' },
@@ -1464,6 +1469,8 @@ function App() {
                 const playerLatticite = gameState.players[0]?.secondaryResource ?? 0;
                 const playerFaction = gameState.settings.playerFaction;
                 
+                // Note: Offensive tower appears twice (left and bottom) to provide 4 options
+                // while giving players quick access to multiple basic assault cannons
                 const towerOptions: { type: StructureType; label: string; angle: number; icon: string }[] = [
                   { type: 'offensive', label: 'Assault', angle: Math.PI, icon: '⚔️' },
                   { type: 'defensive', label: 'Shield', angle: -Math.PI / 2, icon: '🛡️' },
