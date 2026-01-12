@@ -1,19 +1,19 @@
 export const PIXELS_PER_METER = 20;
-// Double the base footprint so structures read larger in-world.
-export const BASE_SIZE_METERS = 6;
-// Double the unit footprint so all unit rendering/collision scales up.
-export const UNIT_SIZE_METERS = 2;
+// Base footprint for structures
+export const BASE_SIZE_METERS = 3;
+// Unit footprint for all unit rendering/collision
+export const UNIT_SIZE_METERS = 1;
 // Separate Blade sword particles into distinct, magnet-like segments.
 export const BLADE_SWORD_PARTICLE_COUNT = 5;
 export const BLADE_SWORD_PARTICLE_SPACING_METERS = UNIT_SIZE_METERS * 0.24 * 4.5 * 0.75; // Reduce spacing by 25% for tighter Blade sword segments
 // Keep Blade melee range aligned with the outermost sword particle radius.
 export const BLADE_SWORD_RANGE_METERS = BLADE_SWORD_PARTICLE_SPACING_METERS * BLADE_SWORD_PARTICLE_COUNT;
 // Scale mining depots to read as large structures in the resource loop.
-export const MINING_DEPOT_SIZE_METERS = 3;
+export const MINING_DEPOT_SIZE_METERS = 1.5;
 // Scale resource deposits so their hex tiles feel substantial on the map.
-export const RESOURCE_DEPOSIT_SIZE_METERS = 2.4; // 2x larger for better visibility
-// Expand the deposit ring radius to keep doubled deposits from overlapping the depot.
-export const RESOURCE_DEPOSIT_RING_RADIUS_METERS = 5;
+export const RESOURCE_DEPOSIT_SIZE_METERS = 1.2;
+// Expand the deposit ring radius to keep deposits from overlapping the depot.
+export const RESOURCE_DEPOSIT_RING_RADIUS_METERS = 2.5;
 // Make mining drones render and select at a smaller footprint than standard units.
 export const MINING_DRONE_SIZE_MULTIPLIER = 0.67; // 3x smaller than before
 
@@ -382,7 +382,7 @@ export const STRUCTURE_DEFINITIONS: Record<StructureType, StructureDefinition> =
     attackRate: 1.5,
     abilityName: 'Rapid Fire',
     abilityCooldown: 10,
-    size: 2.5,
+    size: 1.25,
   },
   defensive: {
     name: 'Shield Nexus',
@@ -396,7 +396,7 @@ export const STRUCTURE_DEFINITIONS: Record<StructureType, StructureDefinition> =
     attackRate: 0,
     abilityName: 'Shield Barrier',
     abilityCooldown: 15,
-    size: 2.5,
+    size: 1.25,
   },
   'faction-radiant': {
     name: 'Photon Spire',
@@ -410,7 +410,7 @@ export const STRUCTURE_DEFINITIONS: Record<StructureType, StructureDefinition> =
     attackRate: 0.8,
     abilityName: 'Concentrated Beam',
     abilityCooldown: 12,
-    size: 2.5,
+    size: 1.25,
   },
   'faction-aurum': {
     name: 'Arcane Obelisk',
@@ -424,7 +424,7 @@ export const STRUCTURE_DEFINITIONS: Record<StructureType, StructureDefinition> =
     attackRate: 0.6,
     abilityName: 'Chaos Bolt',
     abilityCooldown: 12,
-    size: 2.5,
+    size: 1.25,
   },
   'faction-solari': {
     name: 'Solar Pylon',
@@ -438,7 +438,7 @@ export const STRUCTURE_DEFINITIONS: Record<StructureType, StructureDefinition> =
     attackRate: 2.0,
     abilityName: 'Solar Flare',
     abilityCooldown: 12,
-    size: 2.5,
+    size: 1.25,
   },
 };
 

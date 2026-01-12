@@ -1378,6 +1378,7 @@ function App() {
           {/* Button Mode: Spawn Unit Buttons or Tower Placement Buttons */}
           {gameState.settings.controlMode === 'buttons' && (() => {
             const workersSelected = hasWorkersSelected(gameState);
+            const isDesktop = !gameState.isMobile;
             
             if (workersSelected) {
               // Show tower options when workers are selected
@@ -1393,7 +1394,7 @@ function App() {
               ];
               
               return (
-                <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-2 p-2 bg-gray-800/90 backdrop-blur-sm border-t border-gray-600">
+                <div className={`absolute ${isDesktop ? 'left-0 top-1/2 -translate-y-1/2 flex-col w-24' : 'bottom-0 left-0 right-0 flex-row'} flex ${isDesktop ? 'gap-3' : 'justify-center gap-2'} p-3 bg-gray-800/90 backdrop-blur-sm ${isDesktop ? 'border-r' : 'border-t'} border-gray-600`}>
                   {towerOptions.map((option, index) => {
                     const structureDef = STRUCTURE_DEFINITIONS[option.type];
                     const canAfford = playerLatticite >= structureDef.cost;
@@ -1424,7 +1425,7 @@ function App() {
             } else {
               // Show unit spawn buttons when no workers selected
               return (
-                <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-2 p-2 bg-gray-800/90 backdrop-blur-sm border-t border-gray-600">
+                <div className={`absolute ${isDesktop ? 'left-0 top-1/2 -translate-y-1/2 flex-col w-24' : 'bottom-0 left-0 right-0 flex-row'} flex ${isDesktop ? 'gap-3' : 'justify-center gap-2'} p-3 bg-gray-800/90 backdrop-blur-sm ${isDesktop ? 'border-r' : 'border-t'} border-gray-600`}>
                   {(['left', 'up', 'down', 'right'] as const).map((slot, index) => {
                     const unitType = gameState.settings.unitSlots[slot];
                     const unitDef = UNIT_DEFINITIONS[unitType];
@@ -1455,6 +1456,72 @@ function App() {
                 </div>
               );
             }
+          })()}
+
+          {/* Desktop Info Panel - Right Side */}
+          {gameState.settings.controlMode === 'buttons' && !gameState.isMobile && (() => {
+            const playerBase = gameState.bases.find(b => b.owner === 0);
+            const enemyBase = gameState.bases.find(b => b.owner === 1);
+            const playerUnits = gameState.units.filter(u => u.owner === 0);
+            const enemyUnits = gameState.units.filter(u => u.owner === 1);
+            const playerPhotons = gameState.players[0]?.photons ?? 0;
+            const playerLatticite = gameState.players[0]?.secondaryResource ?? 0;
+            
+            return (
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-48 p-4 bg-gray-800/90 backdrop-blur-sm border-l border-gray-600 space-y-3">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-bold orbitron text-primary">Your Forces</h3>
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span>Base HP:</span>
+                      <span className="font-bold" style={{ color: playerColor || COLORS.playerDefault }}>
+                        {playerBase ? `${Math.floor(playerBase.hp)}/${playerBase.maxHp}` : '0/0'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Units:</span>
+                      <span className="font-bold">{playerUnits.length}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Photons:</span>
+                      <span className="font-bold text-yellow-400">{Math.floor(playerPhotons)}◈</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Latticite:</span>
+                      <span className="font-bold text-cyan-400">{Math.floor(playerLatticite)}L</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="border-t border-gray-600 pt-2 space-y-2">
+                  <h3 className="text-sm font-bold orbitron text-destructive">Enemy Forces</h3>
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span>Base HP:</span>
+                      <span className="font-bold" style={{ color: enemyColor || COLORS.enemyDefault }}>
+                        {enemyBase ? `${Math.floor(enemyBase.hp)}/${enemyBase.maxHp}` : '0/0'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Units:</span>
+                      <span className="font-bold">{enemyUnits.length}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {gameState.matchTimeLimit && (
+                  <div className="border-t border-gray-600 pt-2">
+                    <div className="flex justify-between text-xs">
+                      <span>Time:</span>
+                      <span className="font-bold">
+                        {Math.floor((gameState.matchTimeLimit - gameState.elapsedTime) / 60)}:
+                        {String(Math.floor((gameState.matchTimeLimit - gameState.elapsedTime) % 60)).padStart(2, '0')}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
           })()}
 
           {/* Radial Menu Mode: Contextual Unit Spawn Menu or Tower Placement Menu */}
