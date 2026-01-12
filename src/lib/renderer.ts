@@ -265,7 +265,7 @@ function getColoredOutlineSprite(
 
 /**
  * Draws a sprite centered at the provided screen position with rotation, optional glow, and team tinting.
- * Includes a white outline around the sprite.
+ * Optionally includes a white outline around the sprite (for selected units).
  * @param ctx - Canvas rendering context.
  * @param sprite - The sprite image to render.
  * @param center - Screen-space center point for the sprite.
@@ -273,6 +273,7 @@ function getColoredOutlineSprite(
  * @param rotation - Rotation in radians applied around the center.
  * @param tintColor - Team color used to tint white-shaded sprites.
  * @param enableGlow - Whether to apply a glow effect.
+ * @param showOutline - Whether to show the white outline (for selected units/buildings only).
  */
 function drawCenteredSprite(
   ctx: CanvasRenderingContext2D,
@@ -282,6 +283,7 @@ function drawCenteredSprite(
   rotation: number,
   tintColor: string,
   enableGlow: boolean,
+  showOutline: boolean,
 ): void {
   ctx.save();
   ctx.translate(center.x, center.y);
@@ -290,16 +292,19 @@ function drawCenteredSprite(
   // Use a cached, tinted sprite so canvas composite operations don't affect the main scene.
   const tintedSprite = getTintedSprite(sprite, tintColor) ?? sprite;
   
-  // Create white outline by drawing a white version of the sprite at offset positions
-  const outlineWidth = 1.5; // Thin stroke width
-  const whiteSprite = getWhiteOutlineSprite(tintedSprite, sprite, tintColor);
-  
-  // Draw white outline in 8 directions for a smooth outline
-  for (let i = 0; i < 8; i++) {
-    const angle = (i / 8) * Math.PI * 2;
-    const offsetX = Math.cos(angle) * outlineWidth;
-    const offsetY = Math.sin(angle) * outlineWidth;
-    ctx.drawImage(whiteSprite, -size / 2 + offsetX, -size / 2 + offsetY, size, size);
+  // Only draw white outline for selected units/buildings
+  if (showOutline) {
+    // Create white outline by drawing a white version of the sprite at offset positions
+    const outlineWidth = 1.5; // Thin stroke width
+    const whiteSprite = getWhiteOutlineSprite(tintedSprite, sprite, tintColor);
+    
+    // Draw white outline in 8 directions for a smooth outline
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const offsetX = Math.cos(angle) * outlineWidth;
+      const offsetY = Math.sin(angle) * outlineWidth;
+      ctx.drawImage(whiteSprite, -size / 2 + offsetX, -size / 2 + offsetY, size, size);
+    }
   }
   
   if (enableGlow) {
@@ -378,6 +383,7 @@ function drawRadiantUnitSprite(
   color: string,
   state: GameState,
   renderRotation: number,
+  isSelected: boolean,
 ): boolean {
   if (unit.type === 'miningDrone') {
     const miningSprite = getSpriteFromCache(radiantMiningDroneSpritePath);
@@ -394,6 +400,7 @@ function drawRadiantUnitSprite(
       renderRotation + SPRITE_ROTATION_OFFSET,
       color,
       !!state.settings.enableGlowEffects,
+      isSelected, // Only show outline when selected
     );
     return true;
   }
@@ -418,6 +425,7 @@ function drawRadiantUnitSprite(
     renderRotation + SPRITE_ROTATION_OFFSET,
     color,
     !!state.settings.enableGlowEffects,
+    isSelected, // Only show outline when selected
   );
   return true;
 }
@@ -433,6 +441,7 @@ function drawAurumUnitSprite(
   color: string,
   state: GameState,
   renderRotation: number,
+  isSelected: boolean,
 ): boolean {
   if (unit.type === 'miningDrone') {
     const miningSprite = getSpriteFromCache(aurumMiningDroneSpritePath);
@@ -448,6 +457,7 @@ function drawAurumUnitSprite(
       renderRotation + SPRITE_ROTATION_OFFSET,
       color,
       !!state.settings.enableGlowEffects,
+      isSelected, // Only show outline when selected
     );
     return true;
   }
@@ -472,6 +482,7 @@ function drawAurumUnitSprite(
     renderRotation + SPRITE_ROTATION_OFFSET,
     color,
     !!state.settings.enableGlowEffects,
+    isSelected, // Only show outline when selected
   );
   return true;
 }
@@ -483,6 +494,7 @@ function drawSolariUnitSprite(
   color: string,
   state: GameState,
   renderRotation: number,
+  isSelected: boolean,
 ): boolean {
   if (unit.type === 'miningDrone') {
     const miningSprite = getSpriteFromCache(solariMiningDroneSpritePath);
@@ -498,6 +510,7 @@ function drawSolariUnitSprite(
       renderRotation + SPRITE_ROTATION_OFFSET,
       color,
       !!state.settings.enableGlowEffects,
+      isSelected, // Only show outline when selected
     );
     return true;
   }
@@ -512,6 +525,7 @@ function drawRadiantBaseSprite(
   size: number,
   color: string,
   state: GameState,
+  isSelected: boolean,
 ): boolean {
   const spritePath = radiantBaseSpritePaths[base.baseType];
   if (!spritePath) {
@@ -524,7 +538,7 @@ function drawRadiantBaseSprite(
   }
 
   const spriteSize = size * BASE_SPRITE_SCALE;
-  drawCenteredSprite(ctx, sprite, screenPos, spriteSize, 0, color, !!state.settings.enableGlowEffects);
+  drawCenteredSprite(ctx, sprite, screenPos, spriteSize, 0, color, !!state.settings.enableGlowEffects, isSelected);
   return true;
 }
 
@@ -1959,7 +1973,7 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
     const factionDef = FACTION_DEFINITIONS[base.faction];
     // Draw the sprite art for Radiant bases when enabled; fallback to vector base shapes otherwise.
     const spriteDrawn = spritesEnabled && base.faction === 'radiant'
-      ? drawRadiantBaseSprite(ctx, base, screenPos, size, color, state)
+      ? drawRadiantBaseSprite(ctx, base, screenPos, size, color, state, base.isSelected)
       : false;
     
     if (base.isSelected) {
@@ -3149,11 +3163,11 @@ function drawUnits(ctx: CanvasRenderingContext2D, state: GameState): void {
       const faction = ownerBase?.faction || 'radiant';
       
       if (faction === 'radiant') {
-        spriteDrawn = drawRadiantUnitSprite(ctx, unit, screenPos, color, state, unitRenderRotation);
+        spriteDrawn = drawRadiantUnitSprite(ctx, unit, screenPos, color, state, unitRenderRotation, isSelected);
       } else if (faction === 'aurum') {
-        spriteDrawn = drawAurumUnitSprite(ctx, unit, screenPos, color, state, unitRenderRotation);
+        spriteDrawn = drawAurumUnitSprite(ctx, unit, screenPos, color, state, unitRenderRotation, isSelected);
       } else if (faction === 'solari') {
-        spriteDrawn = drawSolariUnitSprite(ctx, unit, screenPos, color, state, unitRenderRotation);
+        spriteDrawn = drawSolariUnitSprite(ctx, unit, screenPos, color, state, unitRenderRotation, isSelected);
       }
     }
 

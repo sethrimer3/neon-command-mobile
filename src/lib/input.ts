@@ -233,7 +233,7 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
       };
       
       // Pan the camera based on finger movement
-      // The camera offset moves in the opposite direction of finger movement (inverse)
+      // Inverted: camera moves in the same direction as finger movement (intuitive dragging)
       if (Math.abs(centerDelta.x) > 1 || Math.abs(centerDelta.y) > 1) {
         if (!state.camera) {
           initializeCamera(state);
@@ -242,12 +242,12 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
         if (state.camera) {
           // Convert screen pixel delta to world meters, accounting for zoom
           // Divide by PIXELS_PER_METER and viewport scale, then by zoom to get world space delta
-          // Negative because camera moves opposite to finger direction
+          // Positive (inverted) so camera moves with finger direction (intuitive dragging)
           const viewportScale = getViewportScale();
           const zoom = state.camera.zoom || 1.0;
           
-          state.camera.targetOffset.x -= (centerDelta.x / (PIXELS_PER_METER * viewportScale * zoom));
-          state.camera.targetOffset.y -= (centerDelta.y / (PIXELS_PER_METER * viewportScale * zoom));
+          state.camera.targetOffset.x += (centerDelta.x / (PIXELS_PER_METER * viewportScale * zoom));
+          state.camera.targetOffset.y += (centerDelta.y / (PIXELS_PER_METER * viewportScale * zoom));
         }
       }
       

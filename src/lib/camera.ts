@@ -14,14 +14,18 @@ const CAMERA_SMOOTHING = 0.15; // Lerp factor for smooth transitions
 
 /**
  * Initialize camera for game state
+ * On mobile, start zoomed out so the playing field is visible above the bottom UI buttons
  */
 export function initializeCamera(state: GameState): void {
   if (!state.camera) {
+    // On mobile, zoom out to 0.7x so the entire playing field fits above the button toolbar
+    const initialZoom = state.isMobile ? 0.7 : 1.0;
+    
     state.camera = {
       offset: { x: 0, y: 0 },
       targetOffset: { x: 0, y: 0 },
-      zoom: 1.0,
-      targetZoom: 1.0,
+      zoom: initialZoom,
+      targetZoom: initialZoom,
       smoothing: CAMERA_SMOOTHING,
     };
   }
