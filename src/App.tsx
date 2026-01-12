@@ -185,8 +185,8 @@ function App() {
     if (!ctx) return;
 
     const detectOrientation = () => {
+      // Check if mobile based on user agent or window width (touch support alone isn't reliable)
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-                        ('ontouchstart' in window) || 
                         (window.innerWidth < 768);
       
       // Store device context for gameplay and rendering logic
