@@ -4819,7 +4819,7 @@ function drawPathDrawingPreview(ctx: CanvasRenderingContext2D, state: GameState)
     
     ctx.globalAlpha = 0.95;
     ctx.shadowBlur = 8;
-    ctx.fillStyle = COLORS.white;
+    ctx.fillStyle = color;
     ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

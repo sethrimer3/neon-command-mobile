@@ -111,7 +111,7 @@ export type CommandNode =
   | { type: 'ability'; position: Vector2; direction: Vector2 }
   | { type: 'attack-move'; position: Vector2 }
   | { type: 'patrol'; position: Vector2; returnPosition: Vector2 }
-  | { type: 'follow-path'; path: Vector2[] }; // New command type for path following
+  | { type: 'follow-path'; path: Vector2[] };
 
 export interface Unit {
   id: string;

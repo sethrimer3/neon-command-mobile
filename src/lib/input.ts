@@ -1790,7 +1790,9 @@ function simplifyPath(path: Vector2[], minDistance: number = 0.5): Vector2[] {
   }
   
   // Always include the last point if it's not already included
-  if (simplified[simplified.length - 1] !== path[path.length - 1]) {
+  const lastSimplified = simplified[simplified.length - 1];
+  const lastPath = path[path.length - 1];
+  if (lastSimplified.x !== lastPath.x || lastSimplified.y !== lastPath.y) {
     simplified.push(path[path.length - 1]);
   }
   
