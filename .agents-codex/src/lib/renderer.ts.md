@@ -70,6 +70,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
   - Lines connecting waypoints
   - Different colors for move vs ability commands
   - Telegraph indicators for pending abilities
+  - Follow-path segments render with subtle glow and waypoint dots for visibility
 
 #### drawUnits(ctx, state): void
 - **Purpose:** Draws all units with effects
@@ -198,6 +199,7 @@ Handles all game rendering to HTML5 canvas. Draws game state including units, ba
 - **2025-03-23**: Tinted Radiant sprites to team colors and added a rotation offset to align sprite-forward direction.
 - **2025-03-24**: Moved sprite tinting to cached offscreen canvases to preserve scene transparency and reduce per-frame work.
 - **2025-03-24**: Applied the playfield rotation offset to unit rendering and motion trails for desktop landscape alignment.
+- **2025-03-24**: Rendered follow-path command segments so drawn paths remain visible during execution.
 - **2025-03-24**: Reduced Blade sword particle size, added pale connector lines, and retracted the blade when no enemies are in range.
 - **2025-03-24**: Swapped selection range visuals to show attack range when idle and ability range only during active ability drags.
 - **2025-03-24**: Added enemy ship sprites for Aurum units and clarified the shared sprite-forward rotation offset.

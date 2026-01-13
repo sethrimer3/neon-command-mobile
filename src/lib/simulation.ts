@@ -805,6 +805,59 @@ function applyFlockingBehavior(unit: Unit, baseDirection: Vector2, allUnits: Uni
 }
 
 /**
+ * Advance through reached waypoints and return a lookahead target to smooth path turns.
+ * @param unitPosition - Current unit position
+ * @param path - Mutable list of waypoints to follow
+ * @param lookaheadDistance - Distance ahead along the path to target
+ * @param reachRadius - Distance threshold for consuming waypoints
+ * @returns Target point along the path for smoother steering
+ */
+function getPathLookaheadTarget(
+  unitPosition: Vector2,
+  path: Vector2[],
+  lookaheadDistance: number,
+  reachRadius: number
+): Vector2 {
+  // Consume any waypoints that are already within the reach radius.
+  while (path.length > 0 && distance(unitPosition, path[0]) <= reachRadius) {
+    path.shift();
+  }
+
+  // If the path is exhausted, return the current position as a safe fallback.
+  if (path.length === 0) {
+    return unitPosition;
+  }
+
+  let remainingDistance = lookaheadDistance;
+  let segmentStart = unitPosition;
+
+  // Walk the polyline and find the point at the requested lookahead distance.
+  for (let i = 0; i < path.length; i++) {
+    const segmentEnd = path[i];
+    const segmentLength = distance(segmentStart, segmentEnd);
+
+    if (segmentLength <= MIN_FORCE_THRESHOLD) {
+      segmentStart = segmentEnd;
+      continue;
+    }
+
+    if (segmentLength >= remainingDistance) {
+      const ratio = remainingDistance / segmentLength;
+      return {
+        x: segmentStart.x + (segmentEnd.x - segmentStart.x) * ratio,
+        y: segmentStart.y + (segmentEnd.y - segmentStart.y) * ratio
+      };
+    }
+
+    remainingDistance -= segmentLength;
+    segmentStart = segmentEnd;
+  }
+
+  // If the lookahead distance extends beyond the final waypoint, use the last point.
+  return path[path.length - 1];
+}
+
+/**
  * Finds an alternative path around obstacles using enhanced angle-based pathfinding.
  * Tries more angles with smaller increments for smoother pathfinding.
  * @param unit - The unit trying to move
@@ -2498,35 +2551,37 @@ function updateUnits(state: GameState, deltaTime: number): void {
         return;
       }
       
-      // Get next waypoint in path
-      const nextWaypoint = currentNode.path[0];
-      const dist = distance(unit.position, nextWaypoint);
       const def = UNIT_DEFINITIONS[unit.type];
       
-      // Check if reached this waypoint (use smaller threshold for smoother path following)
-      if (dist < 0.5) {
-        // Remove this waypoint and continue to next
-        currentNode.path.shift();
-        
-        // If no more waypoints, remove command
-        if (currentNode.path.length === 0) {
-          unit.commandQueue.shift();
-          unit.currentSpeed = 0;
-          unit.stuckTimer = 0;
-          unit.lastPosition = undefined;
-          unit.jitterOffset = undefined;
-          finalizeBladeTrail();
-        }
+      // Use a lookahead target to avoid slowing down or stalling at sharp bends.
+      const reachRadius = Math.max(0.5, def.moveSpeed * 0.1);
+      const lookaheadDistance = Math.max(1.5, def.moveSpeed * 0.4);
+      const lookaheadTarget = getPathLookaheadTarget(
+        unit.position,
+        currentNode.path,
+        lookaheadDistance,
+        reachRadius
+      );
+
+      // If the path is consumed, clear the command immediately.
+      if (currentNode.path.length === 0) {
+        unit.commandQueue.shift();
+        unit.currentSpeed = 0;
+        unit.stuckTimer = 0;
+        unit.lastPosition = undefined;
+        unit.jitterOffset = undefined;
+        finalizeBladeTrail();
         return;
       }
-      
-      let direction = normalize(subtract(nextWaypoint, unit.position));
+
+      const dist = distance(unit.position, lookaheadTarget);
+      let direction = normalize(subtract(lookaheadTarget, unit.position));
       
       // Apply flocking behavior for smooth group movement along path
       direction = applyFlockingBehavior(unit, direction, state.units);
       
       // Try pathfinding if direct path might be blocked
-      const alternativePath = findPathAroundObstacle(unit, nextWaypoint, state.obstacles);
+      const alternativePath = findPathAroundObstacle(unit, lookaheadTarget, state.obstacles);
       if (alternativePath) {
         direction = alternativePath;
       }

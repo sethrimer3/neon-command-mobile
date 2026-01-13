@@ -1742,6 +1742,25 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
           ctx.shadowBlur = 0;
           ctx.globalAlpha = 0.2 * fadeAlpha; // Reset to queued line opacity
         }
+      } else if (segment.type === 'follow-path') {
+        // Draw follow-path segments so drawn paths remain visible during execution.
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.moveTo(startScreen.x, startScreen.y);
+        ctx.lineTo(endScreen.x, endScreen.y);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Add subtle node dots to emphasize the path waypoints once fully drawn.
+        if (segmentProgress >= 1.0) {
+          const pulse = Math.sin(time * 2 + segment.index * 0.2) * 0.2 + 0.8;
+          ctx.globalAlpha = 0.2 * pulse * fadeAlpha;
+          ctx.beginPath();
+          ctx.arc(fullEndScreen.x, fullEndScreen.y, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 0.2 * fadeAlpha; // Reset to queued line opacity
+        }
       } else if (segment.type === 'ability' && segmentProgress >= 1.0) {
         // Only draw ability arrow if segment is fully drawn and node is ability type
         if (segment.node.type !== 'ability') continue;

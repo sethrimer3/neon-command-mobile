@@ -38,6 +38,13 @@ Contains the core game simulation loop and logic. Handles unit movement, combat,
   - Blocks movement only on obstacle collisions (unit overlap handled by avoidance)
   - Applies promotion system based on distance traveled
   - Queue bonus grants extra distance credit (10% per queued move node)
+  - Follow-path movement uses a lookahead target to smooth turns
+
+### getPathLookaheadTarget(unitPosition, path, lookaheadDistance, reachRadius): Vector2
+- **Purpose:** Finds a forward target along a path and consumes reached waypoints
+- **Parameters:** Current unit position, mutable waypoint list, lookahead distance, waypoint reach radius
+- **Returns:** A target point ahead along the polyline for smoother steering
+- **Notes:** Consumes waypoints within the reach radius before calculating the lookahead point
 
 ### updateBases(state: GameState, deltaTime: number): void
 - **Purpose:** Moves bases toward their movement targets
@@ -165,6 +172,7 @@ Multiple functions for unit abilities:
 - **2026-01-12**: Held Blade sword angles after each swing and added a final-swing hold delay before returning to rest
 - **2026-01-13**: Converted marine basic ranged attacks to instant hits with ricochet feedback and standardized right-side shell ejection
 - **2025-03-24**: Clarified sprite corner trail math to align with the global sprite-forward PI/2 rotation offset.
+- **2025-03-24**: Added lookahead-based path following to smooth unit turns on drawn paths.
 
 ## Watch Out For
 - Delta time must be in seconds, not milliseconds
