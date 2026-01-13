@@ -1202,9 +1202,16 @@ function startQueueDrawAnimation(unit: Unit): void {
   unit.queueDrawReverse = false;
 }
 
+// Helper function to clear movement commands while preserving ability commands
+// Used when drawing a new path to ensure only one path exists at a time
+function clearMovementCommands(unit: Unit): void {
+  unit.commandQueue = unit.commandQueue.filter(cmd => cmd.type === 'ability');
+}
+
 // Helper function to handle path drawing end and assign path to units
 // Note: Path drawing replaces existing movement commands (not queued)
 // This is different from other movement commands which queue up to QUEUE_MAX_LENGTH
+// Clears: move, attack-move, patrol, follow-path (preserves ability commands)
 // This ensures only one drawn path exists per unit at any time
 function handlePathDrawingEnd(state: GameState, pathDrawing: { nearUnit: Unit; rawPath: Vector2[] }): void {
   const selectedUnitsArray = state.units.filter(unit => state.selectedUnits.has(unit.id));
@@ -1239,7 +1246,7 @@ function handlePathDrawingEnd(state: GameState, pathDrawing: { nearUnit: Unit; r
       // Clear existing movement commands when drawing a new path
       // This ensures only one path exists at a time (replaces old paths, not queued)
       // Keeps ability commands as they are special actions that should complete
-      unit.commandQueue = unit.commandQueue.filter(cmd => cmd.type === 'ability');
+      clearMovementCommands(unit);
       unit.commandQueue.push({ type: 'follow-path', path: [...smoothed] });
       startQueueDrawAnimation(unit);
     }
@@ -1257,7 +1264,7 @@ function handlePathDrawingEnd(state: GameState, pathDrawing: { nearUnit: Unit; r
       // Clear existing movement commands when drawing a new path
       // This ensures only one path exists at a time (replaces old paths, not queued)
       // Keeps ability commands as they are special actions that should complete
-      unit.commandQueue = unit.commandQueue.filter(cmd => cmd.type === 'ability');
+      clearMovementCommands(unit);
       // Add move to origin, then follow path
       unit.commandQueue.push({ type: 'move', position: pathOrigin });
       unit.commandQueue.push({ type: 'follow-path', path: [...smoothed] });
