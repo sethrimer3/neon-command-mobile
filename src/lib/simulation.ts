@@ -782,16 +782,19 @@ function applyFlockingBehavior(unit: Unit, baseDirection: Vector2, allUnits: Uni
   // Ensure base direction is not zero before attempting projection
   const baseMagnitude = distance({ x: 0, y: 0 }, baseDirection);
   if (baseMagnitude > MIN_FORCE_THRESHOLD) {
+    // Normalize base direction for accurate projection math
+    const normalizedBase = normalize(baseDirection);
+    
     // Calculate dot product to check if flocking force opposes base direction
-    const dot = flockingForce.x * baseDirection.x + flockingForce.y * baseDirection.y;
+    const dot = flockingForce.x * normalizedBase.x + flockingForce.y * normalizedBase.y;
     // Check current magnitude of flocking force (may have been clamped above)
     const currentForceMagnitude = distance({ x: 0, y: 0 }, flockingForce);
     if (dot < 0 && currentForceMagnitude > MIN_FORCE_THRESHOLD) {
       // Flocking force has a backward component - project it to be perpendicular to base direction
       // This allows units to move sideways (to avoid each other) but prevents backward motion
-      // perpendicular = flockingForce - (dot * baseDirection)
-      const projectionScale = dot; // How much force is in the base direction
-      const projection = scale(baseDirection, projectionScale);
+      // Projection formula: proj_B(A) = (A · B̂) * B̂ where B̂ is normalized base direction
+      // perpendicular = flockingForce - projection
+      const projection = scale(normalizedBase, dot);
       flockingForce = subtract(flockingForce, projection);
       
       // Re-clamp after projection
