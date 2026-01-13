@@ -46,3 +46,24 @@ export function ScreenTransitionSlide({ children, className = '', direction = 'b
     </div>
   );
 }
+
+/**
+ * Menu transition with directional slide animations
+ * - forward: slides in from right (for entering sub-menus)
+ * - back: slides in from left (for returning to main menu)
+ */
+export function MenuTransition({ 
+  children, 
+  className = '', 
+  direction = 'forward' 
+}: ScreenTransitionProps & { direction?: 'forward' | 'back' }) {
+  const slideClass = direction === 'forward' 
+    ? 'slide-in-from-right-full' 
+    : 'slide-in-from-left-full';
+
+  return (
+    <div className={`absolute inset-0 animate-in fade-in ${slideClass} duration-500 ${className}`}>
+      {children}
+    </div>
+  );
+}

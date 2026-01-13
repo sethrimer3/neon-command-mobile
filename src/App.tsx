@@ -32,6 +32,7 @@ import { UnitInformationScreen } from './components/UnitInformationScreen';
 import { TutorialScreen } from './components/TutorialScreen';
 import { VictoryScreen } from './components/VictoryScreen';
 import { AnimatedBackground } from './components/AnimatedBackground';
+import { MenuTransition } from './components/ScreenTransition';
 import { getMapById, getValidBasePositions, createBoundaryObstacles } from './lib/maps';
 import { MultiplayerManager, LobbyData } from './lib/multiplayer';
 import { createRealtimeStore } from './lib/realtimeStore';
@@ -659,36 +660,42 @@ function App() {
 
   const goToSettings = () => {
     soundManager.playButtonClick();
+    gameStateRef.current.menuTransitionDirection = 'forward';
     gameStateRef.current.mode = 'settings';
     setRenderTrigger(prev => prev + 1);
   };
 
   const goToUnitSelection = () => {
     soundManager.playButtonClick();
+    gameStateRef.current.menuTransitionDirection = 'forward';
     gameStateRef.current.mode = 'unitSelection';
     setRenderTrigger(prev => prev + 1);
   };
 
   const goToMapSelection = () => {
     soundManager.playButtonClick();
+    gameStateRef.current.menuTransitionDirection = 'forward';
     gameStateRef.current.mode = 'mapSelection';
     setRenderTrigger(prev => prev + 1);
   };
 
   const goToLevelSelection = () => {
     soundManager.playButtonClick();
+    gameStateRef.current.menuTransitionDirection = 'forward';
     gameStateRef.current.mode = 'levelSelection';
     setRenderTrigger(prev => prev + 1);
   };
 
   const goToOnlineMode = () => {
     soundManager.playButtonClick();
+    gameStateRef.current.menuTransitionDirection = 'forward';
     gameStateRef.current.mode = 'onlineMode';
     setRenderTrigger(prev => prev + 1);
   };
 
   const goToMultiplayer = () => {
     soundManager.playButtonClick();
+    gameStateRef.current.menuTransitionDirection = 'forward';
     gameStateRef.current.mode = 'multiplayerLobby';
     refreshLobbies();
     setRenderTrigger(prev => prev + 1);
@@ -801,30 +808,35 @@ function App() {
 
   const backToMenu = () => {
     soundManager.playButtonClick();
+    gameStateRef.current.menuTransitionDirection = 'back';
     gameStateRef.current.mode = 'menu';
     setRenderTrigger(prev => prev + 1);
   };
 
   const goToStatistics = () => {
     soundManager.playButtonClick();
+    gameStateRef.current.menuTransitionDirection = 'forward';
     gameStateRef.current.mode = 'statistics';
     setRenderTrigger(prev => prev + 1);
   };
 
   const goToModifierHelp = () => {
     soundManager.playButtonClick();
+    gameStateRef.current.menuTransitionDirection = 'forward';
     gameStateRef.current.mode = 'modifierHelp';
     setRenderTrigger(prev => prev + 1);
   };
 
   const goToUnitInformation = () => {
     soundManager.playButtonClick();
+    gameStateRef.current.menuTransitionDirection = 'forward';
     gameStateRef.current.mode = 'unitInformation';
     setRenderTrigger(prev => prev + 1);
   };
 
   const goToTutorial = () => {
     soundManager.playButtonClick();
+    gameStateRef.current.menuTransitionDirection = 'forward';
     gameStateRef.current.mode = 'tutorial';
     setRenderTrigger(prev => prev + 1);
   };
@@ -836,6 +848,7 @@ function App() {
       lanStoreRef.current.disconnect();
       lanStoreRef.current = null;
     }
+    gameStateRef.current.menuTransitionDirection = 'forward';
     gameStateRef.current.mode = 'lanMode';
     setRenderTrigger(prev => prev + 1);
   };
@@ -1709,121 +1722,124 @@ function App() {
           {/* 50% transparent black overlay */}
           <div className="absolute inset-0 bg-black opacity-50 pointer-events-none" />
           
-          <div className="absolute inset-0 overflow-y-auto">
-            <div className="min-h-full flex items-center justify-center p-4 py-8 animate-in fade-in duration-500">
-              <div className="flex flex-col gap-4 w-80 max-w-[90vw] my-auto">
-              <div className="flex justify-center mb-4 animate-in fade-in zoom-in-95 duration-700">
-                <img 
-                  src={`${assetBaseUrl}ASSETS/sprites/menus/mainMenuTitle.png`} 
-                  alt="Speed of Light RTS"
-                  className="w-full max-w-md neon-glow"
-                  style={{
-                  filter: 'drop-shadow(0 0 20px currentColor)'
+          <MenuTransition direction={gameState.menuTransitionDirection || 'back'}>
+            <div className="absolute inset-0 overflow-y-auto">
+              <div className="min-h-full flex items-center justify-center p-4 py-8">
+                <div className="flex flex-col gap-4 w-80 max-w-[90vw] my-auto">
+                <div className="flex justify-center mb-4 animate-in fade-in zoom-in-95 duration-700">
+                  <img 
+                    src={`${assetBaseUrl}ASSETS/sprites/menus/mainMenuTitle.png`} 
+                    alt="Speed of Light RTS"
+                    className="w-full max-w-md neon-glow"
+                    style={{
+                    filter: 'drop-shadow(0 0 20px currentColor)'
+                  }}
+                />
+              </div>
+
+              <Button
+                onClick={goToLevelSelection}
+                className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/50"
+                variant="default"
+              >
+                <Robot className="mr-2" size={24} />
+                Vs. AI
+              </Button>
+              
+              <Button
+                onClick={() => {
+                  soundManager.playButtonClick();
+                  startGame('ai', selectedMap || 'open');
                 }}
-              />
-            </div>
+                className="h-12 text-base orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/50"
+                variant="secondary"
+              >
+                Quick Match
+              </Button>
 
-            <Button
-              onClick={goToLevelSelection}
-              className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/50"
-              variant="default"
-            >
-              <Robot className="mr-2" size={24} />
-              Vs. AI
-            </Button>
-            
-            <Button
-              onClick={() => {
-                soundManager.playButtonClick();
-                startGame('ai', selectedMap || 'open');
-              }}
-              className="h-12 text-base orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/50"
-              variant="secondary"
-            >
-              Quick Match
-            </Button>
+              <Button
+                onClick={goToTutorial}
+                className="h-12 text-base orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/50"
+                variant="secondary"
+              >
+                <GraduationCap className="mr-2" size={24} />
+                Tutorial
+              </Button>
 
-            <Button
-              onClick={goToTutorial}
-              className="h-12 text-base orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/50"
-              variant="secondary"
-            >
-              <GraduationCap className="mr-2" size={24} />
-              Tutorial
-            </Button>
+              <Button
+                onClick={goToOnlineMode}
+                className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/50"
+                variant="default"
+              >
+                <WifiHigh className="mr-2" size={24} />
+                Online Multiplayer
+              </Button>
 
-            <Button
-              onClick={goToOnlineMode}
-              className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/50"
-              variant="default"
-            >
-              <WifiHigh className="mr-2" size={24} />
-              Online Multiplayer
-            </Button>
+              <Button
+                onClick={goToMapSelection}
+                className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
+                variant="outline"
+              >
+                <MapPin className="mr-2" size={24} />
+                Map Selection
+              </Button>
 
-            <Button
-              onClick={goToMapSelection}
-              className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
-              variant="outline"
-            >
-              <MapPin className="mr-2" size={24} />
-              Map Selection
-            </Button>
+              <Button
+                onClick={goToUnitSelection}
+                className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
+                variant="outline"
+              >
+                <ListChecks className="mr-2" size={24} />
+                Unit Selection
+              </Button>
 
-            <Button
-              onClick={goToUnitSelection}
-              className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
-              variant="outline"
-            >
-              <ListChecks className="mr-2" size={24} />
-              Unit Selection
-            </Button>
+              <Button
+                onClick={goToSettings}
+                className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
+                variant="outline"
+              >
+                <GearSix className="mr-2" size={24} />
+                Settings
+              </Button>
 
-            <Button
-              onClick={goToSettings}
-              className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
-              variant="outline"
-            >
-              <GearSix className="mr-2" size={24} />
-              Settings
-            </Button>
+              <Button
+                onClick={goToStatistics}
+                className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
+                variant="outline"
+              >
+                <ChartBar className="mr-2" size={24} />
+                Statistics
+              </Button>
 
-            <Button
-              onClick={goToStatistics}
-              className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
-              variant="outline"
-            >
-              <ChartBar className="mr-2" size={24} />
-              Statistics
-            </Button>
+              <Button
+                onClick={goToModifierHelp}
+                className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
+                variant="outline"
+              >
+                <Info className="mr-2" size={24} />
+                Unit Guide
+              </Button>
 
-            <Button
-              onClick={goToModifierHelp}
-              className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
-              variant="outline"
-            >
-              <Info className="mr-2" size={24} />
-              Unit Guide
-            </Button>
-
-            <Button
-              onClick={goToUnitInformation}
-              className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
-              variant="outline"
-            >
-              <Book className="mr-2" size={24} />
-              Unit Information
-            </Button>
+              <Button
+                onClick={goToUnitInformation}
+                className="h-14 text-lg orbitron uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
+                variant="outline"
+              >
+                <Book className="mr-2" size={24} />
+                Unit Information
+              </Button>
+              </div>
             </div>
           </div>
-        </div>
+          </MenuTransition>
         </>
       )}
 
       {gameState.mode === 'settings' && (
-        <div className="absolute inset-0 overflow-y-auto">
-          <div className="min-h-full flex items-start justify-center p-4 py-8">
-          <Card className="w-96 max-w-full my-auto">
+        <MenuTransition direction={gameState.menuTransitionDirection || 'forward'}>
+          <div className="absolute inset-0 overflow-y-auto">
+            <div className="min-h-full flex items-start justify-center p-4 py-8">
+            <Card className="w-96 max-w-full my-auto">
             <CardHeader>
               <CardTitle className="orbitron text-2xl">Settings</CardTitle>
             </CardHeader>
@@ -2185,97 +2201,118 @@ function App() {
           </Card>
           </div>
         </div>
+        </MenuTransition>
       )}
 
       {gameState.mode === 'unitSelection' && (
-        <UnitSelectionScreen
-          unitSlots={unitSlots as Record<'left' | 'up' | 'down' | 'right', UnitType>}
-          onSlotChange={handleSlotChange}
-          onBack={backToMenu}
-          playerColor={playerColor || COLORS.playerDefault}
-          playerFaction={playerFaction || 'radiant'}
-          onFactionChange={setPlayerFaction}
-          playerBaseType={playerBaseType || 'standard'}
-          onBaseTypeChange={setPlayerBaseType}
-          controlMode={controlMode || 'swipe'}
-          onControlModeChange={setControlMode}
-        />
+        <MenuTransition direction={gameState.menuTransitionDirection || 'forward'}>
+          <UnitSelectionScreen
+            unitSlots={unitSlots as Record<'left' | 'up' | 'down' | 'right', UnitType>}
+            onSlotChange={handleSlotChange}
+            onBack={backToMenu}
+            playerColor={playerColor || COLORS.playerDefault}
+            playerFaction={playerFaction || 'radiant'}
+            onFactionChange={setPlayerFaction}
+            playerBaseType={playerBaseType || 'standard'}
+            onBaseTypeChange={setPlayerBaseType}
+            controlMode={controlMode || 'swipe'}
+            onControlModeChange={setControlMode}
+          />
+        </MenuTransition>
       )}
 
       {gameState.mode === 'mapSelection' && (
-        <MapSelectionScreen
-          selectedMap={selectedMap || 'open'}
-          onMapSelect={handleMapSelect}
-          onBack={backToMenu}
-        />
+        <MenuTransition direction={gameState.menuTransitionDirection || 'forward'}>
+          <MapSelectionScreen
+            selectedMap={selectedMap || 'open'}
+            onMapSelect={handleMapSelect}
+            onBack={backToMenu}
+          />
+        </MenuTransition>
       )}
 
       {gameState.mode === 'levelSelection' && (
-        <LevelSelectionScreen
+        <MenuTransition direction={gameState.menuTransitionDirection || 'forward'}>
+          <LevelSelectionScreen
           onBack={backToMenu}
           onSelectLevel={handleLevelSelect}
           currentMap={selectedMap || 'open'}
           chessMode={chessMode ?? false}
           onChessModeChange={setChessMode}
         />
+        </MenuTransition>
       )}
 
       {gameState.mode === 'onlineMode' && (
-        <OnlineModeScreen
-          onBack={backToMenu}
-          onMatchmaking={goToMatchmaking}
-          onCustomGame={goToMultiplayer}
-          onLAN={goToLANMode}
-          chessMode={chessMode ?? false}
-          onChessModeChange={setChessMode}
-        />
+        <MenuTransition direction={gameState.menuTransitionDirection || 'forward'}>
+          <OnlineModeScreen
+            onBack={backToMenu}
+            onMatchmaking={goToMatchmaking}
+            onCustomGame={goToMultiplayer}
+            onLAN={goToLANMode}
+            chessMode={chessMode ?? false}
+            onChessModeChange={setChessMode}
+          />
+        </MenuTransition>
       )}
 
       {gameState.mode === 'lanMode' && (
-        <LANModeScreen
-          onBack={backToMenu}
-          onHost={handleLANHost}
-          onJoin={handleLANJoin}
-        />
+        <MenuTransition direction={gameState.menuTransitionDirection || 'forward'}>
+          <LANModeScreen
+            onBack={backToMenu}
+            onHost={handleLANHost}
+            onJoin={handleLANJoin}
+          />
+        </MenuTransition>
       )}
 
       {gameState.mode === 'multiplayerLobby' && (
-        <MultiplayerLobbyScreen
-          onBack={backToMenu}
-          onCreateGame={handleCreateGame}
-          onJoinGame={handleJoinGame}
-          lobbies={multiplayerLobbies}
-          currentLobby={currentLobby}
-          isHost={multiplayerManagerRef.current?.getIsHost() || false}
-          onStartGame={handleStartMultiplayerGame}
-          onLeaveGame={handleLeaveGame}
-          onRefreshLobbies={refreshLobbies}
-        />
+        <MenuTransition direction={gameState.menuTransitionDirection || 'forward'}>
+          <MultiplayerLobbyScreen
+            onBack={backToMenu}
+            onCreateGame={handleCreateGame}
+            onJoinGame={handleJoinGame}
+            lobbies={multiplayerLobbies}
+            currentLobby={currentLobby}
+            isHost={multiplayerManagerRef.current?.getIsHost() || false}
+            onStartGame={handleStartMultiplayerGame}
+            onLeaveGame={handleLeaveGame}
+            onRefreshLobbies={refreshLobbies}
+          />
+        </MenuTransition>
       )}
 
       {gameState.mode === 'statistics' && (
-        <StatisticsScreen
-          statistics={playerStatistics || createEmptyStatistics()}
-          onBack={backToMenu}
-        />
+        <MenuTransition direction={gameState.menuTransitionDirection || 'forward'}>
+          <StatisticsScreen
+            statistics={playerStatistics || createEmptyStatistics()}
+            onBack={backToMenu}
+          />
+        </MenuTransition>
       )}
 
       {gameState.mode === 'modifierHelp' && (
-        <ModifierHelpScreen
-          onBack={backToMenu}
-        />
+        <MenuTransition direction={gameState.menuTransitionDirection || 'forward'}>
+          <ModifierHelpScreen
+            onBack={backToMenu}
+          />
+        </MenuTransition>
       )}
 
       {gameState.mode === 'unitInformation' && (
-        <UnitInformationScreen
-          onBack={backToMenu}
-        />
+        <MenuTransition direction={gameState.menuTransitionDirection || 'forward'}>
+          <UnitInformationScreen
+            onBack={backToMenu}
+          />
+        </MenuTransition>
       )}
 
       {gameState.mode === 'tutorial' && (
-        <TutorialScreen
-          onBack={backToMenu}
-        />
+        <MenuTransition direction={gameState.menuTransitionDirection || 'forward'}>
+          <TutorialScreen
+            onBack={backToMenu}
+          />
+        </MenuTransition>
       )}
 
       {gameState.mode === 'victory' && (
