@@ -779,20 +779,26 @@ function applyFlockingBehavior(unit: Unit, baseDirection: Vector2, allUnits: Uni
   
   // Prevent flocking forces from pushing units backward relative to their movement direction
   // This fixes the bug where units in large groups start moving backward
-  // Calculate dot product to check if flocking force opposes base direction
-  const dot = flockingForce.x * baseDirection.x + flockingForce.y * baseDirection.y;
-  if (dot < 0 && forceMagnitude > MIN_FORCE_THRESHOLD) {
-    // Flocking force has a backward component - project it to be perpendicular to base direction
-    // This allows units to move sideways (to avoid each other) but prevents backward motion
-    // perpendicular = flockingForce - (dot * baseDirection)
-    const projectionScale = dot; // How much force is in the base direction
-    const projection = scale(baseDirection, projectionScale);
-    flockingForce = subtract(flockingForce, projection);
-    
-    // Re-clamp after projection
-    const newMagnitude = distance({ x: 0, y: 0 }, flockingForce);
-    if (newMagnitude > FLOCKING_MAX_FORCE) {
-      flockingForce = scale(normalize(flockingForce), FLOCKING_MAX_FORCE);
+  // Ensure base direction is not zero before attempting projection
+  const baseMagnitude = distance({ x: 0, y: 0 }, baseDirection);
+  if (baseMagnitude > MIN_FORCE_THRESHOLD) {
+    // Calculate dot product to check if flocking force opposes base direction
+    const dot = flockingForce.x * baseDirection.x + flockingForce.y * baseDirection.y;
+    // Check current magnitude of flocking force (may have been clamped above)
+    const currentForceMagnitude = distance({ x: 0, y: 0 }, flockingForce);
+    if (dot < 0 && currentForceMagnitude > MIN_FORCE_THRESHOLD) {
+      // Flocking force has a backward component - project it to be perpendicular to base direction
+      // This allows units to move sideways (to avoid each other) but prevents backward motion
+      // perpendicular = flockingForce - (dot * baseDirection)
+      const projectionScale = dot; // How much force is in the base direction
+      const projection = scale(baseDirection, projectionScale);
+      flockingForce = subtract(flockingForce, projection);
+      
+      // Re-clamp after projection
+      const newMagnitude = distance({ x: 0, y: 0 }, flockingForce);
+      if (newMagnitude > FLOCKING_MAX_FORCE) {
+        flockingForce = scale(normalize(flockingForce), FLOCKING_MAX_FORCE);
+      }
     }
   }
   
