@@ -791,7 +791,6 @@ function applyFlockingBehavior(unit: Unit, baseDirection: Vector2, allUnits: Uni
   // Clamp flocking force to max magnitude
   let clampResult = clampForce(flockingForce, FLOCKING_MAX_FORCE);
   flockingForce = clampResult.force;
-  let forceMagnitude = clampResult.magnitude;
   
   // Prevent flocking forces from pushing units backward relative to their movement direction
   // This fixes the bug where units in large groups start moving backward
@@ -803,7 +802,8 @@ function applyFlockingBehavior(unit: Unit, baseDirection: Vector2, allUnits: Uni
     
     // Calculate dot product to check if flocking force opposes base direction
     const dot = flockingForce.x * normalizedBase.x + flockingForce.y * normalizedBase.y;
-    if (dot < 0 && forceMagnitude > MIN_FORCE_THRESHOLD) {
+    // Only apply projection if force is significant and pointing backward
+    if (dot < 0 && clampResult.magnitude > MIN_FORCE_THRESHOLD) {
       // Flocking force has a backward component - project it to be perpendicular to base direction
       // This allows units to move sideways (to avoid each other) but prevents backward motion
       // Projection formula: proj_B(A) = (A · B̂) * B̂ where B̂ is normalized base direction
@@ -814,7 +814,6 @@ function applyFlockingBehavior(unit: Unit, baseDirection: Vector2, allUnits: Uni
       // Re-clamp after projection
       clampResult = clampForce(flockingForce, FLOCKING_MAX_FORCE);
       flockingForce = clampResult.force;
-      forceMagnitude = clampResult.magnitude;
     }
   }
   
