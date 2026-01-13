@@ -39,6 +39,10 @@ interface TouchState {
   touchedMovementDot?: { base: Base; dotPos: { x: number; y: number } };
   touchedDepot?: import('./types').MiningDepot; // Track if touched a mining depot
   touchedDepotPos?: Vector2; // World position where depot was touched
+  pathDrawing?: {
+    nearUnit: Unit; // The unit near where path drawing started
+    rawPath: Vector2[]; // Raw path points in world coordinates
+  };
 }
 
 const touchStates = new Map<number, TouchState>();
@@ -297,6 +301,21 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
         };
         soundManager.play('menu-selection');
       }
+      
+      // In path drawing mode, check if we're starting a path near a selected unit
+      if (state.settings.movementMode === 'pathDrawing' && state.selectedUnits.size > 0 && 
+          !touchState.touchedBase && !touchState.touchedDepot && !allMiningDrones) {
+        const worldStart = screenToWorldPosition(state, canvas, touchState.startPos);
+        const nearUnit = findUnitNearPosition(state, worldStart, playerIndex);
+        
+        if (nearUnit) {
+          // Start path drawing
+          touchState.pathDrawing = {
+            nearUnit: nearUnit,
+            rawPath: [worldStart]
+          };
+        }
+      }
 
       // Skip selection rects when the base is selected so swipes spawn units anywhere
       if (!touchState.touchedBase && !touchState.touchedDepot && state.selectedUnits.size === 0 && !selectedBase) {
@@ -371,8 +390,33 @@ export function handleTouchMove(e: TouchEvent, state: GameState, canvas: HTMLCan
     }
     
     // Update ability cast preview when units are selected and dragging
+    // In path drawing mode, use path drawing instead of ability cast preview
     if (touchState.isDragging && state.selectedUnits.size > 0 && !touchState.touchedBase && !touchState.touchedMovementDot) {
-      updateAbilityCastPreview(state, dx, dy, touchState.startPos, canvas);
+      if (state.settings.movementMode === 'pathDrawing' && touchState.pathDrawing) {
+        // Update path drawing: add new point if far enough from last point
+        const worldPos = screenToWorldPosition(state, canvas, { x, y });
+        const lastPoint = touchState.pathDrawing.rawPath[touchState.pathDrawing.rawPath.length - 1];
+        
+        if (distance(lastPoint, worldPos) > 0.3) { // Add point every 0.3 meters
+          touchState.pathDrawing.rawPath.push(worldPos);
+        }
+        
+        // Update path drawing preview
+        const simplified = simplifyPath(touchState.pathDrawing.rawPath);
+        const limited = limitPathLength(simplified, 300); // 300 meter max length
+        const smoothed = smoothPath(limited, 8); // 8 points per segment
+        
+        state.pathDrawingPreview = {
+          rawPath: touchState.pathDrawing.rawPath,
+          smoothedPath: smoothed,
+          originUnit: touchState.pathDrawing.nearUnit.id,
+          originPosition: touchState.pathDrawing.nearUnit.position,
+          startTime: Date.now()
+        };
+      } else if (state.settings.movementMode === 'tap' || !touchState.pathDrawing) {
+        // Use normal ability cast preview in tap mode or if path drawing wasn't initiated
+        updateAbilityCastPreview(state, dx, dy, touchState.startPos, canvas);
+      }
     }
 
     // Update mining depot drag preview so the line snaps toward the closest available deposit
@@ -463,28 +507,36 @@ export function handleTouchEnd(e: TouchEvent, state: GameState, canvas: HTMLCanv
       if (selectedBase && state.selectedUnits.size === 0 && !touchState.touchedBase) {
         handleBaseAbilityDrag(state, selectedBase, { x: dx, y: dy }, touchState.startPos, canvas);
       } else if (state.selectedUnits.size > 0 && !touchState.touchedBase && !touchState.touchedMovementDot) {
-        // Handle ability drag for selected units
-        const worldStart = screenToWorldPosition(state, canvas, touchState.startPos);
-        const worldEnd = screenToWorldPosition(state, canvas, { x, y });
-        let dragVectorWorld = subtract(worldEnd, worldStart);
-        
-        // Apply mirroring if the setting is enabled (mirror both X and Y)
-        if (state.settings.mirrorAbilityCasting) {
-          dragVectorWorld = {
-            x: -dragVectorWorld.x,
-            y: -dragVectorWorld.y
-          };
-        }
-
-        if (distance({ x: 0, y: 0 }, dragVectorWorld) > 0.5) {
-          handleVectorBasedAbilityDrag(state, dragVectorWorld);
+        // Handle path drawing or ability drag for selected units
+        if (state.settings.movementMode === 'pathDrawing' && touchState.pathDrawing && touchState.pathDrawing.rawPath.length > 1) {
+          // Execute path drawing movement
+          handlePathDrawingEnd(state, touchState.pathDrawing);
+          delete state.pathDrawingPreview;
         } else {
-          // Clear preview if drag was too short
-          delete state.abilityCastPreview;
+          // Handle ability drag for selected units (tap mode or no path)
+          const worldStart = screenToWorldPosition(state, canvas, touchState.startPos);
+          const worldEnd = screenToWorldPosition(state, canvas, { x, y });
+          let dragVectorWorld = subtract(worldEnd, worldStart);
+          
+          // Apply mirroring if the setting is enabled (mirror both X and Y)
+          if (state.settings.mirrorAbilityCasting) {
+            dragVectorWorld = {
+              x: -dragVectorWorld.x,
+              y: -dragVectorWorld.y
+            };
+          }
+
+          if (distance({ x: 0, y: 0 }, dragVectorWorld) > 0.5) {
+            handleVectorBasedAbilityDrag(state, dragVectorWorld);
+          } else {
+            // Clear preview if drag was too short
+            delete state.abilityCastPreview;
+          }
         }
       } else {
         // Clear preview if no valid action was taken in this branch
         delete state.abilityCastPreview;
+        delete state.pathDrawingPreview;
       }
     } else if (elapsed < TAP_TIME_MS && dist < 10) {
       handleTap(state, { x, y }, canvas, playerIndex);
@@ -945,6 +997,12 @@ function handleTap(state: GameState, screenPos: { x: number; y: number }, canvas
 
   const selectedBase = state.bases.find((b) => b.isSelected && b.owner === playerIndex);
   if (selectedBase) {
+    // In path drawing mode, tapping away from base deselects it
+    if (state.settings.movementMode === 'pathDrawing') {
+      selectedBase.isSelected = false;
+      return;
+    }
+    // In tap mode, tapping sets movement target
     selectedBase.movementTarget = worldPos;
     soundManager.playUnitMove();
     
@@ -958,6 +1016,12 @@ function handleTap(state: GameState, screenPos: { x: number; y: number }, canvas
   }
 
   if (state.selectedUnits.size > 0) {
+    // In path drawing mode, tapping away from units deselects them
+    if (state.settings.movementMode === 'pathDrawing') {
+      state.selectedUnits.clear();
+      return;
+    }
+    // In tap mode, tapping moves units
     addMovementCommand(state, worldPos, state.patrolMode);
     soundManager.playUnitMove();
     // Show toast if patrol mode is active
@@ -1138,6 +1202,75 @@ function startQueueDrawAnimation(unit: Unit): void {
   unit.queueDrawReverse = false;
 }
 
+// Helper function to handle path drawing end and assign path to units
+function handlePathDrawingEnd(state: GameState, pathDrawing: { nearUnit: Unit; rawPath: Vector2[] }): void {
+  const selectedUnitsArray = state.units.filter(unit => state.selectedUnits.has(unit.id));
+  
+  if (selectedUnitsArray.length === 0 || pathDrawing.rawPath.length < 2) return;
+  
+  // Process the path: simplify, limit length, and smooth
+  const simplified = simplifyPath(pathDrawing.rawPath);
+  const limited = limitPathLength(simplified, 300); // 300 meter max length
+  const smoothed = smoothPath(limited, 8); // 8 points per segment
+  
+  // Find units that are far from the path origin (need to flock together first)
+  const pathOrigin = pathDrawing.nearUnit.position;
+  const farUnits: Unit[] = [];
+  const nearUnits: Unit[] = [];
+  
+  selectedUnitsArray.forEach(unit => {
+    const distanceFromOrigin = distance(unit.position, pathOrigin);
+    if (distanceFromOrigin > 5) { // More than 5 meters away
+      farUnits.push(unit);
+    } else {
+      nearUnits.push(unit);
+    }
+  });
+  
+  // Units near the path get the path directly
+  nearUnits.forEach(unit => {
+    if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
+    
+    // In chess mode, add to pending commands instead of immediate queue
+    if (state.settings.chessMode && state.chessMode) {
+      state.chessMode.pendingCommands.set(unit.id, [{ type: 'follow-path', path: [...smoothed] }]);
+    } else {
+      unit.commandQueue.push({ type: 'follow-path', path: [...smoothed] });
+      startQueueDrawAnimation(unit);
+    }
+  });
+  
+  // Far units first move toward the path origin, then follow the path
+  farUnits.forEach(unit => {
+    if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
+    
+    // In chess mode, add to pending commands instead of immediate queue
+    if (state.settings.chessMode && state.chessMode) {
+      state.chessMode.pendingCommands.set(unit.id, [
+        { type: 'move', position: pathOrigin },
+        { type: 'follow-path', path: [...smoothed] }
+      ]);
+    } else {
+      // Add move to origin, then follow path
+      unit.commandQueue.push({ type: 'move', position: pathOrigin });
+      unit.commandQueue.push({ type: 'follow-path', path: [...smoothed] });
+      startQueueDrawAnimation(unit);
+    }
+  });
+  
+  soundManager.playUnitMove();
+  
+  // Send command to multiplayer backend for online games
+  if (state.vsMode === 'online' && state.multiplayerManager) {
+    // For multiplayer, send simplified command (just the end point)
+    const unitIds = selectedUnitsArray.map(u => u.id);
+    const endPoint = smoothed[smoothed.length - 1];
+    sendMoveCommand(state.multiplayerManager, unitIds, endPoint, false).catch(err => 
+      console.warn('Failed to send move command:', err)
+    );
+  }
+}
+
 function addMovementCommand(state: GameState, worldPos: { x: number; y: number }, isPatrol: boolean = false): void {
   const selectedUnitsArray = state.units.filter(unit => state.selectedUnits.has(unit.id));
   
@@ -1276,6 +1409,21 @@ export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCan
     // Only create selection rect if no units are selected AND no base touched
     const playerIndex = resolvePlayerIndex(state, mouseState.startPos.x);
     const selectedBase = getSelectedBase(state, playerIndex);
+    
+    // In path drawing mode, check if we're starting a path near a selected unit
+    if (state.settings.movementMode === 'pathDrawing' && state.selectedUnits.size > 0 && 
+        !mouseState.touchedBase && !mouseState.touchedDepot) {
+      const worldStart = screenToWorldPosition(state, canvas, mouseState.startPos);
+      const nearUnit = findUnitNearPosition(state, worldStart, playerIndex);
+      
+      if (nearUnit) {
+        // Start path drawing
+        mouseState.pathDrawing = {
+          nearUnit: nearUnit,
+          rawPath: [worldStart]
+        };
+      }
+    }
 
     // Skip selection rects when the base is selected so swipes spawn units anywhere
     if (!mouseState.touchedBase && !mouseState.touchedDepot && state.selectedUnits.size === 0 && !selectedBase) {
@@ -1312,8 +1460,33 @@ export function handleMouseMove(e: MouseEvent, state: GameState, canvas: HTMLCan
   }
   
   // Update ability cast preview when units are selected and dragging
+  // In path drawing mode, use path drawing instead of ability cast preview
   if (mouseState.isDragging && state.selectedUnits.size > 0 && !mouseState.touchedBase && !mouseState.touchedMovementDot) {
-    updateAbilityCastPreview(state, dx, dy, mouseState.startPos, canvas);
+    if (state.settings.movementMode === 'pathDrawing' && mouseState.pathDrawing) {
+      // Update path drawing: add new point if far enough from last point
+      const worldPos = screenToWorldPosition(state, canvas, { x, y });
+      const lastPoint = mouseState.pathDrawing.rawPath[mouseState.pathDrawing.rawPath.length - 1];
+      
+      if (distance(lastPoint, worldPos) > 0.3) { // Add point every 0.3 meters
+        mouseState.pathDrawing.rawPath.push(worldPos);
+      }
+      
+      // Update path drawing preview
+      const simplified = simplifyPath(mouseState.pathDrawing.rawPath);
+      const limited = limitPathLength(simplified, 300); // 300 meter max length
+      const smoothed = smoothPath(limited, 8); // 8 points per segment
+      
+      state.pathDrawingPreview = {
+        rawPath: mouseState.pathDrawing.rawPath,
+        smoothedPath: smoothed,
+        originUnit: mouseState.pathDrawing.nearUnit.id,
+        originPosition: mouseState.pathDrawing.nearUnit.position,
+        startTime: Date.now()
+      };
+    } else if (state.settings.movementMode === 'tap' || !mouseState.pathDrawing) {
+      // Use normal ability cast preview in tap mode or if path drawing wasn't initiated
+      updateAbilityCastPreview(state, dx, dy, mouseState.startPos, canvas);
+    }
   }
   
   // Update mining depot drag preview so the line snaps toward the closest available deposit
@@ -1548,4 +1721,110 @@ export function getActiveSelectionRect(): { x1: number; y1: number; x2: number; 
   }
   
   return null;
+}
+
+// Helper function to smooth a path using Catmull-Rom spline interpolation
+function smoothPath(rawPath: Vector2[], segmentCount: number = 10): Vector2[] {
+  if (rawPath.length < 2) return rawPath;
+  if (rawPath.length === 2) return rawPath;
+  
+  const smoothed: Vector2[] = [];
+  
+  // Add first point
+  smoothed.push({ ...rawPath[0] });
+  
+  // For each segment between control points
+  for (let i = 0; i < rawPath.length - 1; i++) {
+    const p0 = rawPath[Math.max(0, i - 1)];
+    const p1 = rawPath[i];
+    const p2 = rawPath[i + 1];
+    const p3 = rawPath[Math.min(rawPath.length - 1, i + 2)];
+    
+    // Generate intermediate points using Catmull-Rom spline
+    for (let t = 0; t < segmentCount; t++) {
+      const u = t / segmentCount;
+      const uu = u * u;
+      const uuu = uu * u;
+      
+      // Catmull-Rom basis functions
+      const q0 = -0.5 * uuu + uu - 0.5 * u;
+      const q1 = 1.5 * uuu - 2.5 * uu + 1;
+      const q2 = -1.5 * uuu + 2 * uu + 0.5 * u;
+      const q3 = 0.5 * uuu - 0.5 * uu;
+      
+      const x = q0 * p0.x + q1 * p1.x + q2 * p2.x + q3 * p3.x;
+      const y = q0 * p0.y + q1 * p1.y + q2 * p2.y + q3 * p3.y;
+      
+      smoothed.push({ x, y });
+    }
+  }
+  
+  // Add last point
+  smoothed.push({ ...rawPath[rawPath.length - 1] });
+  
+  return smoothed;
+}
+
+// Helper function to simplify a path by removing points that are too close together
+function simplifyPath(path: Vector2[], minDistance: number = 0.5): Vector2[] {
+  if (path.length < 2) return path;
+  
+  const simplified: Vector2[] = [path[0]];
+  
+  for (let i = 1; i < path.length; i++) {
+    const lastPoint = simplified[simplified.length - 1];
+    const currentPoint = path[i];
+    const dist = distance(lastPoint, currentPoint);
+    
+    if (dist >= minDistance) {
+      simplified.push(currentPoint);
+    }
+  }
+  
+  // Always include the last point if it's not already included
+  if (simplified[simplified.length - 1] !== path[path.length - 1]) {
+    simplified.push(path[path.length - 1]);
+  }
+  
+  return simplified;
+}
+
+// Helper function to limit path length to max distance
+function limitPathLength(path: Vector2[], maxLength: number): Vector2[] {
+  if (path.length < 2) return path;
+  
+  const limited: Vector2[] = [path[0]];
+  let totalLength = 0;
+  
+  for (let i = 1; i < path.length; i++) {
+    const lastPoint = limited[limited.length - 1];
+    const currentPoint = path[i];
+    const segmentLength = distance(lastPoint, currentPoint);
+    
+    if (totalLength + segmentLength <= maxLength) {
+      limited.push(currentPoint);
+      totalLength += segmentLength;
+    } else {
+      // Add a partial segment to reach exactly maxLength
+      const remaining = maxLength - totalLength;
+      const ratio = remaining / segmentLength;
+      const finalPoint = {
+        x: lastPoint.x + (currentPoint.x - lastPoint.x) * ratio,
+        y: lastPoint.y + (currentPoint.y - lastPoint.y) * ratio
+      };
+      limited.push(finalPoint);
+      break;
+    }
+  }
+  
+  return limited;
+}
+
+// Helper function to find a unit near a position (for detecting path start)
+function findUnitNearPosition(state: GameState, worldPos: Vector2, playerIndex: number, maxDistance: number = 2): Unit | undefined {
+  return state.units.find((unit) => {
+    if (unit.owner !== playerIndex) return false;
+    if (!state.selectedUnits.has(unit.id)) return false;
+    return distance(unit.position, worldPos) < maxDistance;
+  });
 }

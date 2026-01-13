@@ -110,7 +110,8 @@ export type CommandNode =
   | { type: 'move'; position: Vector2 }
   | { type: 'ability'; position: Vector2; direction: Vector2 }
   | { type: 'attack-move'; position: Vector2 }
-  | { type: 'patrol'; position: Vector2; returnPosition: Vector2 };
+  | { type: 'patrol'; position: Vector2; returnPosition: Vector2 }
+  | { type: 'follow-path'; path: Vector2[] }; // New command type for path following
 
 export interface Unit {
   id: string;
@@ -1167,6 +1168,7 @@ export interface GameState {
     aiDifficulty?: 'easy' | 'medium' | 'hard'; // AI difficulty level
     enableFogOfWar?: boolean; // Enable fog of war (developer mode)
     controlMode?: 'swipe' | 'buttons' | 'radial'; // Control mode for unit spawning
+    movementMode?: 'tap' | 'pathDrawing'; // Movement mode: tap to move or draw path
   };
 
   surrenderClicks: number;
@@ -1440,6 +1442,15 @@ export interface GameState {
     baseId: string; // ID of the base casting the ability
     basePosition: Vector2; // Position of the base
     direction: Vector2; // Direction vector of the laser
+  };
+  
+  // Path drawing preview for movement mode
+  pathDrawingPreview?: {
+    rawPath: Vector2[]; // Raw path points from user's drag
+    smoothedPath: Vector2[]; // Smoothed path for units to follow
+    originUnit: string; // ID of the unit near where the path started
+    originPosition: Vector2; // Position where path drawing started
+    startTime: number; // When the path drawing started
   };
   
   // Building placement menu for workers (radial menu with 4 directions)

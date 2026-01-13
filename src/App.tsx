@@ -85,6 +85,7 @@ function App() {
   const [aiDifficulty, setAiDifficulty] = useKV<'easy' | 'medium' | 'hard'>('ai-difficulty', 'medium');
   const [enableFogOfWar, setEnableFogOfWar] = useKV<boolean>('enable-fog-of-war', false);
   const [controlMode, setControlMode] = useKV<'swipe' | 'buttons' | 'radial'>('control-mode', 'swipe');
+  const [movementMode, setMovementMode] = useKV<'tap' | 'pathDrawing'>('movement-mode', 'pathDrawing');
 
   const gameState = gameStateRef.current;
   const lastVictoryStateRef = useRef<boolean>(false);
@@ -159,13 +160,14 @@ function App() {
       aiDifficulty: aiDifficulty || 'medium',
       enableFogOfWar: enableFogOfWar ?? false,
       controlMode: controlMode || 'swipe',
+      movementMode: movementMode || 'pathDrawing',
     };
     gameStateRef.current.showMinimap = showMinimap ?? true;
     gameStateRef.current.players = gameStateRef.current.players.map((p, i) => ({
       ...p,
       color: i === 0 ? (playerColor || COLORS.playerDefault) : (enemyColor || COLORS.enemyDefault),
     }));
-  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showHealthBarsOnlyWhenDamaged, showMinimap, playerFaction, enemyFaction, enableGlowEffects, enableParticleEffects, enableMotionBlur, enableSprites, mirrorAbilityCasting, chessMode, aiDifficulty, enableFogOfWar, controlMode]);
+  }, [playerColor, enemyColor, enabledUnits, unitSlots, selectedMap, showNumericHP, showHealthBarsOnlyWhenDamaged, showMinimap, playerFaction, enemyFaction, enableGlowEffects, enableParticleEffects, enableMotionBlur, enableSprites, mirrorAbilityCasting, chessMode, aiDifficulty, enableFogOfWar, controlMode, movementMode]);
 
   // Cleanup interval on unmount
   useEffect(() => {
@@ -2065,6 +2067,40 @@ function App() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="movement-mode" className="flex flex-col gap-1">
+                  <span>Movement Mode</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    Tap: Tap to move, double-tap to deselect<br/>
+                    Path: Draw paths for units to follow
+                  </span>
+                </Label>
+                <div className="flex gap-2">
+                  <Button
+                    id="movement-mode-tap"
+                    onClick={() => {
+                      setMovementMode('tap');
+                      soundManager.playButtonClick();
+                    }}
+                    className={`flex-1 ${movementMode === 'tap' ? '' : 'opacity-50'}`}
+                    variant={movementMode === 'tap' ? 'default' : 'outline'}
+                  >
+                    Tap
+                  </Button>
+                  <Button
+                    id="movement-mode-path"
+                    onClick={() => {
+                      setMovementMode('pathDrawing');
+                      soundManager.playButtonClick();
+                    }}
+                    className={`flex-1 ${movementMode === 'pathDrawing' ? '' : 'opacity-50'}`}
+                    variant={movementMode === 'pathDrawing' ? 'default' : 'outline'}
+                  >
+                    Path
+                  </Button>
+                </div>
+              </div>
+
               <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
                 <p><strong>Game Mode:</strong></p>
               </div>
@@ -2371,6 +2407,7 @@ function createBackgroundBattle(canvas: HTMLCanvasElement): GameState {
       playerBaseType: 'standard',
       enemyBaseType: 'standard',
       controlMode: 'swipe',
+      movementMode: 'pathDrawing',
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
@@ -2421,6 +2458,7 @@ function createInitialState(): GameState {
       playerBaseType: 'standard',
       enemyBaseType: 'standard',
       controlMode: 'swipe',
+      movementMode: 'pathDrawing',
     },
     surrenderClicks: 0,
     lastSurrenderClickTime: 0,
