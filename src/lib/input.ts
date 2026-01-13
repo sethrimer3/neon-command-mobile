@@ -1229,12 +1229,12 @@ function handlePathDrawingEnd(state: GameState, pathDrawing: { nearUnit: Unit; r
   
   // Units near the path get the path directly
   nearUnits.forEach(unit => {
-    if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
-    
     // In chess mode, add to pending commands instead of immediate queue
     if (state.settings.chessMode && state.chessMode) {
       state.chessMode.pendingCommands.set(unit.id, [{ type: 'follow-path', path: [...smoothed] }]);
     } else {
+      // Clear existing follow-path commands to ensure only one path at a time
+      unit.commandQueue = unit.commandQueue.filter(cmd => cmd.type !== 'follow-path');
       unit.commandQueue.push({ type: 'follow-path', path: [...smoothed] });
       startQueueDrawAnimation(unit);
     }
@@ -1242,8 +1242,6 @@ function handlePathDrawingEnd(state: GameState, pathDrawing: { nearUnit: Unit; r
   
   // Far units first move toward the path origin, then follow the path
   farUnits.forEach(unit => {
-    if (unit.commandQueue.length >= QUEUE_MAX_LENGTH) return;
-    
     // In chess mode, add to pending commands instead of immediate queue
     if (state.settings.chessMode && state.chessMode) {
       state.chessMode.pendingCommands.set(unit.id, [
@@ -1251,6 +1249,8 @@ function handlePathDrawingEnd(state: GameState, pathDrawing: { nearUnit: Unit; r
         { type: 'follow-path', path: [...smoothed] }
       ]);
     } else {
+      // Clear existing follow-path commands to ensure only one path at a time
+      unit.commandQueue = unit.commandQueue.filter(cmd => cmd.type !== 'follow-path');
       // Add move to origin, then follow path
       unit.commandQueue.push({ type: 'move', position: pathOrigin });
       unit.commandQueue.push({ type: 'follow-path', path: [...smoothed] });
