@@ -127,6 +127,34 @@ canvas {
   }
 }
 
+/* Menu transition animations for sliding screens */
+@keyframes slide-in-from-right-full {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-from-left-full {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Apply slide animations via utility classes */
+.slide-in-from-right-full {
+  animation: slide-in-from-right-full 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slide-in-from-left-full {
+  animation: slide-in-from-left-full 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* Enhanced button animations */
 button {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
