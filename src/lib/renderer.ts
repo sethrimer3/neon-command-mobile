@@ -912,6 +912,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, canv
       drawSelectionIndicators(ctx, state);
       drawAbilityRangeIndicators(ctx, state);
       drawAbilityCastPreview(ctx, state);
+      drawPathDrawingPreview(ctx, state);
       drawBaseAbilityPreview(ctx, state);
       drawBuildingMenu(ctx, state);
       drawVisualFeedback(ctx, state);
@@ -1642,7 +1643,7 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
     const pathSegments: Array<{
       start: Vector2;
       end: Vector2;
-      type: 'move' | 'ability' | 'attack-move' | 'patrol';
+      type: 'move' | 'ability' | 'attack-move' | 'patrol' | 'follow-path';
       node: CommandNode;
       index: number;
     }> = [];
@@ -1651,20 +1652,40 @@ function drawCommandQueues(ctx: CanvasRenderingContext2D, state: GameState): voi
     let lastPos = unit.position;
     
     unit.commandQueue.forEach((node, index) => {
-      const segmentStart = lastPos;
-      const segmentEnd = node.position;
-      const segmentLength = distance(segmentStart, segmentEnd);
-      
-      pathSegments.push({
-        start: segmentStart,
-        end: segmentEnd,
-        type: node.type,
-        node,
-        index
-      });
-      
-      totalLength += segmentLength;
-      lastPos = segmentEnd;
+      if (node.type === 'follow-path') {
+        // For follow-path commands, create segments between each waypoint
+        node.path.forEach((waypoint, waypointIndex) => {
+          const segmentStart = lastPos;
+          const segmentEnd = waypoint;
+          const segmentLength = distance(segmentStart, segmentEnd);
+          
+          pathSegments.push({
+            start: segmentStart,
+            end: segmentEnd,
+            type: 'follow-path',
+            node,
+            index
+          });
+          
+          totalLength += segmentLength;
+          lastPos = segmentEnd;
+        });
+      } else {
+        const segmentStart = lastPos;
+        const segmentEnd = node.position;
+        const segmentLength = distance(segmentStart, segmentEnd);
+        
+        pathSegments.push({
+          start: segmentStart,
+          end: segmentEnd,
+          type: node.type,
+          node,
+          index
+        });
+        
+        totalLength += segmentLength;
+        lastPos = segmentEnd;
+      }
     });
     
     // Calculate how much of the path to draw based on progress
@@ -4690,6 +4711,120 @@ function drawAbilityCastPreview(ctx: CanvasRenderingContext2D, state: GameState)
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(`${dragLen.toFixed(1)}m`, midScreen.x, midScreen.y - 15);
+  
+  ctx.restore();
+}
+
+function drawPathDrawingPreview(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (!state.pathDrawingPreview) return;
+  
+  const { smoothedPath, originUnit, originPosition } = state.pathDrawingPreview;
+  
+  if (smoothedPath.length < 2) return;
+  
+  // Get the origin unit to get its color
+  const unit = state.units.find(u => u.id === originUnit);
+  if (!unit) return;
+  
+  const color = state.players[unit.owner].color;
+  const time = Date.now() / 1000;
+  
+  ctx.save();
+  
+  // Draw the smoothed path
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 4;
+  ctx.globalAlpha = 0.8;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 15;
+  ctx.setLineDash([12, 6]);
+  ctx.lineDashOffset = -time * 30; // Animate dashes flowing forward
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  
+  ctx.beginPath();
+  const firstPoint = positionToPixels(smoothedPath[0]);
+  ctx.moveTo(firstPoint.x, firstPoint.y);
+  
+  for (let i = 1; i < smoothedPath.length; i++) {
+    const point = positionToPixels(smoothedPath[i]);
+    ctx.lineTo(point.x, point.y);
+  }
+  
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // Draw dots along the path at intervals
+  ctx.globalAlpha = 0.6;
+  ctx.shadowBlur = 10;
+  for (let i = 0; i < smoothedPath.length; i += 5) {
+    const point = positionToPixels(smoothedPath[i]);
+    const pulse = Math.sin(time * 4 - i * 0.1) * 0.3 + 0.7;
+    ctx.globalAlpha = 0.4 + pulse * 0.3;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 3 + pulse, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  
+  // Draw pulsing start indicator at origin
+  const originScreen = positionToPixels(originPosition);
+  const originPulse = Math.sin(time * 3) * 0.3 + 0.7;
+  ctx.globalAlpha = 0.9 * originPulse;
+  ctx.shadowBlur = 20;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(originScreen.x, originScreen.y, 6 + originPulse * 3, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Draw arrow at the end point
+  const endPoint = smoothedPath[smoothedPath.length - 1];
+  const endScreen = positionToPixels(endPoint);
+  const prevPoint = smoothedPath[Math.max(0, smoothedPath.length - 2)];
+  const prevScreen = positionToPixels(prevPoint);
+  
+  const dx = endScreen.x - prevScreen.x;
+  const dy = endScreen.y - prevScreen.y;
+  const angle = Math.atan2(dy, dx);
+  
+  ctx.globalAlpha = 0.9;
+  ctx.shadowBlur = 15;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(
+    endScreen.x + Math.cos(angle) * 15,
+    endScreen.y + Math.sin(angle) * 15
+  );
+  ctx.lineTo(
+    endScreen.x + Math.cos(angle + Math.PI * 2.6) * 12,
+    endScreen.y + Math.sin(angle + Math.PI * 2.6) * 12
+  );
+  ctx.lineTo(
+    endScreen.x + Math.cos(angle - Math.PI * 2.6) * 12,
+    endScreen.y + Math.sin(angle - Math.PI * 2.6) * 12
+  );
+  ctx.closePath();
+  ctx.fill();
+  
+  // Calculate and display path length
+  let pathLength = 0;
+  for (let i = 1; i < smoothedPath.length; i++) {
+    pathLength += distance(smoothedPath[i - 1], smoothedPath[i]);
+  }
+  
+  // Draw length label at the middle of the path
+  if (smoothedPath.length > 2) {
+    const midIndex = Math.floor(smoothedPath.length / 2);
+    const midPoint = positionToPixels(smoothedPath[midIndex]);
+    
+    ctx.globalAlpha = 0.95;
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = color;
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${pathLength.toFixed(1)}m`, midPoint.x, midPoint.y - 20);
+  }
   
   ctx.restore();
 }

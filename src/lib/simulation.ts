@@ -2485,6 +2485,101 @@ function updateUnits(state: GameState, deltaTime: number): void {
       }
 
       unit.distanceTraveled += moveDist;
+    } else if (currentNode.type === 'follow-path') {
+      // Follow path: move along a series of waypoints
+      if (currentNode.path.length === 0) {
+        // Path complete - remove command
+        unit.commandQueue.shift();
+        unit.currentSpeed = 0;
+        unit.stuckTimer = 0;
+        unit.lastPosition = undefined;
+        unit.jitterOffset = undefined;
+        finalizeBladeTrail();
+        return;
+      }
+      
+      // Get next waypoint in path
+      const nextWaypoint = currentNode.path[0];
+      const dist = distance(unit.position, nextWaypoint);
+      const def = UNIT_DEFINITIONS[unit.type];
+      
+      // Check if reached this waypoint (use smaller threshold for smoother path following)
+      if (dist < 0.5) {
+        // Remove this waypoint and continue to next
+        currentNode.path.shift();
+        
+        // If no more waypoints, remove command
+        if (currentNode.path.length === 0) {
+          unit.commandQueue.shift();
+          unit.currentSpeed = 0;
+          unit.stuckTimer = 0;
+          unit.lastPosition = undefined;
+          unit.jitterOffset = undefined;
+          finalizeBladeTrail();
+        }
+        return;
+      }
+      
+      let direction = normalize(subtract(nextWaypoint, unit.position));
+      
+      // Apply flocking behavior for smooth group movement along path
+      direction = applyFlockingBehavior(unit, direction, state.units);
+      
+      // Try pathfinding if direct path might be blocked
+      const alternativePath = findPathAroundObstacle(unit, nextWaypoint, state.obstacles);
+      if (alternativePath) {
+        direction = alternativePath;
+      }
+      
+      // If stuck, try jitter movement
+      if (unit.jitterOffset !== undefined) {
+        const jitteredDirection = applyJitterMovement(unit, direction, state.units, state.obstacles);
+        if (jitteredDirection) {
+          direction = jitteredDirection;
+        }
+      }
+      
+      // Update unit rotation to face movement direction
+      updateUnitRotation(unit, direction, deltaTime);
+      
+      // Use constant top speed
+      const movement = scale(direction, def.moveSpeed * deltaTime);
+      const moveDist = Math.min(distance(unit.position, add(unit.position, movement)), dist);
+      const newPosition = add(unit.position, scale(direction, moveDist));
+      
+      // Apply local collision push
+      const adjustedPosition = applyLocalCollisionPush(unit, newPosition, state.units);
+      
+      // Check for collisions
+      const collisionResult = checkUnitCollisionBlocking(unit, adjustedPosition, state.units, state.obstacles);
+      
+      if (!collisionResult.blocked) {
+        unit.position = adjustedPosition;
+        unit.stuckTimer = 0;
+        unit.lastPosition = { ...unit.position };
+        unit.jitterOffset = undefined;
+      } else {
+        // Collision detected - slow down
+        unit.currentSpeed = Math.max(0, (unit.currentSpeed || 0) * COLLISION_DECELERATION_FACTOR);
+        updateStuckDetection(unit, deltaTime);
+        finalizeBladeTrail();
+        return;
+      }
+      
+      // Track distance traveled
+      const queueMovementNodes = unit.commandQueue.filter((n) => 
+        n.type === 'move' || n.type === 'attack-move' || n.type === 'patrol' || n.type === 'follow-path'
+      ).length;
+      const creditMultiplier = 1.0 + QUEUE_BONUS_PER_NODE * queueMovementNodes;
+      unit.distanceCredit += moveDist * creditMultiplier;
+      
+      while (unit.distanceCredit >= PROMOTION_DISTANCE_THRESHOLD) {
+        unit.distanceCredit -= PROMOTION_DISTANCE_THRESHOLD;
+        // Damage multiplier from movement disabled
+        // unit.damageMultiplier *= PROMOTION_MULTIPLIER;
+      }
+      
+      unit.distanceTraveled += moveDist;
     }
 
     finalizeBladeTrail();
