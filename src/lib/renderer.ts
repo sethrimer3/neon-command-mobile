@@ -345,16 +345,20 @@ function drawCenteredSpriteWithColoredOutline(
   ctx.translate(center.x, center.y);
   ctx.rotate(rotation);
   
-  // Draw colored outline if specified
+  // Draw colored outline if specified - optimized to use 4 directions instead of 8
   if (outlineColor) {
     const coloredSprite = getColoredOutlineSprite(sprite, sprite, outlineColor);
     
-    // Draw colored outline in 8 directions for a smooth outline
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
-      const offsetX = Math.cos(angle) * outlineWidth;
-      const offsetY = Math.sin(angle) * outlineWidth;
-      ctx.drawImage(coloredSprite, -size / 2 + offsetX, -size / 2 + offsetY, size, size);
+    // Draw colored outline in 4 cardinal directions (reduced from 8 for performance)
+    const offsets = [
+      { x: -outlineWidth, y: 0 },
+      { x: outlineWidth, y: 0 },
+      { x: 0, y: -outlineWidth },
+      { x: 0, y: outlineWidth },
+    ];
+    
+    for (const offset of offsets) {
+      ctx.drawImage(coloredSprite, -size / 2 + offset.x, -size / 2 + offset.y, size, size);
     }
   }
   
@@ -1369,7 +1373,19 @@ function drawMiningDepots(ctx: CanvasRenderingContext2D, state: GameState): void
   const DEPOSIT_SIZE = RESOURCE_DEPOSIT_SIZE_METERS; // meters
   const spritesEnabled = state.settings.enableSprites ?? true;
   
+  // Pre-load all mining sprites once to avoid repeated cache lookups
+  const radiantDepotSprite = spritesEnabled ? getSpriteFromCache(radiantMiningDepotSpritePath) : null;
+  const radiantDepositSprite = spritesEnabled ? getSpriteFromCache(radiantResourceDepositSpritePath) : null;
+  const aurumDepotSprite = spritesEnabled ? getSpriteFromCache(aurumMiningDepotSpritePath) : null;
+  const solariDepotSprite = spritesEnabled ? getSpriteFromCache(solariMiningDepotSpritePath) : null;
+  const solariDepositSprite = spritesEnabled ? getSpriteFromCache(solariResourceDepositSpritePath) : null;
+  
   state.miningDepots.forEach((depot) => {
+    // Skip depots that are off-screen for performance
+    if (!isOnScreen(depot.position, ctx.canvas, state, OFFSCREEN_CULLING_MARGIN)) {
+      return;
+    }
+    
     const depotScreenPos = positionToPixels(depot.position);
     const depotWidth = metersToPixels(DEPOT_SIZE);
     const depotHeight = metersToPixels(DEPOT_SIZE);
@@ -1395,34 +1411,34 @@ function drawMiningDepots(ctx: CanvasRenderingContext2D, state: GameState): void
     const ownerBase = state.bases.find(b => b.owner === depot.owner);
     const faction = ownerBase?.faction || 'radiant';
     
+    // Select the correct pre-loaded sprites for this faction
+    let depotSprite: HTMLImageElement | null = null;
+    let depositSprite: HTMLImageElement | null = null;
+    if (faction === 'radiant') {
+      depotSprite = radiantDepotSprite;
+      depositSprite = radiantDepositSprite;
+    } else if (faction === 'aurum') {
+      depotSprite = aurumDepotSprite;
+      depositSprite = null; // Aurum doesn't have separate deposit sprites (deposits use fallback rendering)
+    } else if (faction === 'solari') {
+      depotSprite = solariDepotSprite;
+      depositSprite = solariDepositSprite;
+    }
+    
     // Draw the depot building with sprites if enabled
     let depotSpriteDrawn = false;
-    if (spritesEnabled) {
-      let depotSpritePath: string | null = null;
-      if (faction === 'radiant') {
-        depotSpritePath = radiantMiningDepotSpritePath;
-      } else if (faction === 'aurum') {
-        depotSpritePath = aurumMiningDepotSpritePath;
-      } else if (faction === 'solari') {
-        depotSpritePath = solariMiningDepotSpritePath;
-      }
-      
-      if (depotSpritePath) {
-        const depotSprite = getSpriteFromCache(depotSpritePath);
-        if (isSpriteReady(depotSprite)) {
-          const spriteSize = metersToPixels(DEPOT_SIZE) * MINING_DEPOT_SPRITE_SCALE;
-          drawCenteredSpriteWithColoredOutline(
-            ctx,
-            depotSprite,
-            depotScreenPos,
-            spriteSize,
-            0, // No rotation for depots
-            null, // No outline for depot
-            0,
-          );
-          depotSpriteDrawn = true;
-        }
-      }
+    if (spritesEnabled && depotSprite && isSpriteReady(depotSprite)) {
+      const spriteSize = metersToPixels(DEPOT_SIZE) * MINING_DEPOT_SPRITE_SCALE;
+      drawCenteredSpriteWithColoredOutline(
+        ctx,
+        depotSprite,
+        depotScreenPos,
+        spriteSize,
+        0, // No rotation for depots
+        null, // No outline for depot
+        0,
+      );
+      depotSpriteDrawn = true;
     }
     
     // Fallback to basic rendering if sprite not available
@@ -1470,30 +1486,18 @@ function drawMiningDepots(ctx: CanvasRenderingContext2D, state: GameState): void
       
       // Draw deposit with sprites if enabled
       let depositSpriteDrawn = false;
-      if (spritesEnabled) {
-        let depositSpritePath: string | null = null;
-        if (faction === 'radiant') {
-          depositSpritePath = radiantResourceDepositSpritePath;
-        } else if (faction === 'solari') {
-          depositSpritePath = solariResourceDepositSpritePath;
-        }
-        
-        if (depositSpritePath) {
-          const depositSprite = getSpriteFromCache(depositSpritePath);
-          if (isSpriteReady(depositSprite)) {
-            const spriteSize = metersToPixels(DEPOSIT_SIZE) * RESOURCE_DEPOSIT_SPRITE_SCALE;
-            drawCenteredSpriteWithColoredOutline(
-              ctx,
-              depositSprite,
-              depositScreenPos,
-              spriteSize,
-              0, // No rotation for deposits
-              outlineColor,
-              outlineWidth,
-            );
-            depositSpriteDrawn = true;
-          }
-        }
+      if (spritesEnabled && depositSprite && isSpriteReady(depositSprite)) {
+        const spriteSize = metersToPixels(DEPOSIT_SIZE) * RESOURCE_DEPOSIT_SPRITE_SCALE;
+        drawCenteredSpriteWithColoredOutline(
+          ctx,
+          depositSprite,
+          depositScreenPos,
+          spriteSize,
+          0, // No rotation for deposits
+          outlineColor,
+          outlineWidth,
+        );
+        depositSpriteDrawn = true;
       }
       
       // Fallback to basic rendering if sprite not available
@@ -1556,6 +1560,11 @@ function drawResourceOrbs(ctx: CanvasRenderingContext2D, state: GameState): void
   const now = Date.now();
   
   state.resourceOrbs.forEach((orb) => {
+    // Skip orbs that are off-screen for performance
+    if (!isOnScreen(orb.position, ctx.canvas, state, OFFSCREEN_CULLING_MARGIN)) {
+      return;
+    }
+    
     const screenPos = positionToPixels(orb.position);
     const age = (now - orb.createdAt) / 1000; // seconds
     
@@ -2330,6 +2339,11 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
 
 function drawStructures(ctx: CanvasRenderingContext2D, state: GameState): void {
   state.structures.forEach((structure) => {
+    // Skip structures that are off-screen for performance
+    if (!isOnScreen(structure.position, ctx.canvas, state, OFFSCREEN_CULLING_MARGIN)) {
+      return;
+    }
+    
     // Fog of war: hide enemy structures that are not visible to the player
     if (structure.owner !== 0 && !isVisibleToPlayer(structure.position, state)) {
       return;
