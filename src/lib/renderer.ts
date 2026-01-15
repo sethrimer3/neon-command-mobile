@@ -1560,6 +1560,11 @@ function drawResourceOrbs(ctx: CanvasRenderingContext2D, state: GameState): void
   const now = Date.now();
   
   state.resourceOrbs.forEach((orb) => {
+    // Skip orbs that are off-screen for performance
+    if (!isOnScreen(orb.position, ctx.canvas, state, OFFSCREEN_CULLING_MARGIN)) {
+      return;
+    }
+    
     const screenPos = positionToPixels(orb.position);
     const age = (now - orb.createdAt) / 1000; // seconds
     
@@ -2334,6 +2339,11 @@ function drawBases(ctx: CanvasRenderingContext2D, state: GameState): void {
 
 function drawStructures(ctx: CanvasRenderingContext2D, state: GameState): void {
   state.structures.forEach((structure) => {
+    // Skip structures that are off-screen for performance
+    if (!isOnScreen(structure.position, ctx.canvas, state, OFFSCREEN_CULLING_MARGIN)) {
+      return;
+    }
+    
     // Fog of war: hide enemy structures that are not visible to the player
     if (structure.owner !== 0 && !isVisibleToPlayer(structure.position, state)) {
       return;
