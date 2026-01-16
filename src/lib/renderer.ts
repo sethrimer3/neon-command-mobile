@@ -116,6 +116,22 @@ const whiteOutlineSpriteCache = new Map<string, HTMLCanvasElement>();
 // Cache pre-composited sprites with colored outlines to avoid multiple draw calls per frame.
 const compositedOutlineSpriteCache = new Map<string, HTMLCanvasElement>();
 
+// Cache key separator - using null byte as it cannot appear in URLs
+const CACHE_KEY_SEPARATOR = '\0';
+
+// Outline offset directions for creating sprite outlines (4 cardinal directions)
+const OUTLINE_OFFSET_DIRECTIONS = [
+  { x: -1, y: 0 },
+  { x: 1, y: 0 },
+  { x: 0, y: -1 },
+  { x: 0, y: 1 },
+];
+
+// Helper function to calculate outline padding (always ceiled to whole pixels)
+function getOutlinePadding(outlineWidth: number): number {
+  return Math.ceil(outlineWidth);
+}
+
 // Create a canvas element for tinting without touching the main render surface.
 const createTintCanvas = (): HTMLCanvasElement => {
   return document.createElement('canvas');
@@ -147,7 +163,7 @@ function getTintedSprite(sprite: HTMLImageElement, tintColor: string): HTMLCanva
     return null;
   }
 
-  const cacheKey = `${sprite.src}\0${tintColor}`;
+  const cacheKey = `${sprite.src}${CACHE_KEY_SEPARATOR}${tintColor}`;
   const cached = tintedSpriteCache.get(cacheKey);
   if (cached) {
     return cached;
@@ -190,7 +206,7 @@ function getWhiteOutlineSprite(
   tintColor: string
 ): HTMLCanvasElement {
   // Create a cache key that includes both sprite source and tint color
-  const cacheKey = `${spriteSource.src}\0${tintColor}\0white`;
+  const cacheKey = `${spriteSource.src}${CACHE_KEY_SEPARATOR}${tintColor}${CACHE_KEY_SEPARATOR}white`;
   
   // Check cache first
   const cached = whiteOutlineSpriteCache.get(cacheKey);
@@ -234,7 +250,7 @@ function getColoredOutlineSprite(
   outlineColor: string
 ): HTMLCanvasElement {
   // Create a cache key that includes sprite source and outline color
-  const cacheKey = `${spriteSource.src}\0${outlineColor}\0outline`;
+  const cacheKey = `${spriteSource.src}${CACHE_KEY_SEPARATOR}${outlineColor}${CACHE_KEY_SEPARATOR}outline`;
   
   // Check cache first
   const cached = whiteOutlineSpriteCache.get(cacheKey);
@@ -283,7 +299,7 @@ function getCompositedOutlineSprite(
 ): HTMLCanvasElement {
   // Create a cache key that includes all parameters
   // Using null byte as separator to avoid collisions (URLs cannot contain \0)
-  const cacheKey = `${spriteSource.src}\0${outlineColor}\0${outlineWidth}\0composited`;
+  const cacheKey = `${spriteSource.src}${CACHE_KEY_SEPARATOR}${outlineColor}${CACHE_KEY_SEPARATOR}${outlineWidth}${CACHE_KEY_SEPARATOR}composited`;
   
   // Check cache first
   const cached = compositedOutlineSpriteCache.get(cacheKey);
@@ -294,7 +310,7 @@ function getCompositedOutlineSprite(
   // Create a canvas large enough to hold the sprite plus outline padding on all sides
   // outlineWidth determines how far the outline extends from the sprite edge
   // We need padding on all 4 sides (left, right, top, bottom)
-  const outlinePadding = Math.ceil(outlineWidth);
+  const outlinePadding = getOutlinePadding(outlineWidth);
   const canvas = createTintCanvas();
   canvas.width = sprite.width + outlinePadding * 2;
   canvas.height = sprite.height + outlinePadding * 2;
@@ -307,22 +323,14 @@ function getCompositedOutlineSprite(
   // This creates an outline only on the outside perimeter, not internal contours
   ctx.save();
   
-  // First, create the outline layer by drawing the sprite with offsets
-  // We use 4 cardinal directions which is sufficient for a visible outline
-  const outlineOffsets = [
-    { x: -outlineWidth, y: 0 },
-    { x: outlineWidth, y: 0 },
-    { x: 0, y: -outlineWidth },
-    { x: 0, y: outlineWidth },
-  ];
-  
   // Create the outline shape by drawing the sprite at offset positions
+  // Using pre-defined cardinal directions scaled by outlineWidth
   ctx.globalCompositeOperation = 'source-over';
-  for (const offset of outlineOffsets) {
+  for (const direction of OUTLINE_OFFSET_DIRECTIONS) {
     ctx.drawImage(
       sprite,
-      outlinePadding + offset.x,
-      outlinePadding + offset.y,
+      outlinePadding + direction.x * outlineWidth,
+      outlinePadding + direction.y * outlineWidth,
       sprite.width,
       sprite.height
     );
@@ -442,7 +450,7 @@ function drawCenteredSpriteWithColoredOutline(
     // The composited canvas includes the original sprite plus outline padding on all sides
     // Mathematical relationship: compositedWidth = sprite.width + (2 * outlinePadding)
     // To maintain the correct visual size, we scale proportionally
-    const outlinePadding = Math.ceil(outlineWidth);
+    const outlinePadding = getOutlinePadding(outlineWidth);
     
     // Use explicit calculation for the padded size based on the outline padding
     // This ensures the sprite is rendered at the correct size including the outline
