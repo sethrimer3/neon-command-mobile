@@ -168,6 +168,8 @@ function getCollisionRadius(): number {
 const SEPARATION_RADIUS = 1.5; // Distance to maintain from nearby units
 const SEPARATION_FORCE = 3.0; // Strength of separation force (reduced from 8.0 to prevent violent oscillations)
 const SEPARATION_FORCE_PATH = 1.5; // Reduced separation force when following paths to allow tighter groups
+const SEPARATION_ALONG_PATH_FACTOR = 0.3; // Separation force multiplier along path direction (30%)
+const SEPARATION_PERPENDICULAR_FACTOR = 1.0; // Separation force multiplier perpendicular to path (100%)
 const SEPARATION_MIN_DISTANCE = 0.05; // Minimum distance for separation calculation (prevents division by zero)
 const COHESION_RADIUS = 4.0; // Distance to check for group cohesion
 const COHESION_FORCE = 1.0; // Strength of cohesion force (reduced from 2.0 for gentler grouping)
@@ -179,6 +181,8 @@ const FLOCKING_MAX_FORCE = 3.0; // Maximum magnitude of flocking forces (reduced
 const FLOCKING_MAX_FORCE_PATH = 2.5; // Reduced max force for paths to prevent excessive lateral deviation
 const MIN_FORCE_THRESHOLD = 0.01; // Minimum force magnitude to apply
 const FLOCKING_FORCE_SMOOTHING = 0.7; // Smoothing factor for force changes (0=instant, 1=no change) - prevents violent oscillations
+const BASE_DIRECTION_WEIGHT_NORMAL = 10.0; // Base direction strength for normal movement (10x stronger than flocking)
+const BASE_DIRECTION_WEIGHT_PATH = 12.0; // Base direction strength for path following (12x stronger for tighter adherence)
 
 // Jitter/wiggle constants for stuck unit recovery
 const JITTER_ACTIVATION_RATIO = 0.5; // Activate jitter at 50% of stuck timeout
@@ -663,7 +667,8 @@ function calculateSeparation(unit: Unit, allUnits: Unit[], isFollowingPath: bool
         const perpendicularity = Math.abs(normalizedAway.x * normalizedPath.y - normalizedAway.y * normalizedPath.x);
         // Reduce separation force along the path direction (when perpendicularity is low)
         // This allows units to tolerate being closer when moving in the same direction
-        weight *= 0.3 + 0.7 * perpendicularity; // 30% force along path, 100% force perpendicular
+        // Linear interpolation: along-path factor when parallel, perpendicular factor when perpendicular
+        weight *= SEPARATION_ALONG_PATH_FACTOR + (SEPARATION_PERPENDICULAR_FACTOR - SEPARATION_ALONG_PATH_FACTOR) * perpendicularity;
       }
       
       const weightedAway = scale(normalize(away), weight);
@@ -873,7 +878,7 @@ function applyFlockingBehavior(unit: Unit, baseDirection: Vector2, allUnits: Uni
   // Base direction should have stronger weight to ensure units still move toward their goal
   // Scale base direction by a factor to make it the dominant force
   // Use even stronger base direction weight for path following to reduce lateral deviation
-  const BASE_DIRECTION_WEIGHT = isFollowingPath ? 12.0 : 10.0; // Stronger adherence to path
+  const BASE_DIRECTION_WEIGHT = isFollowingPath ? BASE_DIRECTION_WEIGHT_PATH : BASE_DIRECTION_WEIGHT_NORMAL;
   let finalDirection = scale(baseDirection, BASE_DIRECTION_WEIGHT);
   finalDirection = add(finalDirection, flockingForce);
   
