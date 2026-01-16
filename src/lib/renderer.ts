@@ -300,20 +300,12 @@ function getCompositedOutlineSprite(
     return canvas;
   }
   
-  // Use a simpler, more efficient outline rendering approach
-  // Instead of drawing 4 offset copies, use canvas shadow for the outline effect
+  // Optimized approach: use canvas filters and composite operations
   // This creates an outline only on the outside perimeter, not internal contours
   ctx.save();
   
-  // Draw the outline using shadow blur trick
-  // This is much more efficient and only outlines the exterior
-  ctx.shadowColor = outlineColor;
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = 0;
-  
-  // Draw the sprite multiple times with small offsets to create a solid outline
-  // Using fewer, strategic positions for better performance
+  // First, create the outline layer by drawing the sprite with offsets
+  // We use 4 cardinal directions which is sufficient for a visible outline
   const outlineOffsets = [
     { x: -outlineWidth, y: 0 },
     { x: outlineWidth, y: 0 },
@@ -321,7 +313,7 @@ function getCompositedOutlineSprite(
     { x: 0, y: outlineWidth },
   ];
   
-  // Create the outline using composite operations
+  // Create the outline shape by drawing the sprite at offset positions
   ctx.globalCompositeOperation = 'source-over';
   for (const offset of outlineOffsets) {
     ctx.drawImage(
@@ -333,18 +325,20 @@ function getCompositedOutlineSprite(
     );
   }
   
-  // Fill the outline with the desired color
+  // Fill the outline with the desired color using source-in
+  // This keeps only the overlapping pixels and colors them
   ctx.globalCompositeOperation = 'source-in';
   ctx.fillStyle = outlineColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   
-  // Draw the main sprite on top
+  // Draw the main sprite on top using source-over
+  // This will overwrite the outline where the sprite exists, leaving only the outer edge
   ctx.globalCompositeOperation = 'source-over';
   ctx.drawImage(sprite, padding, padding, sprite.width, sprite.height);
   
   ctx.restore();
   
-  // Cache the result
+  // Cache the result - this pre-composited sprite can be reused across frames
   compositedOutlineSpriteCache.set(cacheKey, canvas);
   
   return canvas;
