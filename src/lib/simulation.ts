@@ -669,7 +669,8 @@ function calculateSeparation(unit: Unit, allUnits: Unit[], isFollowingPath: bool
         // Reduce separation force along the path direction (when perpendicularity is low)
         // This allows units to tolerate being closer when moving in the same direction
         // Linear interpolation: along-path factor when parallel, perpendicular factor when perpendicular
-        const pathAwareSeparationWeight = SEPARATION_ALONG_PATH_FACTOR + (SEPARATION_PERPENDICULAR_FACTOR - SEPARATION_ALONG_PATH_FACTOR) * perpendicularity;
+        const factorRange = SEPARATION_PERPENDICULAR_FACTOR - SEPARATION_ALONG_PATH_FACTOR;
+        const pathAwareSeparationWeight = SEPARATION_ALONG_PATH_FACTOR + factorRange * perpendicularity;
         weight *= pathAwareSeparationWeight;
       }
       
@@ -2663,14 +2664,13 @@ function updateUnits(state: GameState, deltaTime: number): void {
       }
 
       const dist = distance(unit.position, lookaheadTarget);
-      let direction = normalize(subtract(lookaheadTarget, unit.position));
+      const pathDirection = normalize(subtract(lookaheadTarget, unit.position));
       
       // Apply flocking behavior for smooth group movement along path
-      // Pass true for isFollowingPath and the current direction as pathDirection
-      // Note: Using current movement direction as path direction is correct here because
-      // the lookahead target is already calculated along the path, so this direction
-      // represents the tangent to the path at the current point
-      direction = applyFlockingBehavior(unit, direction, state.units, true, direction);
+      // Pass true for isFollowingPath and the path direction for path-aware separation
+      // Note: pathDirection represents the tangent to the path at the current point
+      // (direction from unit to lookahead target along the path)
+      let direction = applyFlockingBehavior(unit, pathDirection, state.units, true, pathDirection);
       
       // Try pathfinding if direct path might be blocked
       const alternativePath = findPathAroundObstacle(unit, lookaheadTarget, state.obstacles);
