@@ -664,11 +664,13 @@ function calculateSeparation(unit: Unit, allUnits: Unit[], isFollowingPath: bool
         const normalizedAway = normalize(away);
         const normalizedPath = normalize(pathDirection);
         // Calculate how perpendicular the separation is to the path (0 = parallel, 1 = perpendicular)
+        // Cross product magnitude gives perpendicularity: |a × b| = |ax*by - ay*bx|
         const perpendicularity = Math.abs(normalizedAway.x * normalizedPath.y - normalizedAway.y * normalizedPath.x);
         // Reduce separation force along the path direction (when perpendicularity is low)
         // This allows units to tolerate being closer when moving in the same direction
         // Linear interpolation: along-path factor when parallel, perpendicular factor when perpendicular
-        weight *= SEPARATION_ALONG_PATH_FACTOR + (SEPARATION_PERPENDICULAR_FACTOR - SEPARATION_ALONG_PATH_FACTOR) * perpendicularity;
+        const pathAwareSeparationWeight = SEPARATION_ALONG_PATH_FACTOR + (SEPARATION_PERPENDICULAR_FACTOR - SEPARATION_ALONG_PATH_FACTOR) * perpendicularity;
+        weight *= pathAwareSeparationWeight;
       }
       
       const weightedAway = scale(normalize(away), weight);
@@ -2665,7 +2667,9 @@ function updateUnits(state: GameState, deltaTime: number): void {
       
       // Apply flocking behavior for smooth group movement along path
       // Pass true for isFollowingPath and the current direction as pathDirection
-      // This enables path-aware flocking that reduces lateral separation
+      // Note: Using current movement direction as path direction is correct here because
+      // the lookahead target is already calculated along the path, so this direction
+      // represents the tangent to the path at the current point
       direction = applyFlockingBehavior(unit, direction, state.units, true, direction);
       
       // Try pathfinding if direct path might be blocked
