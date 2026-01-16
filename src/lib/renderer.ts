@@ -147,7 +147,7 @@ function getTintedSprite(sprite: HTMLImageElement, tintColor: string): HTMLCanva
     return null;
   }
 
-  const cacheKey = `${sprite.src}::${tintColor}`;
+  const cacheKey = `${sprite.src}\0${tintColor}`;
   const cached = tintedSpriteCache.get(cacheKey);
   if (cached) {
     return cached;
@@ -190,7 +190,7 @@ function getWhiteOutlineSprite(
   tintColor: string
 ): HTMLCanvasElement {
   // Create a cache key that includes both sprite source and tint color
-  const cacheKey = `${spriteSource.src}::${tintColor}::white`;
+  const cacheKey = `${spriteSource.src}\0${tintColor}\0white`;
   
   // Check cache first
   const cached = whiteOutlineSpriteCache.get(cacheKey);
@@ -234,7 +234,7 @@ function getColoredOutlineSprite(
   outlineColor: string
 ): HTMLCanvasElement {
   // Create a cache key that includes sprite source and outline color
-  const cacheKey = `${spriteSource.src}::${outlineColor}::outline`;
+  const cacheKey = `${spriteSource.src}\0${outlineColor}\0outline`;
   
   // Check cache first
   const cached = whiteOutlineSpriteCache.get(cacheKey);
@@ -282,7 +282,8 @@ function getCompositedOutlineSprite(
   outlineWidth: number
 ): HTMLCanvasElement {
   // Create a cache key that includes all parameters
-  const cacheKey = `${spriteSource.src}::${outlineColor}::${outlineWidth}::composited`;
+  // Using null byte as separator to avoid collisions (URLs cannot contain \0)
+  const cacheKey = `${spriteSource.src}\0${outlineColor}\0${outlineWidth}\0composited`;
   
   // Check cache first
   const cached = compositedOutlineSpriteCache.get(cacheKey);
@@ -442,8 +443,11 @@ function drawCenteredSpriteWithColoredOutline(
     // Mathematical relationship: compositedWidth = sprite.width + (2 * outlinePadding)
     // To maintain the correct visual size, we scale proportionally
     const outlinePadding = Math.ceil(outlineWidth);
-    const scaleFactor = compositedSprite.width / sprite.width; // Should equal (sprite.width + 2*outlinePadding) / sprite.width
-    const paddedSize = size * scaleFactor;
+    
+    // Use explicit calculation for the padded size based on the outline padding
+    // This ensures the sprite is rendered at the correct size including the outline
+    const expectedCompositedWidth = sprite.width + (2 * outlinePadding);
+    const paddedSize = size * (expectedCompositedWidth / sprite.width);
     
     // Draw the pre-composited sprite (outline + main sprite combined)
     ctx.drawImage(compositedSprite, -paddedSize / 2, -paddedSize / 2, paddedSize, paddedSize);
