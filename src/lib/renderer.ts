@@ -290,11 +290,13 @@ function getCompositedOutlineSprite(
     return cached;
   }
   
-  // Create a canvas large enough to hold the sprite plus outline padding
-  const padding = Math.ceil(outlineWidth) * 2;
+  // Create a canvas large enough to hold the sprite plus outline padding on all sides
+  // outlineWidth determines how far the outline extends from the sprite edge
+  // We need padding on all 4 sides (left, right, top, bottom)
+  const outlinePadding = Math.ceil(outlineWidth);
   const canvas = createTintCanvas();
-  canvas.width = sprite.width + padding * 2;
-  canvas.height = sprite.height + padding * 2;
+  canvas.width = sprite.width + outlinePadding * 2;
+  canvas.height = sprite.height + outlinePadding * 2;
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     return canvas;
@@ -318,8 +320,8 @@ function getCompositedOutlineSprite(
   for (const offset of outlineOffsets) {
     ctx.drawImage(
       sprite,
-      padding + offset.x,
-      padding + offset.y,
+      outlinePadding + offset.x,
+      outlinePadding + offset.y,
       sprite.width,
       sprite.height
     );
@@ -334,7 +336,7 @@ function getCompositedOutlineSprite(
   // Draw the main sprite on top using source-over
   // This will overwrite the outline where the sprite exists, leaving only the outer edge
   ctx.globalCompositeOperation = 'source-over';
-  ctx.drawImage(sprite, padding, padding, sprite.width, sprite.height);
+  ctx.drawImage(sprite, outlinePadding, outlinePadding, sprite.width, sprite.height);
   
   ctx.restore();
   
@@ -435,9 +437,13 @@ function drawCenteredSpriteWithColoredOutline(
   if (outlineColor) {
     const compositedSprite = getCompositedOutlineSprite(sprite, sprite, outlineColor, outlineWidth);
     
-    // Calculate the extra padding added by the outline
-    const padding = Math.ceil(outlineWidth) * 2;
-    const paddedSize = size * (compositedSprite.width / sprite.width);
+    // Calculate the scaled size for the composited sprite
+    // The composited canvas includes the original sprite plus outline padding on all sides
+    // Mathematical relationship: compositedWidth = sprite.width + (2 * outlinePadding)
+    // To maintain the correct visual size, we scale proportionally
+    const outlinePadding = Math.ceil(outlineWidth);
+    const scaleFactor = compositedSprite.width / sprite.width; // Should equal (sprite.width + 2*outlinePadding) / sprite.width
+    const paddedSize = size * scaleFactor;
     
     // Draw the pre-composited sprite (outline + main sprite combined)
     ctx.drawImage(compositedSprite, -paddedSize / 2, -paddedSize / 2, paddedSize, paddedSize);
