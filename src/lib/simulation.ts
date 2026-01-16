@@ -167,14 +167,22 @@ function getCollisionRadius(): number {
 // Flocking/Boids constants for smooth group movement (StarCraft-like)
 const SEPARATION_RADIUS = 1.5; // Distance to maintain from nearby units
 const SEPARATION_FORCE = 3.0; // Strength of separation force (reduced from 8.0 to prevent violent oscillations)
+const SEPARATION_FORCE_PATH = 1.5; // Reduced separation force when following paths to allow tighter groups
+const SEPARATION_ALONG_PATH_FACTOR = 0.3; // Separation force multiplier along path direction (30%)
+const SEPARATION_PERPENDICULAR_FACTOR = 1.0; // Separation force multiplier perpendicular to path (100%)
 const SEPARATION_MIN_DISTANCE = 0.05; // Minimum distance for separation calculation (prevents division by zero)
 const COHESION_RADIUS = 4.0; // Distance to check for group cohesion
 const COHESION_FORCE = 1.0; // Strength of cohesion force (reduced from 2.0 for gentler grouping)
+const COHESION_FORCE_PATH = 2.0; // Increased cohesion when following paths to keep units together along the line
 const ALIGNMENT_RADIUS = 3.0; // Distance to check for velocity alignment
 const ALIGNMENT_FORCE = 0.8; // Strength of alignment force (reduced from 1.5 for smoother alignment)
+const ALIGNMENT_FORCE_PATH = 1.2; // Increased alignment when following paths for better coordination
 const FLOCKING_MAX_FORCE = 3.0; // Maximum magnitude of flocking forces (reduced from 5.0 to prevent extreme forces)
+const FLOCKING_MAX_FORCE_PATH = 2.5; // Reduced max force for paths to prevent excessive lateral deviation
 const MIN_FORCE_THRESHOLD = 0.01; // Minimum force magnitude to apply
 const FLOCKING_FORCE_SMOOTHING = 0.7; // Smoothing factor for force changes (0=instant, 1=no change) - prevents violent oscillations
+const BASE_DIRECTION_WEIGHT_NORMAL = 10.0; // Base direction strength for normal movement (10x stronger than flocking)
+const BASE_DIRECTION_WEIGHT_PATH = 12.0; // Base direction strength for path following (12x stronger for tighter adherence)
 
 // Jitter/wiggle constants for stuck unit recovery
 const JITTER_ACTIVATION_RATIO = 0.5; // Activate jitter at 50% of stuck timeout
@@ -625,9 +633,12 @@ const PATHFINDING_MAX_ANGLES = 6; // Try up to 6 angles on each side (more attem
  * @param allUnits - All units in the game
  * @returns Separation force vector
  */
-function calculateSeparation(unit: Unit, allUnits: Unit[]): Vector2 {
+function calculateSeparation(unit: Unit, allUnits: Unit[], isFollowingPath: boolean = false, pathDirection?: Vector2): Vector2 {
   let separationForce = { x: 0, y: 0 };
   let count = 0;
+  
+  // Use reduced separation force when following paths
+  const separationStrength = isFollowingPath ? SEPARATION_FORCE_PATH : SEPARATION_FORCE;
   
   for (const other of allUnits) {
     // Skip self and enemy units
@@ -645,7 +656,23 @@ function calculateSeparation(unit: Unit, allUnits: Unit[]): Vector2 {
       // but tapers off smoothly, preventing oscillations
       const normalizedDist = dist / SEPARATION_RADIUS;
       const base = 1 - normalizedDist;
-      const weight = base * base * base; // Cubic falloff - more efficient than Math.pow
+      let weight = base * base * base; // Cubic falloff - more efficient than Math.pow
+      
+      // When following a path, reduce separation perpendicular to path direction
+      // This allows units to be closer when moving along the same line
+      if (isFollowingPath && pathDirection) {
+        const normalizedAway = normalize(away);
+        const normalizedPath = normalize(pathDirection);
+        // Calculate how perpendicular the separation is to the path (0 = parallel, 1 = perpendicular)
+        // Cross product magnitude gives perpendicularity: |a × b| = |ax*by - ay*bx|
+        const perpendicularity = Math.abs(normalizedAway.x * normalizedPath.y - normalizedAway.y * normalizedPath.x);
+        // Reduce separation force along the path direction (when perpendicularity is low)
+        // This allows units to tolerate being closer when moving in the same direction
+        // Linear interpolation: along-path factor when parallel, perpendicular factor when perpendicular
+        const factorRange = SEPARATION_PERPENDICULAR_FACTOR - SEPARATION_ALONG_PATH_FACTOR;
+        const pathAwareSeparationWeight = SEPARATION_ALONG_PATH_FACTOR + factorRange * perpendicularity;
+        weight *= pathAwareSeparationWeight;
+      }
       
       const weightedAway = scale(normalize(away), weight);
       separationForce = add(separationForce, weightedAway);
@@ -658,7 +685,7 @@ function calculateSeparation(unit: Unit, allUnits: Unit[]): Vector2 {
     separationForce = scale(separationForce, 1 / count);
     // Normalize and apply force strength
     if (distance({ x: 0, y: 0 }, separationForce) > MIN_FORCE_THRESHOLD) {
-      separationForce = scale(normalize(separationForce), SEPARATION_FORCE);
+      separationForce = scale(normalize(separationForce), separationStrength);
     }
   }
   
@@ -669,11 +696,15 @@ function calculateSeparation(unit: Unit, allUnits: Unit[]): Vector2 {
  * Calculate cohesion force to stay near group center (boids algorithm)
  * @param unit - The unit calculating cohesion
  * @param allUnits - All units in the game
+ * @param isFollowingPath - Whether the unit is following a path
  * @returns Cohesion force vector
  */
-function calculateCohesion(unit: Unit, allUnits: Unit[]): Vector2 {
+function calculateCohesion(unit: Unit, allUnits: Unit[], isFollowingPath: boolean = false): Vector2 {
   let centerOfMass = { x: 0, y: 0 };
   let count = 0;
+  
+  // Use increased cohesion force when following paths
+  const cohesionStrength = isFollowingPath ? COHESION_FORCE_PATH : COHESION_FORCE;
   
   for (const other of allUnits) {
     // Skip self and enemy units
@@ -697,7 +728,7 @@ function calculateCohesion(unit: Unit, allUnits: Unit[]): Vector2 {
     if (cohesionMagnitude > MIN_FORCE_THRESHOLD) {
       // Apply weaker force at longer distances for gentler cohesion
       const normalizedDist = Math.min(cohesionMagnitude / COHESION_RADIUS, 1.0);
-      const strength = COHESION_FORCE * normalizedDist; // Linear falloff
+      const strength = cohesionStrength * normalizedDist; // Linear falloff
       return scale(normalize(cohesionForce), strength);
     }
   }
@@ -710,11 +741,15 @@ function calculateCohesion(unit: Unit, allUnits: Unit[]): Vector2 {
  * @param unit - The unit calculating alignment
  * @param allUnits - All units in the game
  * @param currentDirection - Current movement direction
+ * @param isFollowingPath - Whether the unit is following a path
  * @returns Alignment force vector
  */
-function calculateAlignment(unit: Unit, allUnits: Unit[], currentDirection: Vector2): Vector2 {
+function calculateAlignment(unit: Unit, allUnits: Unit[], currentDirection: Vector2, isFollowingPath: boolean = false): Vector2 {
   let averageDirection = { x: 0, y: 0 };
   let count = 0;
+  
+  // Use increased alignment force when following paths
+  const alignmentStrength = isFollowingPath ? ALIGNMENT_FORCE_PATH : ALIGNMENT_FORCE;
   
   for (const other of allUnits) {
     // Skip self and enemy units
@@ -729,6 +764,13 @@ function calculateAlignment(unit: Unit, allUnits: Unit[], currentDirection: Vect
         const otherDirection = normalize(subtract(otherTarget.position, other.position));
         averageDirection = add(averageDirection, otherDirection);
         count++;
+      } else if (otherTarget.type === 'follow-path') {
+        // For path following, use the direction to the current waypoint
+        if (otherTarget.path.length > 0) {
+          const otherDirection = normalize(subtract(otherTarget.path[0], other.position));
+          averageDirection = add(averageDirection, otherDirection);
+          count++;
+        }
       }
     }
   }
@@ -744,7 +786,7 @@ function calculateAlignment(unit: Unit, allUnits: Unit[], currentDirection: Vect
       const alignmentMagnitude = distance({ x: 0, y: 0 }, alignmentForce);
       if (alignmentMagnitude > MIN_FORCE_THRESHOLD) {
         // Weaker alignment force for gentler direction changes
-        return scale(normalize(alignmentForce), ALIGNMENT_FORCE * Math.min(alignmentMagnitude, 1.0));
+        return scale(normalize(alignmentForce), alignmentStrength * Math.min(alignmentMagnitude, 1.0));
       }
     }
   }
@@ -774,13 +816,15 @@ function clampForce(force: Vector2, maxMagnitude: number): { force: Vector2; mag
  * @param unit - The unit to apply flocking to
  * @param baseDirection - The base movement direction (toward target)
  * @param allUnits - All units in the game
+ * @param isFollowingPath - Whether the unit is following a path
+ * @param pathDirection - The direction of the path (for path-aware separation)
  * @returns Modified direction with flocking applied
  */
-function applyFlockingBehavior(unit: Unit, baseDirection: Vector2, allUnits: Unit[]): Vector2 {
-  // Calculate all three flocking forces
-  const separation = calculateSeparation(unit, allUnits);
-  const cohesion = calculateCohesion(unit, allUnits);
-  const alignment = calculateAlignment(unit, allUnits, baseDirection);
+function applyFlockingBehavior(unit: Unit, baseDirection: Vector2, allUnits: Unit[], isFollowingPath: boolean = false, pathDirection?: Vector2): Vector2 {
+  // Calculate all three flocking forces with path-awareness
+  const separation = calculateSeparation(unit, allUnits, isFollowingPath, pathDirection);
+  const cohesion = calculateCohesion(unit, allUnits, isFollowingPath);
+  const alignment = calculateAlignment(unit, allUnits, baseDirection, isFollowingPath);
   
   // Combine flocking forces
   let flockingForce = { x: 0, y: 0 };
@@ -788,8 +832,11 @@ function applyFlockingBehavior(unit: Unit, baseDirection: Vector2, allUnits: Uni
   flockingForce = add(flockingForce, cohesion);
   flockingForce = add(flockingForce, alignment);
   
+  // Use path-specific max force when following paths
+  const maxForce = isFollowingPath ? FLOCKING_MAX_FORCE_PATH : FLOCKING_MAX_FORCE;
+  
   // Clamp flocking force to max magnitude
-  let clampResult = clampForce(flockingForce, FLOCKING_MAX_FORCE);
+  let clampResult = clampForce(flockingForce, maxForce);
   flockingForce = clampResult.force;
   
   // Prevent flocking forces from pushing units backward relative to their movement direction
@@ -813,7 +860,7 @@ function applyFlockingBehavior(unit: Unit, baseDirection: Vector2, allUnits: Uni
       flockingForce = subtract(flockingForce, projection);
       
       // Re-clamp after projection
-      clampResult = clampForce(flockingForce, FLOCKING_MAX_FORCE);
+      clampResult = clampForce(flockingForce, maxForce);
       flockingForce = clampResult.force;
     }
   }
@@ -833,7 +880,8 @@ function applyFlockingBehavior(unit: Unit, baseDirection: Vector2, allUnits: Uni
   // Combine forces with base direction
   // Base direction should have stronger weight to ensure units still move toward their goal
   // Scale base direction by a factor to make it the dominant force
-  const BASE_DIRECTION_WEIGHT = 10.0; // Make base direction 10x stronger than flocking forces
+  // Use even stronger base direction weight for path following to reduce lateral deviation
+  const BASE_DIRECTION_WEIGHT = isFollowingPath ? BASE_DIRECTION_WEIGHT_PATH : BASE_DIRECTION_WEIGHT_NORMAL;
   let finalDirection = scale(baseDirection, BASE_DIRECTION_WEIGHT);
   finalDirection = add(finalDirection, flockingForce);
   
@@ -2616,10 +2664,13 @@ function updateUnits(state: GameState, deltaTime: number): void {
       }
 
       const dist = distance(unit.position, lookaheadTarget);
-      let direction = normalize(subtract(lookaheadTarget, unit.position));
+      const pathDirection = normalize(subtract(lookaheadTarget, unit.position));
       
       // Apply flocking behavior for smooth group movement along path
-      direction = applyFlockingBehavior(unit, direction, state.units);
+      // Pass true for isFollowingPath and the path direction for path-aware separation
+      // Note: pathDirection represents the tangent to the path at the current point
+      // (direction from unit to lookahead target along the path)
+      let direction = applyFlockingBehavior(unit, pathDirection, state.units, true, pathDirection);
       
       // Try pathfinding if direct path might be blocked
       const alternativePath = findPathAroundObstacle(unit, lookaheadTarget, state.obstacles);
